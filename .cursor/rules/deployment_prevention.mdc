@@ -1,0 +1,85 @@
+---
+description: Prevention rule for Render and cloud deployment build cache hash mismatch failures
+globs: ["requirements.txt", "Procfile", "*.yaml", "*.yml"]
+alwaysApply: true
+---
+
+# 🚨 Deployment Failure Prevention (Render / Pip Hash Mismatch)
+
+### Problem
+During cloud deployments (such as Render, Railway, or Heroku), `pip install` fails during the build step with:
+```
+ERROR: THESE PACKAGES DO NOT MATCH THE HASHES FROM THE REQUIREMENTS FILE.
+unknown package:
+Expected sha256 <hash_A>
+Got <hash_B>
+==> Build failed 😞
+```
+
+### Root Cause
+1. Cloud CI/CD platforms like Render cache `~/.cache/pip` across builds. When wheels or dependencies update, corrupted or incomplete partial downloads in the build cache cause SHA256 checksum mismatches.
+2. Missing or platform-specific wheel hashes in requirements conflict with Linux container environments.
+3. Missing `Procfile` prevents web services from automatically identifying the Uvicorn web entry point.
+
+### Prevention Rule
+
+```
+# ❌ WRONG - Relying on stale build cache or ambiguous build commands
+Build Command: pip install -r requirements.txt
+
+# ✅ CORRECT - Use --no-cache-dir in cloud build scripts and provide Procfile
+Build Command: pip install --no-cache-dir -r requirements.txt
+Start Command: uvicorn src.api:app --host 0.0.0.0 --port $PORT
+```
+
+### Implementation
+1. **On Render Dashboard**:
+   - Go to the service **Deploys** tab -> Click **Manual Deploy** -> Select **"Clear build cache & deploy"**.
+   - Under **Settings** -> **Build Command**, configure:
+     `pip install --no-cache-dir -r requirements.txt`
+   - Under **Settings** -> **Start Command**, configure:
+     `uvicorn src.api:app --host 0.0.0.0 --port $PORT` (or `bash start.sh`)
+2. **Repository Configuration**:
+   - Maintain a root `Procfile` with:
+     `web: bash start.sh`
+   - Keep `requirements.txt` clean and unpinned from machine-specific wheel hashes.
+
+---
+
+## 🚨 Port Binding Timeout & OOM Prevention (Render 512MB RAM)
+
+### Problem
+Render displays:
+```
+==> No open ports detected, continuing to scan...
+==> Docs on specifying a port: https://render.com/docs/web-services#port-binding
+==> Running 'uvicorn src.api:app --host 0.0.0.0 --port $PORT'
+==> No open ports detected, continuing to scan...
+==> Timed out waiting for port binding
+```
+
+### Root Cause
+1. Top-level eager imports of heavy ML packages (`torch`, `sentence_transformers`, `transformers`, `langchain_text_splitters`) consume >500MB RSS before `uvicorn` can bind to `$PORT`.
+2. On 512MB free tier instances, Python either gets killed by the Linux cgroup OOM killer or takes >60 seconds to import, exceeding Render's port detection window.
+3. Synchronous blocking operations in `@app.on_event("startup")` delay socket binding.
+
+### Prevention Rule
+```
+# ❌ WRONG - Top-level eager imports of PyTorch / ML models
+from sentence_transformers import CrossEncoder
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+# ✅ CORRECT - Lazy load inside cached factories and functions, prefer FastEmbed (ONNX)
+@lru_cache(maxsize=1)
+def get_embeddings():
+    from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
+    return FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+@lru_cache(maxsize=1)
+def get_reranker():
+    from sentence_transformers import CrossEncoder
+    return CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+```
+- Never perform network blocking calls inside synchronous FastAPI startup events; run them asynchronously in background threads via `asyncio.to_thread` or lifespan handlers.
+- Bind host to `0.0.0.0` and port to `$PORT`.

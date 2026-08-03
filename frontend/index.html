@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Omni</title>
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('omni_theme');
+          var valid = ['light', 'dark', 'matcha', 'matcha-dark', 'terracotta', 'terracotta-dark', 'nordic', 'nordic-dark', 'amber', 'amber-dark'];
+          var theme = (saved && valid.indexOf(saved) !== -1) ? saved : 'dark';
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

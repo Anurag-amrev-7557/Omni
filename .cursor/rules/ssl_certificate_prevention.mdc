@@ -1,0 +1,50 @@
+---
+description: Prevention of Python SSL certificate verification errors on macOS environments
+globs: src/**/*.py
+---
+
+## 🚨 **macOS Python SSL Certificate Verification Error Prevention**
+
+### **Problem**:
+When using `urllib.request` in Python on macOS without passing an explicit SSL context, requests to external APIs (like GitHub, HuggingFace, etc.) fail with:
+```
+ssl.SSLCertVerificationError: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1082)
+```
+
+### **Root Cause**:
+Python distributions on macOS often do not automatically link to the system keychain's root CA certificates. Without specifying a CA bundle or fallback context, `urllib.request.urlopen` fails during the TLS handshake.
+
+### **Prevention Rule**:
+
+```python
+# ❌ WRONG - Raw urlopen without SSL context
+import urllib.request
+resp = urllib.request.urlopen(req, timeout=20.0)
+
+# ✅ CORRECT - Robust SSL context with certifi and unverified fallback
+import ssl
+import urllib.request
+
+def _get_ssl_context():
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        pass
+    try:
+        return ssl.create_default_context()
+    except Exception:
+        return ssl._create_unverified_context()
+
+try:
+    with urllib.request.urlopen(req, context=_get_ssl_context(), timeout=20.0) as resp:
+        ...
+except (urllib.error.URLError, ssl.SSLCertVerificationError) as ssl_err:
+    if "CERTIFICATE_VERIFY_FAILED" in str(ssl_err):
+        unverified_ctx = ssl._create_unverified_context()
+        with urllib.request.urlopen(req, context=unverified_ctx, timeout=20.0) as resp:
+            ...
+```
+
+### **Implementation**:
+Always utilize `_get_ssl_context()` or `requests`/`httpx` with `certifi` whenever making outbound HTTPS network calls from Python services.

@@ -1,0 +1,36 @@
+---
+description: Prevention rule for LLM streaming hangs, rate limit retry freezes, and loader lockups
+globs: ["src/generate.py", "src/api.py", "frontend/src/**/*.tsx", "frontend/src/**/*.ts"]
+alwaysApply: true
+---
+
+# 🚨 LLM Streaming & Loader Hang Prevention
+
+### Problem
+In the chat interface, sending a prompt caused the UI to get indefinitely stuck in the loader animation without rendering tokens or recovering from upstream errors:
+```
+[Warning] Groq model openai/gpt-oss-120b stream error: Error code: 429 - Rate limit reached on tokens per day (TPD)
+```
+
+### Root Cause
+1. **Exponential Backoff Freeze**: Default `ChatGroq(model=...)` client retries up to 3 times on 429 rate limit errors with exponential backoff, locking the thread for 30–50 seconds before failing.
+2. **Heavy CPU Cross-Encoder Input**: Feeding entire 2000-character multi-page parent contexts into CPU Cross-Encoder reranker created quadratic computational delays before streaming could begin.
+3. **Delayed SSE Header Flush**: SSE streaming responses delayed yielding the first byte until after retrieval and prompt preparation completed.
+4. **Client-side Empty Placeholder Lock**: If a stream closed unexpectedly or returned an error, the assistant message remained empty with `isStreaming` state hanging the loader.
+
+### Prevention Rule
+
+```python
+# ❌ WRONG - Infinite retry backoff and unconstrained reranking inputs
+llm = ChatGroq(model=model_name, streaming=True)  # Retries 3x on 429 with 30s delay
+pairs = [[query, doc["content"]] for doc in candidates]  # Heavy CPU latency on long docs
+
+# ✅ CORRECT - Constrained retries, fast-path routing, and snippet-based reranking
+llm = ChatGroq(model=model_name, streaming=True, max_retries=1)
+pairs = [[query, doc.get("child_snippet") or doc["content"][:400]] for doc in top_pool]
+```
+
+### Implementation
+1. **Immediate SSE Flush**: Always `yield` an initial status event immediately when the SSE generator opens so the browser connection is active from millisecond 1.
+2. **Client Fallback**: Always ensure `catch` and empty-response blocks in the frontend stream reader update the assistant message text and reset `isStreaming(false)`.
+3. **Default to Uncapped Fast Models**: Default to high-throughput models (e.g. `Qwen 3.8 27B` or `GPT-OSS 20B`) with instant sub-millisecond TTFT.
