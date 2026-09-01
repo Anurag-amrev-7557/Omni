@@ -104,8 +104,12 @@ def decompose_query(query: str) -> list[str]:
     return [q.strip() for q in response.split('|') if q.strip()]
 
 
-def prepare_context_and_prompt(query: str, chat_history: list[dict] = None) -> tuple[str, list[dict]]:
-    """Fast-path context and prompt preparation without unnecessary LLM overhead."""
+def prepare_context_and_prompt(
+    query: str,
+    chat_history: list[dict] = None,
+    web_search: bool = False
+) -> tuple[str, list[dict]]:
+    """Fast-path context and prompt preparation blending Vault vectors and real-time Web intelligence."""
     standalone_query = reformulate_query(query, chat_history)
     sub_queries = decompose_query(standalone_query)
     
@@ -116,16 +120,10 @@ def prepare_context_and_prompt(query: str, chat_history: list[dict] = None) -> t
     for sq in search_queries:
         if not sq.strip():
             continue
-        print(f"[DEBUG] Searching for: {sq}")
         contexts = hybrid_search(sq, k=6)
-        print(f"[DEBUG] Found {len(contexts)} contexts for query: {sq}")
         all_contexts.extend(contexts)
         
-    if not all_contexts:
-        print(f"[DEBUG] No contexts found for search queries: {search_queries}")
-        return None, []
-        
-    # Deduplicate contexts by parent_content and content while preserving order
+    # Deduplicate vault contexts by parent_content and content while preserving order
     seen = set()
     unique_contexts = []
     for ctx in all_contexts:
@@ -134,25 +132,43 @@ def prepare_context_and_prompt(query: str, chat_history: list[dict] = None) -> t
         if key not in seen:
             seen.add(key)
             unique_contexts.append(ctx)
+
+    # 2. Live Web Research if requested or triggered
+    web_contexts = []
+    if web_search or "@web" in query.lower():
+        try:
+            from src.web_search import search_web_knowledge, format_web_contexts_for_prompt
+            clean_q = query.replace("@web", "").strip()
+            web_results = search_web_knowledge(clean_q, max_results=4)
+            if web_results:
+                _, web_contexts = format_web_contexts_for_prompt(web_results, start_idx=len(unique_contexts) + 1)
+        except Exception as exc:
+            print(f"[Warning] Web research error: {exc}")
+
+    combined_all = unique_contexts + web_contexts
+    if not combined_all:
+        return None, []
             
     combined_context = ""
-    for idx, ctx in enumerate(unique_contexts, start=1):
-        page_info = f", Page {ctx['page']}" if ctx.get('page') else ""
-        # CRITICAL: Always use full parent_content so table rows, line items, and surrounding context are intact!
-        full_text = ctx.get('parent_content') or ctx.get('content') or ""
-        combined_context += f"--- SOURCE [{idx}]: {ctx['filename']}{page_info} ---\n{full_text.strip()}\n\n"
+    for idx, ctx in enumerate(combined_all, start=1):
+        if ctx.get("source_type") == "web":
+            combined_context += f"--- WEB SOURCE [{idx}]: {ctx.get('title', 'Web Result')} ({ctx.get('domain', 'web')}) ---\nURL: {ctx.get('url', '')}\n{ctx.get('content', '').strip()}\n\n"
+        else:
+            page_info = f", Page {ctx['page']}" if ctx.get('page') else ""
+            full_text = ctx.get('parent_content') or ctx.get('content') or ""
+            combined_context += f"--- VAULT SOURCE [{idx}]: {ctx['filename']}{page_info} ---\n{full_text.strip()}\n\n"
         
     prompt = f"""
-    You are an expert technical and document analyst. Answer the user's question accurately, thoroughly, and directly using the provided context below.
+    You are an expert enterprise research analyst. Answer the user's question accurately, thoroughly, and directly using the provided context below.
     
     CRITICAL PRESENTATION & CITATION INSTRUCTIONS:
     1. EXCELLENT PRESENTATION: Present your answer with clean structure. Use bullet points (`-`), bold sub-headers (`**Category:**`), and clear line breaks. NEVER collapse multiple items or categories into a single unformatted wall of text.
-    2. ACCURATE EXTRACTION: Carefully read all tables, line items, item descriptions, rates, quantities, taxes, and totals in the context. When asked about a specific item (e.g. headphones vs amplifier), identify the exact matching item and provide its full details (rate, taxes, MRP, total).
-    3. INLINE CITATIONS: Whenever stating a fact, price, or detail from a source, insert a bracketed numerical citation immediately following the statement, e.g., `[1]` or `[1, 2]`.
+    2. ACCURATE EXTRACTION & SYNTHESIS: Carefully inspect all tables, line items, pricing, web articles, dates, and numbers in the context. Integrate both private Knowledge Vault documents and public Web findings seamlessly.
+    3. INLINE CITATIONS: Whenever stating a fact, price, finding, or detail from a source, insert a bracketed numerical citation immediately following the statement, e.g., `[1]` or `[1, 2]`.
     4. REFERENCES FOOTER: At the very end of your answer, add a horizontal divider `---` followed by the header `##### References & Sources`. DO NOT use any emojis. Write ONLY clean text without any emoji!
     5. CITATION LIST FORMAT: Under `##### References & Sources`, list each referenced source on a new line using this format:
-
-       - **[1] filename.pdf** *(Page X)* — *"Exact short quote or excerpt snippet..."*
+       - For Vault Documents: `- **[X] filename.pdf** *(Page Y)* — *"Exact short quote snippet..."*`
+       - For Web Pages: `- **[X] [Page Title](URL)** *(domain.com)* — *"Exact short excerpt snippet..."*`
     6. Only if the provided context truly contains no information related to the question, state "I don't know based on the provided documents."
     
     Context:
@@ -160,7 +176,7 @@ def prepare_context_and_prompt(query: str, chat_history: list[dict] = None) -> t
     
     Question: {query}
     """
-    return prompt, unique_contexts
+    return prompt, combined_all
 
 def answer_query_stream(query: str, chat_history: list[dict] = None) -> Generator[str, None, None]:
     """Streams answer tokens chunk-by-chunk with automatic fallback for Groq rate limits."""

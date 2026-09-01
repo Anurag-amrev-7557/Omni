@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { Plus, Mic, ArrowUp, X, ChevronDown, Check, ChevronRight, ChevronLeft, CornerDownLeft, AtSign, Database, FileText } from 'lucide-react';
+import { Plus, Mic, ArrowUp, X, ChevronDown, Check, ChevronRight, ChevronLeft, CornerDownLeft, AtSign, Database, FileText, Globe } from 'lucide-react';
 import { ModelOption } from '../../types/chat';
 import { DocumentItem } from '../../types/document';
 import { FormatBadge } from '../common/FormatBadge';
@@ -21,6 +21,8 @@ interface ChatInputProps {
   setSelectedModel: (model: string) => void;
   effortLevel: string;
   setEffortLevel: (effort: string) => void;
+  webSearchEnabled?: boolean;
+  onToggleWebSearch?: () => void;
   onStartVoice: () => void;
   showToast: (msg: string) => void;
 }
@@ -506,15 +508,33 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           Omni is AI and can make mistakes. Please double-check responses.
         </span>
 
-        {/* Right Model Selector */}
-        <div className="relative">
-          <button 
-            className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer"
-            onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
+        {/* Right Controls: Web Research & Model Selector */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Live Web Research Toggle */}
+          <button
+            type="button"
+            onClick={onToggleWebSearch}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-all cursor-pointer select-none ${
+              webSearchEnabled
+                ? 'bg-[var(--accent-subtle)] text-[var(--accent-primary)] ring-1 ring-[var(--accent-primary)]/40 font-semibold shadow-xs'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
+            }`}
+            title="Toggle Live Web Search & Deep Research"
           >
-            <span className="font-medium text-[var(--text-main)]">{selectedModel}</span>
-            <span className="text-[var(--text-dark)]">{effortLevel}</span>
+            <Globe size={13} className={webSearchEnabled ? 'text-[var(--accent-primary)]' : ''} />
+            <span>Web Search</span>
+            {webSearchEnabled && <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-primary)]" />}
           </button>
+
+          {/* Model Selector */}
+          <div className="relative">
+            <button 
+              className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer"
+              onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
+            >
+              <span className="font-medium text-[var(--text-main)]">{selectedModel}</span>
+              <span className="text-[var(--text-dark)]">{effortLevel}</span>
+            </button>
 
           {modelDropdownOpen && (
             <>
@@ -594,6 +614,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 };

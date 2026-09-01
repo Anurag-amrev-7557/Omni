@@ -670,6 +670,7 @@ def cleanup_orphaned():
 def stream_chat(data: dict):
     session_id = data.get("session_id")
     prompt = data.get("prompt")
+    web_search = bool(data.get("web_search", False)) or "@web" in (prompt or "").lower()
     
     if not session_id or not prompt:
         raise HTTPException(status_code=400, detail="Missing session_id or prompt")
@@ -681,14 +682,19 @@ def stream_chat(data: dict):
     def sse_event_generator():
         set_current_user(user_id)
         try:
+            if web_search:
+                yield f"data: {json.dumps({'type': 'thought', 'step': 'Performing deep web research & scanning Knowledge Vault...', 'status': 'in_progress'})}\n\n"
+            else:
+                yield f"data: {json.dumps({'type': 'thought', 'step': 'Scanning Knowledge Vault for relevant context...', 'status': 'in_progress'})}\n\n"
+
             # Prepare context and prompt once, then reuse for both frontend and LLM
-            prompt_str, retrieved_contexts = prepare_context_and_prompt(prompt, messages)
+            prompt_str, retrieved_contexts = prepare_context_and_prompt(prompt, messages, web_search=web_search)
             
             yield f"data: {json.dumps({'type': 'contexts', 'contexts': retrieved_contexts})}\n\n"
             
             # If no contexts found, yield the error message and return early
             if not prompt_str:
-                error_msg = "I couldn't find any relevant information in the database to answer that."
+                error_msg = "I couldn't find any relevant information in the database or web to answer that."
                 yield f"data: {json.dumps({'type': 'token', 'token': error_msg})}\n\n"
                 yield f"data: {json.dumps({'type': 'done', 'full_text': error_msg})}\n\n"
                 return

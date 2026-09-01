@@ -1,5 +1,9 @@
 export interface ContextChunk {
   filename?: string;
+  title?: string;
+  url?: string;
+  domain?: string;
+  source_type?: 'vault' | 'web';
   source?: string;
   parent_content?: string;
   content?: string;
@@ -15,6 +19,7 @@ export interface ChatMessage {
   id?: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  thought?: string;
   contexts?: ContextChunk[] | null;
   created_at?: string;
   timestamp?: string;

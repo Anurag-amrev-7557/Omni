@@ -26,6 +26,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'chats' | 'projects' | 'vault' | 'chats_list'>('chats');
   const [sidecarOpen, setSidecarOpen] = useState<boolean>(false);
   const [sidecarDoc, setSidecarDoc] = useState<{ filename: string; content?: string } | null>(null);
+  const [webSearchEnabled, setWebSearchEnabled] = useState<boolean>(false);
 
   // Projects State
   const [projects, setProjects] = useState<ProjectItem[]>(() => {
@@ -229,7 +230,11 @@ export default function App() {
       const response = await fetch(`${API_BASE}/api/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ session_id: currentSessionId, prompt: actualPrompt })
+        body: JSON.stringify({
+          session_id: currentSessionId,
+          prompt: actualPrompt,
+          web_search: webSearchEnabled
+        })
       });
 
       if (!response.body) throw new Error("No response body");
@@ -237,6 +242,7 @@ export default function App() {
       const decoder = new TextDecoder('utf-8');
       let targetContent = '';
       let streamContexts: any = null;
+      let thoughtContent: string | undefined = undefined;
 
       let buffer = '';
       while (true) {
@@ -255,6 +261,9 @@ export default function App() {
 
             try {
               const parsed = JSON.parse(dataStr);
+              if (parsed.type === 'thought' && parsed.step) {
+                thoughtContent = parsed.step;
+              }
               if (parsed.token) {
                 targetContent += parsed.token;
               }
@@ -268,6 +277,7 @@ export default function App() {
                   updated[lastIdx] = {
                     ...updated[lastIdx],
                     content: targetContent,
+                    thought: thoughtContent,
                     contexts: streamContexts || updated[lastIdx].contexts
                   };
                 }
@@ -388,6 +398,14 @@ export default function App() {
                 setSelectedModel={setSelectedModel}
                 effortLevel={effortLevel}
                 setEffortLevel={setEffortLevel}
+                webSearchEnabled={webSearchEnabled}
+                onToggleWebSearch={() => {
+                  setWebSearchEnabled(prev => {
+                    const next = !prev;
+                    showToast(next ? "🌐 Live Web Research Enabled" : "📁 Local Knowledge Vault Only");
+                    return next;
+                  });
+                }}
                 onInspectDoc={handleInspectDoc}
                 onReadAloud={(text) => speakText(text)}
                 onStartVoice={() => startVoiceDictation((t) => setInputPrompt(prev => `${prev} ${t}`.trim()))}

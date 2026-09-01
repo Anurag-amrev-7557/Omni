@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Copy, Check, RotateCw, Edit3, Volume2, FileText, ChevronDown, ChevronUp, ExternalLink, Sparkles, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Copy, Check, RotateCw, Edit3, Volume2, FileText, ChevronDown, ChevronUp, ExternalLink, Sparkles, ThumbsUp, ThumbsDown, Globe } from 'lucide-react';
 import { ChatMessage, ContextChunk } from '../../types/chat';
 import { FormatBadge } from '../common/FormatBadge';
 import { DocumentSquareTile } from '../common/DocumentSquareTile';
@@ -23,6 +23,8 @@ interface ParsedCitation {
   id: string;
   filename: string;
   page?: string;
+  url?: string;
+  domain?: string;
   quote?: string;
 }
 
@@ -107,6 +109,19 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     const citations: ParsedCitation[] = [];
 
     for (const line of lines) {
+      // Check for Markdown web link: [1] [Title](url) (domain) - "quote"
+      const webMatch = line.match(/^\[(\d+)\]\s*\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)(?:\s*\(([^)]+)\))?(?:\s*(?:[—–-]|:)\s*["“]?([\s\S]*?)["”]?)?$/i);
+      if (webMatch) {
+        citations.push({
+          id: webMatch[1],
+          filename: webMatch[2]?.trim() || 'Web Link',
+          url: webMatch[3],
+          domain: webMatch[4],
+          quote: webMatch[5] ? webMatch[5].replace(/^["“]|["”]$/g, '').trim() : undefined,
+        });
+        continue;
+      }
+
       const citMatch = line.match(/^\[(\d+)\]\s*([^\n(—–:]+?)(?:\s*\((?:Page\s*(\d+)|p\.\s*(\d+))\))?(?:\s*(?:[—–-]|:)\s*["“]?([\s\S]*?)["”]?)?$/i);
       if (citMatch) {
         citations.push({
@@ -118,7 +133,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       } else if (line.length > 3) {
         citations.push({
           id: String(citations.length + 1),
-          filename: 'Cited Document',
+          filename: 'Cited Source',
           quote: line.replace(/^["“]|["”]$/g, '').trim(),
         });
       }
@@ -179,6 +194,14 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   // 2. ASSISTANT MESSAGE RENDER
   return (
     <div className="w-full flex flex-col my-5 fade-in">
+      {/* Live Research / Reasoning Thought Trace */}
+      {isLastAssistant && isStreaming && message.thought && (
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--accent-subtle)]/40 border border-[var(--accent-primary)]/20 text-xs text-[var(--accent-primary)] mb-3 animate-pulse">
+          <Globe size={13} className="animate-spin flex-shrink-0" />
+          <span className="font-medium truncate">{message.thought}</span>
+        </div>
+      )}
+
       {isLastAssistant && isStreaming && !bodyText.trim() ? (
         <div className="py-2.5">
           <OrbitingOrbLoader size="md" />
@@ -188,9 +211,15 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           <ReactMarkdown
             components={{
               a: ({ href, children }) => (
-                <span className="text-[var(--accent-primary)] font-medium cursor-pointer underline hover:text-[var(--accent-hover)] transition-colors">
+                <a 
+                  href={href} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-[var(--accent-primary)] font-medium cursor-pointer underline hover:text-[var(--accent-hover)] transition-colors inline-flex items-center gap-0.5"
+                >
                   {children}
-                </span>
+                  <ExternalLink size={10} className="inline opacity-70" />
+                </a>
               ),
             }}
           >
@@ -230,7 +259,11 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                       <span className="w-5 h-5 rounded-md bg-[var(--accent-subtle)] text-[var(--accent-primary)] font-mono text-[11px] font-bold flex items-center justify-center flex-shrink-0">
                         {cit.id}
                       </span>
-                      <FormatBadge filename={cit.filename} size="xs" />
+                      {cit.url ? (
+                        <Globe size={13} className="text-blue-500 flex-shrink-0" />
+                      ) : (
+                        <FormatBadge filename={cit.filename} size="xs" />
+                      )}
                       <span className="font-medium text-[13px] text-[var(--text-main)] truncate">
                         {cit.filename}
                       </span>
@@ -239,16 +272,34 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                           · p. {cit.page}
                         </span>
                       )}
+                      {cit.domain && (
+                        <span className="text-[11px] text-[var(--text-muted)] font-mono flex-shrink-0">
+                          · {cit.domain}
+                        </span>
+                      )}
                     </div>
 
-                    <button 
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-[var(--accent-primary)] hover:bg-[var(--accent-subtle)] transition-colors cursor-pointer flex-shrink-0"
-                      onClick={() => onInspectDoc({ filename: cit.filename, content: cit.quote, page: cit.page ? parseInt(cit.page, 10) : undefined })}
-                      title="Inspect document sidecar"
-                    >
-                      <ExternalLink size={12} />
-                      <span>View</span>
-                    </button>
+                    {cit.url ? (
+                      <a
+                        href={cit.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-blue-500 hover:bg-blue-500/10 transition-colors cursor-pointer flex-shrink-0"
+                        title="Open external web source"
+                      >
+                        <ExternalLink size={12} />
+                        <span>Visit</span>
+                      </a>
+                    ) : (
+                      <button 
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-[var(--accent-primary)] hover:bg-[var(--accent-subtle)] transition-colors cursor-pointer flex-shrink-0"
+                        onClick={() => onInspectDoc({ filename: cit.filename, content: cit.quote, page: cit.page ? parseInt(cit.page, 10) : undefined })}
+                        title="Inspect document sidecar"
+                      >
+                        <ExternalLink size={12} />
+                        <span>View</span>
+                      </button>
+                    )}
                   </div>
 
                   {cit.quote && (
@@ -272,7 +323,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           >
             <div className="flex items-center gap-2">
               <FileText size={14} className="text-[var(--accent-primary)]" />
-              <span>Retrieved Vector Chunks ({message.contexts.length} sources)</span>
+              <span>Retrieved Context Sources ({message.contexts.length} items)</span>
             </div>
             <div className="flex items-center gap-1.5 text-[var(--text-muted)]">
               <span className="text-[11px] font-normal font-mono">
@@ -286,6 +337,30 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             <div className="mt-3 flex flex-col gap-2 pt-2.5 border-t border-[var(--border-color)]">
               {message.contexts.map((ctx: ContextChunk, idx: number) => {
                 const fname = ctx.filename || ctx.source || 'document';
+                const isWeb = ctx.source_type === 'web' || Boolean(ctx.url);
+
+                if (isWeb && ctx.url) {
+                  return (
+                    <a
+                      key={idx}
+                      href={ctx.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-[var(--bg-sidebar)] border border-[var(--border-color)] text-xs cursor-pointer hover:border-blue-500/60 transition-all group"
+                    >
+                      <div className="flex items-center gap-2.5 truncate pr-2">
+                        <span className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold bg-blue-500/10 text-blue-500 font-mono flex-shrink-0">
+                          {idx + 1}
+                        </span>
+                        <Globe size={13} className="text-blue-500 flex-shrink-0" />
+                        <span className="font-medium text-[var(--text-main)] truncate text-[12.5px]">{ctx.title || fname}</span>
+                        {ctx.domain && <span className="text-[var(--text-muted)] font-mono">· {ctx.domain}</span>}
+                      </div>
+                      <ExternalLink size={12} className="text-[var(--text-muted)] group-hover:text-blue-500 transition-colors flex-shrink-0" />
+                    </a>
+                  );
+                }
+
                 return (
                   <div 
                     key={idx}

@@ -22,6 +22,8 @@ interface ChatCanvasProps {
   setSelectedModel: (model: string) => void;
   effortLevel: string;
   setEffortLevel: (effort: string) => void;
+  webSearchEnabled?: boolean;
+  onToggleWebSearch?: () => void;
   onInspectDoc: (chunk: { filename: string; content?: string }) => void;
   onReadAloud: (content: string) => void;
   onStartVoice: () => void;
@@ -46,6 +48,8 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
   setSelectedModel,
   effortLevel,
   setEffortLevel,
+  webSearchEnabled,
+  onToggleWebSearch,
   onInspectDoc,
   onReadAloud,
   onStartVoice,
@@ -114,6 +118,8 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
             setSelectedModel={setSelectedModel}
             effortLevel={effortLevel}
             setEffortLevel={setEffortLevel}
+            webSearchEnabled={webSearchEnabled}
+            onToggleWebSearch={onToggleWebSearch}
             onStartVoice={onStartVoice}
             showToast={showToast}
           />
