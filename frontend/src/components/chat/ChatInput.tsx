@@ -28,10 +28,10 @@ interface ChatInputProps {
 }
 
 const AVAILABLE_MODELS: ModelOption[] = [
-  { name: 'Sonnet 5', desc: 'Default high precision' },
-  { name: 'Groq LLaMA 3.3 70B', desc: 'Commercial LPU RAG' },
-  { name: 'Groq LLaMA 3.1 8B', desc: 'Ultra fast inference' },
-  { name: 'DeepSeek R1', desc: 'Reasoning model' },
+  { name: 'GPT-OSS 120B', desc: 'Flagship high-precision reasoning' },
+  { name: 'GPT-OSS 20B', desc: 'Ultra-fast balanced inference' },
+  { name: 'Qwen 3.8 27B', desc: 'Advanced enterprise reasoning' },
+  { name: 'Qwen 3.6 27B', desc: 'Technical & code synthesis' },
 ];
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -50,6 +50,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   setSelectedModel,
   effortLevel,
   setEffortLevel,
+  webSearchEnabled = false,
+  onToggleWebSearch,
   onStartVoice,
   showToast,
 }) => {

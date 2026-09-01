@@ -53,7 +53,7 @@ export default function App() {
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
 
   // Model & Inference Settings
-  const [selectedModel, setSelectedModel] = useState<string>('Sonnet 5');
+  const [selectedModel, setSelectedModel] = useState<string>('GPT-OSS 120B');
   const [effortLevel, setEffortLevel] = useState<string>('Medium');
   const [temperature, setTemperature] = useState<number>(0.2);
   const [similarityTopK, setSimilarityTopK] = useState<number>(12);
