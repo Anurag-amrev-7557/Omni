@@ -147,7 +147,13 @@ def prepare_context_and_prompt(
 
     combined_all = unique_contexts + web_contexts
     if not combined_all:
-        return None, []
+        prompt = f"""
+        You are Omni, a highly intelligent and helpful AI assistant.
+        Answer the user's question directly, clearly, thoughtfully, and with structured formatting (bullet points, bold key points, and clear paragraphs).
+        
+        Question: {query}
+        """
+        return prompt, []
             
     combined_context = ""
     for idx, ctx in enumerate(combined_all, start=1):
@@ -159,17 +165,16 @@ def prepare_context_and_prompt(
             combined_context += f"--- VAULT SOURCE [{idx}]: {ctx['filename']}{page_info} ---\n{full_text.strip()}\n\n"
         
     prompt = f"""
-    You are an expert enterprise research analyst. Answer the user's question accurately, thoroughly, and directly using the provided context below.
+    You are an expert enterprise research analyst and intelligent AI assistant. Answer the user's question accurately, thoroughly, and directly.
     
     CRITICAL PRESENTATION & CITATION INSTRUCTIONS:
     1. EXCELLENT PRESENTATION: Present your answer with clean structure. Use bullet points (`-`), bold sub-headers (`**Category:**`), and clear line breaks. NEVER collapse multiple items or categories into a single unformatted wall of text.
-    2. ACCURATE EXTRACTION & SYNTHESIS: Carefully inspect all tables, line items, pricing, web articles, dates, and numbers in the context. Integrate both private Knowledge Vault documents and public Web findings seamlessly.
-    3. INLINE CITATIONS: Whenever stating a fact, price, finding, or detail from a source, insert a bracketed numerical citation immediately following the statement, e.g., `[1]` or `[1, 2]`.
-    4. REFERENCES FOOTER: At the very end of your answer, add a horizontal divider `---` followed by the header `##### References & Sources`. DO NOT use any emojis. Write ONLY clean text without any emoji!
-    5. CITATION LIST FORMAT: Under `##### References & Sources`, list each referenced source on a new line using this format:
+    2. ACCURATE EXTRACTION & SYNTHESIS: If the context contains relevant information (from private Knowledge Vault documents or Web findings), synthesize it thoroughly and cite it accurately. If the provided context is unrelated to the question (e.g. general knowledge, reasoning, or advice queries), answer the user's question directly, thoughtfully, and helpfully.
+    3. INLINE CITATIONS: Whenever stating a fact, price, finding, or detail from a relevant source, insert a bracketed numerical citation immediately following the statement, e.g., `[1]` or `[1, 2]`.
+    4. REFERENCES FOOTER: If you cited specific sources from the context, at the very end of your answer add a horizontal divider `---` followed by the header `##### References & Sources`. DO NOT use any emojis.
+    5. CITATION LIST FORMAT: Under `##### References & Sources`, list each cited source on a new line using this format:
        - For Vault Documents: `- **[X] filename.pdf** *(Page Y)* — *"Exact short quote snippet..."*`
        - For Web Pages: `- **[X] [Page Title](URL)** *(domain.com)* — *"Exact short excerpt snippet..."*`
-    6. Only if the provided context truly contains no information related to the question, state "I don't know based on the provided documents."
     
     Context:
     {combined_context}

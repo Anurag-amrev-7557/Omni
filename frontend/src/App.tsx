@@ -273,6 +273,9 @@ export default function App() {
               if (parsed.token) {
                 targetContent += parsed.token;
               }
+              if (parsed.full_text && !targetContent) {
+                targetContent = parsed.full_text;
+              }
               if (parsed.contexts) {
                 streamContexts = parsed.contexts;
               }
@@ -295,10 +298,37 @@ export default function App() {
           }
         }
       }
+
+      // Ensure assistant message has content if stream finished empty
+      if (!targetContent.trim()) {
+        setMessages(prev => {
+          const updated = [...prev];
+          const lastIdx = updated.length - 1;
+          if (lastIdx >= 0 && updated[lastIdx].role === 'assistant' && !updated[lastIdx].content) {
+            updated[lastIdx] = {
+              ...updated[lastIdx],
+              content: "I could not retrieve matching information. Please try rephrasing or enable Web Search.",
+            };
+          }
+          return updated;
+        });
+      }
+
       loadSessions();
     } catch (e) {
       console.error("Stream error:", e);
       showToast("Error generating response");
+      setMessages(prev => {
+        const updated = [...prev];
+        const lastIdx = updated.length - 1;
+        if (lastIdx >= 0 && updated[lastIdx].role === 'assistant' && !updated[lastIdx].content) {
+          updated[lastIdx] = {
+            ...updated[lastIdx],
+            content: "⚠️ *An error occurred while connecting to the assistant. Please try again.*",
+          };
+        }
+        return updated;
+      });
     } finally {
       setIsStreaming(false);
     }

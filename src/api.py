@@ -692,12 +692,8 @@ def stream_chat(data: dict):
             
             yield f"data: {json.dumps({'type': 'contexts', 'contexts': retrieved_contexts})}\n\n"
             
-            # If no contexts found, yield the error message and return early
             if not prompt_str:
-                error_msg = "I couldn't find any relevant information in the database or web to answer that."
-                yield f"data: {json.dumps({'type': 'token', 'token': error_msg})}\n\n"
-                yield f"data: {json.dumps({'type': 'done', 'full_text': error_msg})}\n\n"
-                return
+                prompt_str = f"You are Omni, a helpful AI assistant. Please answer this prompt: {prompt}"
             
             full_text = ""
             # Stream the LLM response using the already-prepared prompt
