@@ -15,6 +15,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { api } from '../../services/api';
 import { FormatBadge } from '../common/FormatBadge';
 import { OrbitingOrbLoader } from '../common/OrbitingOrbLoader';
@@ -296,7 +297,40 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
               fontSize: `${(zoom / 100) * 0.95}rem`,
             }}
           >
-            <ReactMarkdown>{content}</ReactMarkdown>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                table: ({ children }) => (
+                  <div className="overflow-x-auto my-3.5 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] shadow-xs">
+                    <table className="min-w-full divide-y divide-[var(--border-color)] text-xs text-left">
+                      {children}
+                    </table>
+                  </div>
+                ),
+                thead: ({ children }) => (
+                  <thead className="bg-[var(--bg-sidebar)] text-[var(--text-muted)] font-semibold text-[11.5px] uppercase tracking-wider">
+                    {children}
+                  </thead>
+                ),
+                th: ({ children }) => (
+                  <th className="px-3.5 py-2.5 font-semibold text-[var(--text-main)] border-b border-[var(--border-color)] whitespace-nowrap">
+                    {children}
+                  </th>
+                ),
+                td: ({ children }) => (
+                  <td className="px-3.5 py-2.5 text-[var(--text-main)] border-b border-[var(--border-color)]/40 leading-relaxed align-top">
+                    {children}
+                  </td>
+                ),
+                tr: ({ children }) => (
+                  <tr className="hover:bg-[var(--bg-hover)]/40 transition-colors last:border-b-0">
+                    {children}
+                  </tr>
+                ),
+              }}
+            >
+              {content}
+            </ReactMarkdown>
           </div>
         )}
       </div>

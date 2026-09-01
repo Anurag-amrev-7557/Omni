@@ -174,6 +174,51 @@ def safe_filename(filename: str) -> str:
         raise HTTPException(status_code=400, detail="Invalid filename")
     return name
 
+def resolve_file_path(user_id: str, filename: str) -> str:
+    """Robustly discovers and links files across user directories, root uploads, and cloud storage."""
+    filename = safe_filename(filename)
+    user_dir = os.path.join(get_uploads_dir(), user_id)
+    os.makedirs(user_dir, exist_ok=True)
+    target_path = os.path.join(user_dir, filename)
+    
+    if os.path.exists(target_path) and os.path.getsize(target_path) > 0:
+        return target_path
+        
+    # Check base uploaded_docs root
+    root_path = os.path.join(get_uploads_dir(), filename)
+    if os.path.exists(root_path) and os.path.getsize(root_path) > 0:
+        import shutil
+        try:
+            shutil.copy2(root_path, target_path)
+        except Exception:
+            return root_path
+        return target_path
+
+    # Search all user subdirectories under uploaded_docs
+    base_uploads = get_uploads_dir()
+    if os.path.exists(base_uploads):
+        for entry in os.listdir(base_uploads):
+            entry_path = os.path.join(base_uploads, entry)
+            if os.path.isdir(entry_path) and entry != user_id:
+                candidate = os.path.join(entry_path, filename)
+                if os.path.exists(candidate) and os.path.getsize(candidate) > 0:
+                    import shutil
+                    try:
+                        shutil.copy2(candidate, target_path)
+                    except Exception:
+                        return candidate
+                    return target_path
+
+    # Try downloading from Cloudflare R2 / S3 storage
+    try:
+        data = get_file_bytes(user_id, filename, local_path=target_path)
+        if data and os.path.exists(target_path) and os.path.getsize(target_path) > 0:
+            return target_path
+    except Exception:
+        pass
+        
+    return target_path
+
 # Global progress tracking for uploads
 upload_progress: Dict[str, Dict] = {}
 
@@ -494,10 +539,13 @@ def delete_document(filename: str):
 
 @app.get("/api/download/{filename}")
 def download_document(filename: str):
-    uploads_dir = user_upload_dir()
-    filename = safe_filename(filename)
-    file_path = os.path.join(uploads_dir, filename)
-    file_bytes = get_file_bytes(get_current_user(), filename, local_path=file_path)
+    user_id = get_current_user()
+    file_path = resolve_file_path(user_id, filename)
+    if os.path.exists(file_path):
+        with open(file_path, "rb") as f:
+            file_bytes = f.read()
+    else:
+        file_bytes = get_file_bytes(user_id, filename, local_path=file_path)
     if not file_bytes:
         raise HTTPException(status_code=404, detail="File not found")
     return Response(
@@ -508,27 +556,23 @@ def download_document(filename: str):
 
 @app.post("/api/documents/{filename}/reindex")
 def reindex_document(filename: str):
-    uploads_dir = user_upload_dir()
-    filename = safe_filename(filename)
-    file_path = os.path.join(uploads_dir, filename)
+    user_id = get_current_user()
+    file_path = resolve_file_path(user_id, filename)
     if not os.path.exists(file_path):
-        data = get_file_bytes(get_current_user(), filename, local_path=file_path)
+        data = get_file_bytes(user_id, filename, local_path=file_path)
         if not data:
             raise HTTPException(status_code=404, detail="File not found")
     try:
         delete_file_from_collection(filename)
-        ingest_file(file_path, get_current_user())
+        ingest_file(file_path, user_id)
         return {"success": True, "filename": filename}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error re-indexing {filename}: {e}")
 
 @app.get("/api/pdf-info")
 def get_pdf_info(filename: str = Query(...)):
-    uploads_dir = user_upload_dir()
-    filename = safe_filename(filename)
-    file_path = os.path.join(uploads_dir, filename)
-    if not os.path.exists(file_path):
-        get_file_bytes(get_current_user(), filename, local_path=file_path)
+    user_id = get_current_user()
+    file_path = resolve_file_path(user_id, filename)
     if not os.path.exists(file_path):
         return {"filename": filename, "total_pages": 1}
     count = get_pdf_page_count(file_path)
@@ -536,20 +580,15 @@ def get_pdf_info(filename: str = Query(...)):
 
 @app.get("/api/file-content")
 def get_file_content(filename: str = Query(...)):
-    uploads_dir = user_upload_dir()
-    filename = safe_filename(filename)
-    file_path = os.path.join(uploads_dir, filename)
     user_id = get_current_user()
-    
-    if not os.path.exists(file_path):
-        get_file_bytes(user_id, filename, local_path=file_path)
+    file_path = resolve_file_path(user_id, filename)
         
     if os.path.exists(file_path):
         if filename.lower().endswith(".pdf"):
             try:
                 pages_count = get_pdf_page_count(file_path)
                 pages_text = []
-                for p in range(1, pages_count + 1):
+                for p in range(1, (pages_count or 1) + 1):
                     p_text = extract_pdf_page_text(file_path, p)
                     if p_text.strip():
                         pages_text.append(f"### Page {p}\n\n{p_text}")
@@ -569,10 +608,9 @@ def get_file_content(filename: str = Query(...)):
         client = get_qdrant_client()
         points, _ = client.scroll(
             collection_name=COLLECTION_NAME,
-            limit=200,
+            limit=300,
             scroll_filter=Filter(
                 must=[
-                    FieldCondition(key="metadata.user_id", match=MatchValue(value=user_id)),
                     FieldCondition(key="metadata.filename", match=MatchValue(value=filename)),
                 ]
             ),
@@ -596,7 +634,7 @@ def get_file_content(filename: str = Query(...)):
                 if parent_text and parent_text not in seen:
                     seen.add(parent_text)
                     page_num = meta.get("page", 1)
-                    blocks.append(f"**[Page {page_num}]**\n{parent_text}")
+                    blocks.append(f"**[Page {page_num}]**\n\n{parent_text}")
             if blocks:
                 return {"filename": filename, "content": "\n\n---\n\n".join(blocks)}
     except Exception as exc:
@@ -606,12 +644,9 @@ def get_file_content(filename: str = Query(...)):
 
 @app.get("/api/pdf-page-image")
 def get_pdf_page_image(filename: str = Query(...), page: int = Query(1, ge=1)):
-    uploads_dir = user_upload_dir()
-    filename = safe_filename(filename)
-    file_path = os.path.join(uploads_dir, filename)
+    user_id = get_current_user()
+    file_path = resolve_file_path(user_id, filename)
     
-    if not os.path.exists(file_path):
-        get_file_bytes(get_current_user(), filename, local_path=file_path)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
         
