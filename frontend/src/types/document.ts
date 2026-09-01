@@ -1,5 +1,6 @@
 export interface DocumentItem {
   filename: string;
+  upload_id?: string;
   size_mb: number;
   pages: number;
   indexed?: boolean;

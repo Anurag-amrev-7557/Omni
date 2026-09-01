@@ -373,18 +373,53 @@ MAX_FILE_SIZE_BYTES = 35 * 1024 * 1024  # 35 MB
 MAX_FILES_PER_BATCH = 10
 ALLOWED_EXTENSIONS = {".pdf", ".txt", ".md"}
 
+cancelled_uploads: set[str] = set()
+
+def rollback_upload_files(user_id: str, file_records: list[dict]):
+    """Performs a comprehensive rollback of files from Qdrant, Supabase Storage, disk, and database."""
+    for rec in file_records:
+        fname = rec.get("filename")
+        fpath = rec.get("path")
+        if not fname:
+            continue
+        print(f"[Rollback] Purging {fname} for user {user_id}...")
+        try:
+            delete_file_from_collection(fname)
+        except Exception as exc:
+            print(f"[Rollback] Qdrant purge error for {fname}: {exc}")
+        try:
+            delete_file(user_id, fname, local_path=fpath)
+        except Exception as exc:
+            print(f"[Rollback] Storage purge error for {fname}: {exc}")
+        try:
+            delete_document_record(user_id, fname)
+        except Exception as exc:
+            print(f"[Rollback] DB record purge error for {fname}: {exc}")
+
 def process_upload_batch_sync(upload_id: str, user_id: str, file_records: list[dict]):
-    """Background worker that ingests files and updates progress in database."""
+    """Background worker that ingests files and updates progress in database with cancellation support."""
     set_current_user(user_id)
     completed = 0
     errors = []
     
     for idx, rec in enumerate(file_records):
+        # Check cancellation before starting file
+        if upload_id in cancelled_uploads:
+            print(f"[Worker] Upload {upload_id} cancelled. Executing full rollback...")
+            rollback_upload_files(user_id, file_records)
+            cancelled_uploads.discard(upload_id)
+            if upload_id in upload_progress:
+                upload_progress[upload_id]["status"] = "cancelled"
+            save_upload_job(upload_id, user_id, "cancelled", len(file_records), completed, file_records)
+            return
+
         fname = rec["filename"]
         fpath = rec["path"]
         fsize = rec["size_bytes"]
         
         def item_progress_cb(percent: int, stage_text: str = "Processing..."):
+            if upload_id in cancelled_uploads:
+                return
             rec["progress"] = percent
             rec["stage"] = stage_text
             rec["status"] = "completed" if percent >= 100 else "processing"
@@ -396,6 +431,17 @@ def process_upload_batch_sync(upload_id: str, user_id: str, file_records: list[d
             print(f"[Worker] Ingesting {fname} for user {user_id}...")
             item_progress_cb(10, "Starting ingestion...")
             ingest_file(fpath, user_id, progress_callback=item_progress_cb)
+            
+            # Re-check cancellation after ingestion
+            if upload_id in cancelled_uploads:
+                print(f"[Worker] Upload {upload_id} cancelled post-ingestion. Executing full rollback...")
+                rollback_upload_files(user_id, file_records)
+                cancelled_uploads.discard(upload_id)
+                if upload_id in upload_progress:
+                    upload_progress[upload_id]["status"] = "cancelled"
+                save_upload_job(upload_id, user_id, "cancelled", len(file_records), completed, file_records)
+                return
+
             upsert_document(user_id, fname, "indexed", size_bytes=fsize)
             completed += 1
             rec["status"] = "completed"
@@ -482,6 +528,34 @@ async def upload_documents(
         "status": "processing",
         "files_count": len(files)
     }
+
+@app.post("/api/upload/{upload_id}/cancel")
+def cancel_upload_endpoint(upload_id: str):
+    """Cancels an active upload and executes full rollback across storage, vectors, and database."""
+    user_id = get_current_user()
+    cancelled_uploads.add(upload_id)
+    
+    file_records = []
+    if upload_id in upload_progress:
+        file_records = upload_progress[upload_id].get("files", []) or []
+    else:
+        try:
+            job = get_upload_job(upload_id, user_id)
+            if job:
+                file_records = job.get("files", []) or []
+        except Exception:
+            pass
+            
+    if isinstance(file_records, list) and file_records:
+        rollback_upload_files(user_id, file_records)
+            
+    if upload_id in upload_progress:
+        upload_progress[upload_id]["status"] = "cancelled"
+    try:
+        save_upload_job(upload_id, user_id, "cancelled", 0, 0, [])
+    except Exception:
+        pass
+    return {"success": True, "upload_id": upload_id, "status": "cancelled", "message": "Upload cancelled and rolled back."}
 
 @app.post("/api/audio/transcribe")
 @limiter.limit("30/minute")

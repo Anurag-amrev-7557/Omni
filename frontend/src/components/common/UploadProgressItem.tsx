@@ -1,5 +1,5 @@
 import React from 'react';
-import { Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, Clock, X } from 'lucide-react';
 
 interface UploadProgressItemProps {
   filename: string;
@@ -7,6 +7,7 @@ interface UploadProgressItemProps {
   progress: number;
   stage?: string;
   error?: string;
+  onCancel?: () => void;
 }
 
 export const UploadProgressItem: React.FC<UploadProgressItemProps> = ({
@@ -14,7 +15,8 @@ export const UploadProgressItem: React.FC<UploadProgressItemProps> = ({
   status,
   progress,
   stage,
-  error
+  error,
+  onCancel
 }) => {
   const getStatusIcon = () => {
     switch (status) {
@@ -95,9 +97,24 @@ export const UploadProgressItem: React.FC<UploadProgressItemProps> = ({
         )}
       </div>
 
-      {/* Progress Percentage */}
-      <div className="flex-shrink-0 text-xs font-mono text-[var(--text-muted)]">
-        {progress}%
+      {/* Progress Percentage & Cancel Button */}
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <span className="text-xs font-mono text-[var(--text-muted)]">
+          {progress}%
+        </span>
+        {onCancel && (status === 'uploading' || status === 'processing') && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCancel();
+            }}
+            className="p-1 rounded-md text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+            title="Cancel upload and rollback"
+          >
+            <X size={14} />
+          </button>
+        )}
       </div>
     </div>
   );

@@ -71,7 +71,8 @@ export const api = {
 
   uploadDocuments(
     files: FileList | File[],
-    onProgress?: (percent: number) => void
+    onProgress?: (percent: number) => void,
+    onXhrCreated?: (xhr: XMLHttpRequest) => void
   ): Promise<UploadResponse> {
     return new Promise(async (resolve, reject) => {
       const formData = new FormData();
@@ -81,6 +82,7 @@ export const api = {
       
       const token = await tokenProvider?.();
       const xhr = new XMLHttpRequest();
+      onXhrCreated?.(xhr);
       xhr.open('POST', `${API_BASE}/api/upload`);
       if (token) {
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
@@ -108,9 +110,18 @@ export const api = {
         }
       };
 
+      xhr.onabort = () => {
+        reject(new Error('Upload aborted by user'));
+      };
+
       xhr.onerror = () => reject(new Error('Network error during upload'));
       xhr.send(formData);
     });
+  },
+
+  async cancelUpload(uploadId: string): Promise<{ success: boolean; status: string }> {
+    const res = await apiFetch(`/api/upload/${uploadId}/cancel`, { method: 'POST' });
+    return res.json();
   },
 
   async getUploadProgress(uploadId: string): Promise<UploadProgress> {

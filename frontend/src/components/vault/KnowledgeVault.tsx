@@ -23,6 +23,7 @@ interface KnowledgeVaultProps {
   onBatchReindex?: (filenames: string[]) => void;
   onBatchDownload?: (filenames: string[]) => void;
   onCleanupOrphaned?: () => void;
+  onCancelUpload?: (uploadId?: string, filename?: string) => void;
   showToast: (msg: string) => void;
 }
 
@@ -41,6 +42,7 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
   onBatchReindex,
   onBatchDownload,
   onCleanupOrphaned,
+  onCancelUpload,
   showToast,
 }) => {
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -272,6 +274,7 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
                   progress={doc.progress || 0}
                   stage={doc.stage}
                   error={doc.error}
+                  onCancel={onCancelUpload ? () => onCancelUpload(doc.upload_id, doc.filename) : undefined}
                 />
               ))}
             </div>

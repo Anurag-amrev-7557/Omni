@@ -89,6 +89,7 @@ export default function App() {
     isUploading,
     refreshVault,
     uploadFiles,
+    cancelUpload,
     deleteDocument,
     reindexDocument,
     downloadDocument,
@@ -520,6 +521,7 @@ export default function App() {
                 onBatchReindex={batchReindexDocuments}
                 onBatchDownload={batchDownloadDocuments}
                 onCleanupOrphaned={cleanupOrphaned}
+                onCancelUpload={cancelUpload}
                 showToast={showToast}
               />
             )}

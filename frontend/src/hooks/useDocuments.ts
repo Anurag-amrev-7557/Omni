@@ -19,6 +19,55 @@ export const useDocuments = (showToast: (msg: string) => void) => {
   const [health, setHealth] = useState<PipelineHealth | null>(null);
   const [currentUploadId, setCurrentUploadId] = useState<string | null>(null);
   const pollerRef = useRef<number | null>(null);
+  const activeXhrRef = useRef<XMLHttpRequest | null>(null);
+
+  const cancelUpload = useCallback(async (uploadIdToCancel?: string, filenameToCancel?: string) => {
+    // 1. Abort in-flight network transfer
+    if (activeXhrRef.current) {
+      try {
+        activeXhrRef.current.abort();
+      } catch (err) {
+        console.warn("Error aborting XHR:", err);
+      }
+      activeXhrRef.current = null;
+    }
+
+    // 2. Clear background poller
+    if (pollerRef.current) {
+      window.clearInterval(pollerRef.current);
+      pollerRef.current = null;
+    }
+
+    setIsUploading(false);
+    const targetUploadId = uploadIdToCancel || currentUploadId;
+
+    // 3. Instantly remove from local documents list (0ms optimistic rollback)
+    setDocuments(prev => prev.filter(doc => {
+      if (filenameToCancel && doc.filename === filenameToCancel) return false;
+      if (!filenameToCancel && (doc.status === 'uploading' || doc.status === 'processing')) return false;
+      return true;
+    }));
+
+    showToast("Upload cancelled and rolled back");
+
+    // 4. Fire backend cancellation & rollback
+    if (targetUploadId) {
+      try {
+        await api.cancelUpload(targetUploadId);
+      } catch (e) {
+        console.warn("Backend cancel error:", e);
+      }
+    } else if (filenameToCancel) {
+      try {
+        await api.deleteDocument(filenameToCancel);
+      } catch (e) {
+        console.warn("Backend purge error:", e);
+      }
+    }
+
+    setCurrentUploadId(null);
+    await refreshVault();
+  }, [currentUploadId, refreshVault, showToast]);
 
   const fetchDocuments = useCallback(async () => {
     try {
@@ -105,22 +154,41 @@ export const useDocuments = (showToast: (msg: string) => void) => {
     });
 
     try {
-      const res = await api.uploadDocuments(files, (uploadPercent) => {
+      const res = await api.uploadDocuments(
+        files, 
+        (uploadPercent) => {
+          setDocuments(prev => prev.map(doc => {
+            if (fileList.some(f => f.name === doc.filename)) {
+              return {
+                ...doc,
+                status: 'uploading',
+                progress: uploadPercent,
+                stage: uploadPercent >= 100 ? 'Server processing...' : `Uploading to server (${uploadPercent}%)...`
+              };
+            }
+            return doc;
+          }));
+        },
+        (xhr) => {
+          activeXhrRef.current = xhr;
+        }
+      );
+      
+      activeXhrRef.current = null;
+      
+      if (res.success && res.upload_id) {
+        setCurrentUploadId(res.upload_id);
+        
+        // Attach upload_id to local document items
         setDocuments(prev => prev.map(doc => {
           if (fileList.some(f => f.name === doc.filename)) {
             return {
               ...doc,
-              status: 'uploading',
-              progress: uploadPercent,
-              stage: uploadPercent >= 100 ? 'Server processing...' : `Uploading to server (${uploadPercent}%)...`
+              upload_id: res.upload_id
             };
           }
           return doc;
         }));
-      });
-      
-      if (res.success && res.upload_id) {
-        setCurrentUploadId(res.upload_id);
         
         // 2. Poll server for background vector ingestion progress
         const pollInterval = 500;
@@ -132,12 +200,24 @@ export const useDocuments = (showToast: (msg: string) => void) => {
           try {
             const progress = await api.getUploadProgress(res.upload_id!);
             
+            if (progress && progress.status === 'cancelled') {
+              if (pollerRef.current) {
+                window.clearInterval(pollerRef.current);
+                pollerRef.current = null;
+              }
+              setIsUploading(false);
+              setCurrentUploadId(null);
+              await refreshVault();
+              return;
+            }
+            
             if (progress && progress.files && progress.files.length > 0) {
               setDocuments(prev => prev.map(doc => {
                 const fProgress = progress.files.find(f => f.filename === doc.filename);
                 if (fProgress) {
                   return {
                     ...doc,
+                    upload_id: res.upload_id,
                     status: fProgress.status,
                     progress: fProgress.progress ?? (fProgress.status === 'completed' ? 100 : 50),
                     stage: (fProgress as any).stage || (fProgress.status === 'completed' ? 'Completed' : 'Extracting & Indexing...'),
@@ -183,6 +263,10 @@ export const useDocuments = (showToast: (msg: string) => void) => {
         await refreshVault();
       }
     } catch (e: any) {
+      activeXhrRef.current = null;
+      if (e?.message === 'Upload aborted by user') {
+        return; // Handled cleanly by cancelUpload
+      }
       console.error("Upload error:", e);
       setDocuments(prev => prev.map(doc => {
         if (fileList.some(f => f.name === doc.filename)) {
@@ -326,6 +410,7 @@ export const useDocuments = (showToast: (msg: string) => void) => {
     fetchHealth,
     refreshVault,
     uploadFiles,
+    cancelUpload,
     deleteDocument,
     reindexDocument,
     downloadDocument,
