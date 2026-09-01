@@ -1,0 +1,75 @@
+{
+  "timestamp": "2026-09-01T13:13:11.721106",
+  "total_queries_tested": 4,
+  "metrics": {
+    "avg_faithfulness": 1.0,
+    "avg_answer_relevance": 0.718,
+    "avg_context_precision": 0.073,
+    "avg_total_latency_ms": 19927.81,
+    "avg_retrieval_latency_ms": 7903.75,
+    "avg_generation_latency_ms": 12024.07
+  },
+  "query_results": [
+    {
+      "query": "What are the primary findings and model architecture described in the documents?",
+      "retrieved_chunks": 5,
+      "sources": [
+        "cell-segmentation.md"
+      ],
+      "retrieval_latency_ms": 22371.16,
+      "generation_latency_ms": 2099.78,
+      "total_latency_ms": 24470.94,
+      "faithfulness": 1.0,
+      "hallucination_detected": false,
+      "answer_relevance": 0.95,
+      "context_precision": 0.0322,
+      "answer_preview": "**Primary Findings**\n\n- **Wide\u2011field Specular Microscopy (WFSM) improves disease assessment**  \n  - WFSM captures peripheral endothelial images, addressing the ..."
+    },
+    {
+      "query": "Summarize the key methodology and cell segmentation analysis.",
+      "retrieved_chunks": 4,
+      "sources": [
+        "cell-segmentation.md",
+        "2303.13962v2.pdf"
+      ],
+      "retrieval_latency_ms": 1141.76,
+      "generation_latency_ms": 12544.34,
+      "total_latency_ms": 13686.1,
+      "faithfulness": 1.0,
+      "hallucination_detected": false,
+      "answer_relevance": 0.9,
+      "context_precision": 0.2587,
+      "answer_preview": "**Key Methodology \u2013 iRIOM (4D Radar Inertial Odometry & Mapping)**  \n- **Fusion of Radar and IMU** \u2013 iRIOM combines 4\u2011D imaging radar scans with 6\u2011D inertial me..."
+    },
+    {
+      "query": "What are the main performance metrics and conclusions reached?",
+      "retrieved_chunks": 5,
+      "sources": [
+        "2303.13962v2.pdf"
+      ],
+      "retrieval_latency_ms": 4953.47,
+      "generation_latency_ms": 22403.69,
+      "total_latency_ms": 27357.16,
+      "faithfulness": 1.0,
+      "hallucination_detected": false,
+      "answer_relevance": 0.92,
+      "context_precision": 0.0007,
+      "answer_preview": "**Main Performance Metrics**\n\n- **Closure Error**  \n  - Horizontal (m), Vertical (m), and Translational (m) errors are reported for each method.  \n  - iRIOM con..."
+    },
+    {
+      "query": "What is the capital of Mars?",
+      "retrieved_chunks": 3,
+      "sources": [
+        "2303.13962v2.pdf"
+      ],
+      "retrieval_latency_ms": 3148.6,
+      "generation_latency_ms": 11048.46,
+      "total_latency_ms": 14197.06,
+      "faithfulness": 1.0,
+      "hallucination_detected": false,
+      "answer_relevance": 0.1,
+      "context_precision": 0.0,
+      "answer_preview": "I don't know based on the provided documents."
+    }
+  ]
+}

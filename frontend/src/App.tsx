@@ -1,0 +1,460 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { Sidebar } from './components/layout/Sidebar';
+import { TopHeader } from './components/layout/TopHeader';
+import { SidecarReader } from './components/layout/SidecarReader';
+import { ChatCanvas } from './components/chat/ChatCanvas';
+import { KnowledgeVault } from './components/vault/KnowledgeVault';
+import { SettingsModal } from './components/modals/SettingsModal';
+import { SearchModal } from './components/modals/SearchModal';
+import { ShareModal } from './components/modals/ShareModal';
+import { ProjectsModal } from './components/modals/ProjectsModal';
+import { ProjectsView } from './components/projects/ProjectsView';
+import { Toast } from './components/common/Toast';
+import { useDocuments } from './hooks/useDocuments';
+import { useSpeech } from './hooks/useSpeech';
+import { api } from './services/api';
+import { ChatSession, ChatMessage } from './types/chat';
+import { ProjectItem, INITIAL_PROJECTS } from './types/project';
+
+export default function App() {
+  // Navigation & Layout State
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<'chats' | 'projects' | 'vault' | 'chats_list'>('chats');
+  const [sidecarOpen, setSidecarOpen] = useState<boolean>(false);
+  const [sidecarDoc, setSidecarDoc] = useState<{ filename: string; content?: string } | null>(null);
+
+  // Projects State
+  const [projects, setProjects] = useState<ProjectItem[]>(() => {
+    const saved = localStorage.getItem('omni_projects');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        // fallback
+      }
+    }
+    return INITIAL_PROJECTS;
+  });
+  const [activeProjectId, setActiveProjectId] = useState<string>(() => {
+    return localStorage.getItem('omni_active_project') || 'default-vault';
+  });
+
+  // Chat & Session State
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputPrompt, setInputPrompt] = useState<string>('');
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [isStreaming, setIsStreaming] = useState<boolean>(false);
+
+  // Model & Inference Settings
+  const [selectedModel, setSelectedModel] = useState<string>('Sonnet 5');
+  const [effortLevel, setEffortLevel] = useState<string>('Medium');
+  const [temperature, setTemperature] = useState<number>(0.2);
+  const [similarityTopK, setSimilarityTopK] = useState<number>(12);
+  const [rerankLimit, setRerankLimit] = useState<number>(3);
+
+  // Modals
+  const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
+  const [searchOpen, setSearchOpen] = useState<boolean>(false);
+  const [shareOpen, setShareOpen] = useState<boolean>(false);
+  const [projectsOpen, setProjectsOpen] = useState<boolean>(false);
+  const [referencedVaultDocs, setReferencedVaultDocs] = useState<string[]>([]);
+
+  // Toast
+  const [toastMessage, setToastMessage] = useState<string>('');
+  const showToast = useCallback((msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 2600);
+  }, []);
+
+  // Custom Hooks
+  const {
+    documents,
+    stats,
+    isUploading,
+    refreshVault,
+    uploadFiles,
+    deleteDocument,
+    reindexDocument,
+    downloadDocument,
+    batchDeleteDocuments,
+    batchReindexDocuments,
+    batchDownloadDocuments,
+  } = useDocuments(showToast);
+
+  const { speakText, startVoiceDictation } = useSpeech(showToast);
+
+  // Fetch Sessions
+  const loadSessions = useCallback(async () => {
+    try {
+      const sess = await api.getSessions();
+      setSessions(sess);
+      if (sess.length > 0 && !currentSessionId) {
+        setCurrentSessionId(sess[0].session_id);
+      }
+    } catch (e) {
+      console.error("Error loading sessions:", e);
+    }
+  }, [currentSessionId]);
+
+  // Fetch Messages for active session
+  const loadMessages = useCallback(async (sessionId: string) => {
+    try {
+      const msgs = await api.getMessages(sessionId);
+      setMessages(msgs);
+    } catch (e) {
+      console.error("Error loading messages:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSessions();
+  }, [loadSessions]);
+
+  useEffect(() => {
+    if (currentSessionId) {
+      loadMessages(currentSessionId);
+    }
+  }, [currentSessionId, loadMessages]);
+
+  // Create New Thread
+  const handleNewChat = async () => {
+    try {
+      const newSess = await api.createSession('New chat');
+      await loadSessions();
+      setCurrentSessionId(newSess.session_id);
+      setMessages([]);
+      setActiveTab('chats');
+      showToast("Started new chat");
+    } catch (e) {
+      console.error("Error creating session:", e);
+    }
+  };
+
+  // Delete Thread
+  const handleDeleteSession = async (sessionId: string) => {
+    try {
+      await api.deleteSession(sessionId);
+      const remaining = sessions.filter(s => s.session_id !== sessionId);
+      setSessions(remaining);
+      showToast("Thread deleted");
+      if (remaining.length > 0) {
+        setCurrentSessionId(remaining[0].session_id);
+      } else {
+        handleNewChat();
+      }
+    } catch (e) {
+      console.error("Error deleting session:", e);
+    }
+  };
+
+  // Inspect document in sidecar reader
+  const handleInspectDoc = (doc: { filename: string; content?: string }) => {
+    setSidecarDoc(doc);
+    setSidecarOpen(true);
+  };
+
+  // Project Management Handlers
+  const handleCreateProject = (name: string, description: string, color: string) => {
+    const newProject: ProjectItem = {
+      id: `proj-${Date.now()}`,
+      name,
+      description,
+      documentCount: 0,
+      chatCount: 0,
+      createdAt: new Date().toISOString().split('T')[0],
+      color,
+    };
+    const updated = [newProject, ...projects];
+    setProjects(updated);
+    localStorage.setItem('omni_projects', JSON.stringify(updated));
+    setActiveProjectId(newProject.id);
+    localStorage.setItem('omni_active_project', newProject.id);
+  };
+
+  const handleDeleteProject = (id: string) => {
+    const updated = projects.filter(p => p.id !== id);
+    setProjects(updated);
+    localStorage.setItem('omni_projects', JSON.stringify(updated));
+    if (activeProjectId === id) {
+      setActiveProjectId('default-vault');
+      localStorage.setItem('omni_active_project', 'default-vault');
+    }
+  };
+
+  // Handle Send Prompt with SSE Streaming
+  const handleSendPrompt = async (customText?: string) => {
+    const text = customText || inputPrompt;
+    if (!text.trim() && attachedFiles.length === 0) return;
+    if (isStreaming || !currentSessionId) return;
+
+    if (attachedFiles.length > 0) {
+      await uploadFiles(attachedFiles);
+      setAttachedFiles([]);
+    }
+
+    let actualPrompt = text.trim();
+    if (referencedVaultDocs.length > 0) {
+      const refHeader = `[Focus explicitly on referenced Knowledge Vault documents: ${referencedVaultDocs.join(', ')}]\n\n`;
+      actualPrompt = actualPrompt ? `${refHeader}${actualPrompt}` : `${refHeader}Analyze and summarize key findings from the referenced documents.`;
+      setReferencedVaultDocs([]);
+    } else if (!actualPrompt) {
+      actualPrompt = "Summarize the attached files.";
+    }
+
+    setInputPrompt('');
+    setIsStreaming(true);
+
+    const userMsg: ChatMessage = { role: 'user', content: actualPrompt };
+    const tempAssistantMsg: ChatMessage = { role: 'assistant', content: '', contexts: null };
+    setMessages(prev => [...prev, userMsg, tempAssistantMsg]);
+
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/chat/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: currentSessionId, prompt: actualPrompt })
+      });
+
+      if (!response.body) throw new Error("No response body");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let targetContent = '';
+      let streamContexts: any = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const dataStr = line.replace('data: ', '').trim();
+            if (dataStr === '[DONE]') break;
+
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (parsed.token) {
+                targetContent += parsed.token;
+              }
+              if (parsed.contexts) {
+                streamContexts = parsed.contexts;
+              }
+              setMessages(prev => {
+                const updated = [...prev];
+                const lastIdx = updated.length - 1;
+                if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
+                  updated[lastIdx] = {
+                    ...updated[lastIdx],
+                    content: targetContent,
+                    contexts: streamContexts || updated[lastIdx].contexts
+                  };
+                }
+                return updated;
+              });
+            } catch {
+              targetContent += dataStr;
+            }
+          }
+        }
+      }
+      loadSessions();
+    } catch (e) {
+      console.error("Stream error:", e);
+      showToast("Error generating response");
+    } finally {
+      setIsStreaming(false);
+    }
+  };
+
+  const activeSession = sessions.find(s => s.session_id === currentSessionId);
+  const activeTitle = activeSession?.title || 'New chat';
+
+  return (
+    <div className="omni-layout font-sans">
+      {/* Toast Notifications */}
+      <Toast message={toastMessage} />
+
+      {/* Left Sidebar */}
+      <Sidebar
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        sessions={sessions}
+        currentSessionId={currentSessionId}
+        onSelectSession={(id) => setCurrentSessionId(id)}
+        onNewChat={handleNewChat}
+        onDeleteSession={handleDeleteSession}
+        activeTab={activeTab}
+        onSelectTab={(tab) => setActiveTab(tab)}
+        onOpenSearch={() => setSearchOpen(true)}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenProjects={() => setProjectsOpen(true)}
+        documentsCount={documents.length || stats.files_count}
+        totalChunksCount={stats.total_chunks}
+        showToast={showToast}
+      />
+
+      {/* Main App Content Area */}
+      <main className="flex-1 flex flex-col h-full overflow-hidden bg-[var(--bg-dark)]">
+        {/* Top Header Bar */}
+        <TopHeader
+          sidebarCollapsed={sidebarCollapsed}
+          onExpandSidebar={() => setSidebarCollapsed(false)}
+          activeSessionTitle={activeTitle}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenShare={() => setShareOpen(true)}
+        />
+
+        {/* Tab Switcher Body with Sidecar Support */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Main Active Tab View (Smooth Synchronized Width Transition with Sidecar) */}
+          <div className="flex-1 min-w-0 h-full overflow-hidden flex flex-col transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]">
+            {/* CHATS TAB */}
+            {(activeTab === 'chats' || activeTab === 'chats_list') && (
+              <ChatCanvas
+                messages={messages}
+                isStreaming={isStreaming}
+                inputPrompt={inputPrompt}
+                setInputPrompt={setInputPrompt}
+                attachedFiles={attachedFiles}
+                onRemoveAttachedFile={(target) => {
+                  if (typeof target === 'number') {
+                    setAttachedFiles(prev => prev.filter((_, i) => i !== target));
+                  } else {
+                    setAttachedFiles(prev => prev.filter(f => f !== target));
+                  }
+                }}
+                onAttachFiles={(files) => {
+                  if (!files) return;
+                  const incoming = Array.from(files);
+                  setAttachedFiles(prev => {
+                    const existingSet = new Set(prev.map(f => `${f.name}_${f.size}_${f.lastModified}`));
+                    const uniqueIncoming = incoming.filter(f => !existingSet.has(`${f.name}_${f.size}_${f.lastModified}`));
+                    return [...prev, ...uniqueIncoming];
+                  });
+                }}
+                vaultDocuments={documents}
+                referencedVaultDocs={referencedVaultDocs}
+                onAddReferencedDoc={(fn) => setReferencedVaultDocs(prev => prev.includes(fn) ? prev : [...prev, fn])}
+                onRemoveReferencedDoc={(fn) => setReferencedVaultDocs(prev => prev.filter(f => f !== fn))}
+                onSend={handleSendPrompt}
+                selectedModel={selectedModel}
+                setSelectedModel={setSelectedModel}
+                effortLevel={effortLevel}
+                setEffortLevel={setEffortLevel}
+                onInspectDoc={handleInspectDoc}
+                onReadAloud={(text) => speakText(text)}
+                onStartVoice={() => startVoiceDictation((t) => setInputPrompt(prev => `${prev} ${t}`.trim()))}
+                showToast={showToast}
+              />
+            )}
+
+            {/* PROJECTS TAB */}
+            {activeTab === 'projects' && (
+              <ProjectsView
+                projects={projects}
+                activeProjectId={activeProjectId}
+                onSelectProject={(id) => {
+                  setActiveProjectId(id);
+                  localStorage.setItem('omni_active_project', id);
+                }}
+                onCreateProject={handleCreateProject}
+                onDeleteProject={handleDeleteProject}
+                onOpenVault={() => setActiveTab('vault')}
+                onStartChatInProject={(projectId) => {
+                  setActiveProjectId(projectId);
+                  localStorage.setItem('omni_active_project', projectId);
+                  handleNewChat();
+                }}
+                documents={documents}
+                showToast={showToast}
+              />
+            )}
+
+            {/* KNOWLEDGE VAULT TAB */}
+            {activeTab === 'vault' && (
+              <KnowledgeVault
+                documents={documents}
+                stats={stats}
+                isUploading={isUploading}
+                onUpload={uploadFiles}
+                onRefresh={refreshVault}
+                onInspect={handleInspectDoc}
+                onDownload={downloadDocument}
+                onReindex={reindexDocument}
+                onDelete={deleteDocument}
+                onBatchDelete={batchDeleteDocuments}
+                onBatchReindex={batchReindexDocuments}
+                onBatchDownload={batchDownloadDocuments}
+                showToast={showToast}
+              />
+            )}
+          </div>
+
+          {/* 50% SPLIT SIDECAR READER */}
+          <SidecarReader
+            isOpen={sidecarOpen}
+            onClose={() => setSidecarOpen(false)}
+            document={sidecarDoc}
+          />
+        </div>
+      </main>
+
+      {/* Global Modals */}
+      <SettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        temperature={temperature}
+        setTemperature={setTemperature}
+        similarityTopK={similarityTopK}
+        setSimilarityTopK={setSimilarityTopK}
+        rerankLimit={rerankLimit}
+        setRerankLimit={setRerankLimit}
+        onResetCollection={async () => {
+          if (!window.confirm("Purge all vector embeddings in Qdrant?")) return;
+          await api.resetCollection();
+          await refreshVault();
+          showToast("Vector database reset");
+        }}
+        showToast={showToast}
+      />
+
+      <SearchModal
+        isOpen={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        sessions={sessions}
+        documents={documents}
+        onSelectSession={(id) => {
+          setCurrentSessionId(id);
+          setActiveTab('chats');
+        }}
+        onSelectDocument={(doc) => {
+          handleInspectDoc({ filename: doc.filename });
+        }}
+        onNavigateTab={(tab) => {
+          setActiveTab(tab);
+        }}
+        onOpenSettings={() => {
+          setSettingsOpen(true);
+        }}
+        onNewChat={handleNewChat}
+      />
+
+      <ShareModal
+        isOpen={shareOpen}
+        onClose={() => setShareOpen(false)}
+        sessionTitle={activeTitle}
+        showToast={showToast}
+      />
+
+      <ProjectsModal
+        isOpen={projectsOpen}
+        onClose={() => setProjectsOpen(false)}
+        showToast={showToast}
+      />
+    </div>
+  );
+}
