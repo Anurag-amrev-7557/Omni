@@ -210,6 +210,8 @@ download, re-index, and PDF-reader functionality.
 Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in Vercel. Set
 `SUPABASE_URL` to the same project URL on Render. The publishable key belongs
 only in the frontend; never expose a Supabase secret/service-role key there.
+Also set `SUPABASE_PUBLISHABLE_KEY` on Render. It lets the API safely validate
+legacy Supabase access tokens when the project has no public JWKS signing key.
 Set `CORS_ORIGINS` on Render to your exact Vercel origin, for example
 `https://omni.vercel.app`.
 
