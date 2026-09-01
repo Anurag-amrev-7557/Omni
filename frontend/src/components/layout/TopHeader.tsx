@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PanelLeft, ChevronDown, Share2, Settings, Palette, Check } from 'lucide-react';
+import { PanelLeft, ChevronDown, Share2, Settings, Palette, Check, Download } from 'lucide-react';
 import { AuthControls } from './AuthControls';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -9,6 +9,8 @@ interface TopHeaderProps {
   activeSessionTitle: string;
   onOpenSettings: () => void;
   onOpenShare: () => void;
+  onExportChat?: () => void;
+  hasMessages?: boolean;
 }
 
 export const TopHeader: React.FC<TopHeaderProps> = ({
@@ -17,6 +19,8 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   activeSessionTitle,
   onOpenSettings,
   onOpenShare,
+  onExportChat,
+  hasMessages = false,
 }) => {
   const { theme, setTheme, themesList } = useTheme();
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
@@ -128,6 +132,18 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             </>
           )}
         </div>
+
+        {/* Export Chat Button at Top Right */}
+        {onExportChat && hasMessages && (
+          <button 
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:border-[var(--text-dark)] transition-all cursor-pointer"
+            onClick={onExportChat}
+            title="Export chat to Markdown (.md)"
+          >
+            <Download size={13} className="text-[var(--accent-primary)]" />
+            <span className="hidden sm:inline">Export</span>
+          </button>
+        )}
 
         <button 
           className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"

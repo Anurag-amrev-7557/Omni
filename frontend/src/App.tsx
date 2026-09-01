@@ -283,6 +283,28 @@ export default function App() {
   const activeSession = sessions.find(s => s.session_id === currentSessionId);
   const activeTitle = activeSession?.title || 'New chat';
 
+  const handleExportChat = () => {
+    if (messages.length === 0) {
+      showToast("No messages to export");
+      return;
+    }
+    let md = `# Omni RAG Chat Export - ${activeTitle || 'Chat'}\n*Exported on ${new Date().toLocaleString()}*\n\n---\n\n`;
+    messages.forEach((m) => {
+      md += `### ${m.role === 'user' ? '👤 User' : '🤖 Omni Assistant'}\n\n${m.content}\n\n---\n\n`;
+    });
+
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const safeTitle = (activeTitle || 'chat').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    link.setAttribute('download', `omni-chat-${safeTitle}.md`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Chat exported to Markdown');
+  };
+
   return (
     <div className="omni-layout font-sans">
       {/* Toast Notifications */}
@@ -316,6 +338,8 @@ export default function App() {
           activeSessionTitle={activeTitle}
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenShare={() => setShareOpen(true)}
+          onExportChat={handleExportChat}
+          hasMessages={messages.length > 0 && (activeTab === 'chats' || activeTab === 'chats_list')}
         />
 
         {/* Tab Switcher Body with Sidecar Support */}
