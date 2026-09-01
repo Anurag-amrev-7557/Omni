@@ -26,6 +26,9 @@ def init_db():
     client = get_qdrant_client()
     try:
         collections = [c.name for c in client.get_collections().collections]
+        print(f"[DEBUG] Available collections: {collections}")
+        print(f"[DEBUG] Target collection name: {COLLECTION_NAME}")
+        
         if COLLECTION_NAME not in collections:
             client.create_collection(
                 collection_name=COLLECTION_NAME,
@@ -34,6 +37,10 @@ def init_db():
             print(f"Qdrant collection '{COLLECTION_NAME}' created successfully.")
         else:
             print(f"Qdrant collection '{COLLECTION_NAME}' already exists.")
+            
+        # Check collection stats
+        info = client.get_collection(collection_name=COLLECTION_NAME)
+        print(f"[DEBUG] Collection '{COLLECTION_NAME}' has {info.points_count} points")
     except Exception as e:
         print(f"Error initializing Qdrant collection: {e}")
 

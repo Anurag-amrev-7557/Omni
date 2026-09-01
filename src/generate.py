@@ -88,10 +88,13 @@ def prepare_context_and_prompt(query: str, chat_history: list[dict] = None) -> t
     
     all_contexts = []
     for sq in sub_queries:
+        print(f"[DEBUG] Searching for: {sq}")
         contexts = hybrid_search(sq, k=3)
+        print(f"[DEBUG] Found {len(contexts)} contexts for query: {sq}")
         all_contexts.extend(contexts)
         
     if not all_contexts:
+        print(f"[DEBUG] No contexts found for any sub-queries: {sub_queries}")
         return None, []
         
     # Deduplicate contexts while preserving order

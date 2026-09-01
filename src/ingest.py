@@ -44,6 +44,8 @@ def ingest_file(file_path: str):
     filename = os.path.basename(file_path)
     ext = os.path.splitext(filename)[1].lower()
     
+    print(f"[DEBUG] Starting ingestion for {filename} (type: {ext})")
+    
     if ext == ".pdf":
         pages = load_pages_with_pymupdf(file_path)
     elif ext in [".txt", ".md"]:
@@ -55,7 +57,9 @@ def ingest_file(file_path: str):
     if not pages:
         raise ValueError(f"No text content could be extracted from {filename}.")
     
+    print(f"[DEBUG] Extracted {len(pages)} pages from {filename}")
     summary = generate_summary(pages)
+    print(f"[DEBUG] Generated summary: {summary[:100]}...")
     
     # 1. PARENT CHUNKING (1500 chars)
     parent_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
@@ -97,7 +101,8 @@ def ingest_file(file_path: str):
     )
     
     vector_store.add_documents(child_documents)
-    print(f"Ingested {filename} into Qdrant: {len(parent_docs)} parent blocks, {len(child_documents)} child vectors.")
+    print(f"[DEBUG] Ingested {filename} into Qdrant: {len(parent_docs)} parent blocks, {len(child_documents)} child vectors.")
+    print(f"[DEBUG] Collection name used: {COLLECTION_NAME}")
 
 # Backward compatibility alias
 ingest_pdf = ingest_file

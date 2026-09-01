@@ -130,6 +130,8 @@ def hybrid_search(query: str, k: int = 5) -> list[dict]:
     client = get_qdrant_client()
     embeddings_model = get_embeddings()
 
+    print(f"[DEBUG] Using collection: {COLLECTION_NAME}")
+    
     vectorstore = QdrantVectorStore(
         client=client,
         collection_name=COLLECTION_NAME,
@@ -138,9 +140,11 @@ def hybrid_search(query: str, k: int = 5) -> list[dict]:
 
     # 1. Dense retrieval (k*2 candidates)
     candidate_limit = max(k * 2, 8)
+    print(f"[DEBUG] Searching for {candidate_limit} candidates with query: {query}")
     docs_with_scores = vectorstore.similarity_search_with_score(query, k=candidate_limit)
 
     if not docs_with_scores:
+        print(f"[DEBUG] No documents found in collection {COLLECTION_NAME}")
         return []
 
     candidate_docs = []
