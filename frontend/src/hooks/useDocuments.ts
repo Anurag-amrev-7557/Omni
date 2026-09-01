@@ -131,6 +131,20 @@ export const useDocuments = (showToast: (msg: string) => void) => {
     showToast(`Downloaded ${filenames.length} document(s)`);
   };
 
+  const cleanupOrphaned = async () => {
+    try {
+      showToast("Cleaning up orphaned vectors...");
+      const res = await api.cleanupOrphaned();
+      if (res.success) {
+        showToast(`Cleaned up ${res.cleaned} orphaned file(s)`);
+        await refreshVault();
+      }
+    } catch (e) {
+      console.error("Cleanup error:", e);
+      showToast("Failed to cleanup orphaned files");
+    }
+  };
+
   return {
     documents,
     stats,
@@ -146,5 +160,6 @@ export const useDocuments = (showToast: (msg: string) => void) => {
     batchDeleteDocuments,
     batchReindexDocuments,
     batchDownloadDocuments,
+    cleanupOrphaned,
   };
 };

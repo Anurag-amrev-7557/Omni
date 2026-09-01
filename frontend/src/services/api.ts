@@ -81,6 +81,11 @@ export const api = {
     return res.json();
   },
 
+  async cleanupOrphaned(): Promise<{ success: boolean; cleaned: number; orphaned_files: string[]; message: string }> {
+    const res = await fetch(`${API_BASE}/api/cleanup-orphaned`, { method: 'POST' });
+    return res.json();
+  },
+
   getDownloadUrl(filename: string): string {
     return `${API_BASE}/api/download/${encodeURIComponent(filename)}`;
   },

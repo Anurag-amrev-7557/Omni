@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RefreshCw, UploadCloud, Plus, Database } from 'lucide-react';
+import { RefreshCw, UploadCloud, Plus, Database, Trash2 } from 'lucide-react';
 import { DocumentItem, CollectionStats } from '../../types/document';
 import { VaultToolbar } from './VaultToolbar';
 import { VaultDocList, SortField, SortDirection } from './VaultDocList';
@@ -20,6 +20,7 @@ interface KnowledgeVaultProps {
   onBatchDelete?: (filenames: string[]) => void;
   onBatchReindex?: (filenames: string[]) => void;
   onBatchDownload?: (filenames: string[]) => void;
+  onCleanupOrphaned?: () => void;
   showToast: (msg: string) => void;
 }
 
@@ -36,6 +37,7 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
   onBatchDelete,
   onBatchReindex,
   onBatchDownload,
+  onCleanupOrphaned,
   showToast,
 }) => {
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -202,6 +204,17 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
                 <RefreshCw size={13.5} className={isSyncing ? 'animate-spin text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'} />
                 <span>Sync</span>
               </button>
+
+              {onCleanupOrphaned && (
+                <button
+                  className="h-9 px-3.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-main)] hover:bg-[var(--bg-hover)] text-[13px] font-medium transition-colors inline-flex items-center gap-2 cursor-pointer shadow-2xs active:scale-[0.98]"
+                  onClick={onCleanupOrphaned}
+                  title="Remove orphaned vectors from Qdrant"
+                >
+                  <Database size={13.5} className="text-[var(--text-muted)]" />
+                  <span>Cleanup</span>
+                </button>
+              )}
 
               <button
                 className="h-9 px-4 rounded-lg bg-[var(--accent-primary)] text-white hover:opacity-95 text-[13px] font-medium transition-all inline-flex items-center gap-2 cursor-pointer shadow-xs active:scale-[0.98]"

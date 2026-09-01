@@ -81,6 +81,7 @@ export default function App() {
     batchDeleteDocuments,
     batchReindexDocuments,
     batchDownloadDocuments,
+    cleanupOrphaned,
   } = useDocuments(showToast);
 
   const { speakText, startVoiceDictation } = useSpeech(showToast);
@@ -389,6 +390,7 @@ export default function App() {
                 onBatchDelete={batchDeleteDocuments}
                 onBatchReindex={batchReindexDocuments}
                 onBatchDownload={batchDownloadDocuments}
+                onCleanupOrphaned={cleanupOrphaned}
                 showToast={showToast}
               />
             )}

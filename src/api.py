@@ -57,11 +57,21 @@ def health_check():
 def get_stats():
     stats = get_collection_stats()
     sessions = get_all_sessions()
+    
+    # Check filesystem vs Qdrant discrepancy
+    uploads_dir = os.path.join(ROOT_DIR, "data", "uploaded_docs")
+    files_on_disk = []
+    if os.path.exists(uploads_dir):
+        files_on_disk = [f for f in os.listdir(uploads_dir) if os.path.isfile(os.path.join(uploads_dir, f))]
+    
+    print(f"[DEBUG] Stats - Qdrant files: {stats['files']}, Disk files: {files_on_disk}")
+    
     return {
         "status": "Active",
         "total_chunks": stats["total_chunks"],
         "files_count": len(stats["files"]),
         "files": stats["files"],
+        "disk_files": files_on_disk,
         "sessions_count": len(sessions)
     }
 
@@ -71,8 +81,15 @@ def list_documents():
     uploads_dir = os.path.join(ROOT_DIR, "data", "uploaded_docs")
     available_files = []
     
+    print(f"[DEBUG] Uploads directory: {uploads_dir}")
+    print(f"[DEBUG] Directory exists: {os.path.exists(uploads_dir)}")
+    print(f"[DEBUG] Files in Qdrant: {stats['files']}")
+    
     if os.path.exists(uploads_dir):
-        for fname in os.listdir(uploads_dir):
+        files_on_disk = os.listdir(uploads_dir)
+        print(f"[DEBUG] Files on disk: {files_on_disk}")
+        
+        for fname in files_on_disk:
             fpath = os.path.join(uploads_dir, fname)
             if os.path.isfile(fpath):
                 size_mb = round(os.path.getsize(fpath) / (1024 * 1024), 2)
@@ -83,6 +100,11 @@ def list_documents():
                     "pages": page_count,
                     "indexed": fname in stats["files"]
                 })
+    else:
+        print(f"[DEBUG] Uploads directory does not exist, creating it...")
+        os.makedirs(uploads_dir, exist_ok=True)
+    
+    print(f"[DEBUG] Returning {len(available_files)} available files")
     return {"documents": available_files}
 
 @app.post("/api/upload")
@@ -219,6 +241,34 @@ def reset_all():
         delete_session(s["session_id"])
     new_id = create_session("New Chat")
     return {"success": True, "new_session_id": new_id}
+
+@app.post("/api/cleanup-orphaned")
+def cleanup_orphaned():
+    """Remove Qdrant vectors for files that no longer exist on disk."""
+    stats = get_collection_stats()
+    uploads_dir = os.path.join(ROOT_DIR, "data", "uploaded_docs")
+    
+    if not os.path.exists(uploads_dir):
+        return {"success": True, "cleaned": 0, "message": "Uploads directory does not exist"}
+    
+    files_on_disk = set(os.listdir(uploads_dir))
+    orphaned_files = [f for f in stats["files"] if f not in files_on_disk]
+    
+    cleaned_count = 0
+    for orphan in orphaned_files:
+        try:
+            delete_file_from_collection(orphan)
+            cleaned_count += 1
+            print(f"[DEBUG] Cleaned up orphaned file: {orphan}")
+        except Exception as e:
+            print(f"[DEBUG] Error cleaning up {orphan}: {e}")
+    
+    return {
+        "success": True,
+        "cleaned": cleaned_count,
+        "orphaned_files": orphaned_files,
+        "message": f"Cleaned up {cleaned_count} orphaned file(s)"
+    }
 
 @app.post("/api/chat/stream")
 def stream_chat(data: dict):
