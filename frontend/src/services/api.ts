@@ -3,13 +3,22 @@ import { DocumentItem, CollectionStats, PipelineHealth, UploadResponse, UploadPr
 
 export const API_BASE = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
 let tokenProvider: (() => Promise<string | null>) | null = null;
+let cachedToken: string | null = null;
 
 export const setAuthTokenProvider = (provider: () => Promise<string | null>) => {
   tokenProvider = provider;
+  provider().then(t => {
+    cachedToken = t;
+  }).catch(() => {
+    cachedToken = null;
+  });
 };
+
+export const getCachedToken = (): string | null => cachedToken;
 
 const apiFetch = async (path: string, options: RequestInit = {}) => {
   const token = await tokenProvider?.();
+  if (token) cachedToken = token;
   const headers = new Headers(options.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
   return fetch(`${API_BASE}${path}`, { ...options, headers });
@@ -149,10 +158,14 @@ export const api = {
   },
 
   getDownloadUrl(filename: string): string {
-    return `${API_BASE}/api/download/${encodeURIComponent(filename)}`;
+    const token = cachedToken;
+    const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
+    return `${API_BASE}/api/download/${encodeURIComponent(filename)}${tokenQuery}`;
   },
 
   getPdfPageImageUrl(filename: string, page: number): string {
-    return `${API_BASE}/api/pdf-page-image?filename=${encodeURIComponent(filename)}&page=${page}`;
+    const token = cachedToken;
+    const tokenQuery = token ? `&token=${encodeURIComponent(token)}` : '';
+    return `${API_BASE}/api/pdf-page-image?filename=${encodeURIComponent(filename)}&page=${page}${tokenQuery}`;
   }
 };
