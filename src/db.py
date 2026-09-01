@@ -7,6 +7,7 @@ from qdrant_client.models import (
     MatchValue,
     PayloadSchemaType,
 )
+from src.auth import get_current_user
 try:
     from src.config import QDRANT_URL, QDRANT_API_KEY, QDRANT_PATH, COLLECTION_NAME
 except ImportError:
@@ -50,7 +51,7 @@ def init_db():
         # actual payload path is `metadata.filename` (not simply `filename`).
         # Keep the legacy flat-field index as well for collections created by
         # older versions of the application.
-        for field_name in ("metadata.filename", "filename"):
+        for field_name in ("metadata.filename", "metadata.user_id", "filename"):
             client.create_payload_index(
                 collection_name=COLLECTION_NAME,
                 field_name=field_name,
@@ -67,22 +68,10 @@ def init_db():
 
 
 def clear_collection():
-    """Deletes and recreates the Qdrant collection."""
+    """Deletes only the current user's vectors; never resets other tenants."""
     client = get_qdrant_client()
     try:
-        client.delete_collection(collection_name=COLLECTION_NAME)
-        client.create_collection(
-            collection_name=COLLECTION_NAME,
-            vectors_config=VectorParams(size=384, distance=Distance.COSINE),
-        )
-        for field_name in ("metadata.filename", "filename"):
-            client.create_payload_index(
-                collection_name=COLLECTION_NAME,
-                field_name=field_name,
-                field_schema=PayloadSchemaType.KEYWORD,
-                wait=True,
-            )
-        print(f"Qdrant collection '{COLLECTION_NAME}' cleared successfully.")
+        client.delete(collection_name=COLLECTION_NAME, points_selector=Filter(must=[FieldCondition(key="metadata.user_id", match=MatchValue(value=get_current_user()))]), wait=True)
     except Exception as e:
         print(f"Error clearing Qdrant collection: {e}")
 
@@ -95,7 +84,7 @@ def delete_file_from_collection(filename: str):
     client.delete(
         collection_name=COLLECTION_NAME,
         points_selector=Filter(
-            should=[
+            must=[FieldCondition(key="metadata.user_id", match=MatchValue(value=get_current_user()))], should=[
                 FieldCondition(key="metadata.filename", match=MatchValue(value=filename)),
                 FieldCondition(key="filename", match=MatchValue(value=filename)),
             ]
@@ -114,8 +103,7 @@ def get_collection_stats() -> dict:
         if COLLECTION_NAME not in collections:
             return {"total_chunks": 0, "files": [], "file_details": {}}
         
-        info = client.get_collection(collection_name=COLLECTION_NAME)
-        total_chunks = info.points_count if hasattr(info, 'points_count') else 0
+        total_chunks = 0
 
         # Scroll through every point; a single 500-point page silently hid
         # documents in larger collections.
@@ -126,6 +114,7 @@ def get_collection_stats() -> dict:
                 collection_name=COLLECTION_NAME,
                 limit=500,
                 offset=offset,
+                scroll_filter=Filter(must=[FieldCondition(key="metadata.user_id", match=MatchValue(value=get_current_user()))]),
                 with_payload=True,
                 with_vectors=False,
             )
@@ -137,6 +126,7 @@ def get_collection_stats() -> dict:
                     continue
                 details = file_details.setdefault(filename, {"chunks": 0, "pages": set()})
                 details["chunks"] += 1
+                total_chunks += 1
                 page = metadata.get("page") or payload.get("page")
                 if isinstance(page, int) and page > 0:
                     details["pages"].add(page)

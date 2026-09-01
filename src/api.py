@@ -7,7 +7,7 @@ import asyncio
 import uuid
 import time
 from typing import Optional, Dict
-from fastapi import FastAPI, File, UploadFile, Query, HTTPException, BackgroundTasks
+from fastapi import FastAPI, File, UploadFile, Query, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response, JSONResponse, FileResponse
 
@@ -27,6 +27,7 @@ try:
     from src.generate import answer_query_stream, answer_query_stream_with_prompt, prepare_context_and_prompt
     from src.chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session
     from src.pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
+    from src.auth import require_user, set_current_user, get_current_user
 except ImportError:
     from db import init_db, clear_collection, get_collection_stats, delete_file_from_collection, get_qdrant_client
     from ingest import ingest_file
@@ -43,12 +44,30 @@ app = FastAPI(
 # CORS middleware for Web Frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_origin_regex=r".*",
+    allow_origins=[origin for origin in os.getenv("CORS_ORIGINS", "").split(",") if origin],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def authenticate_api(request: Request, call_next):
+    if request.method == "OPTIONS" or request.url.path == "/api/health":
+        return await call_next(request)
+    if request.url.path.startswith("/api/"):
+        set_current_user(require_user(request.headers.get("authorization")))
+    return await call_next(request)
+
+def user_upload_dir() -> str:
+    path = os.path.join(UPLOADS_DIR, get_current_user())
+    os.makedirs(path, exist_ok=True)
+    return path
+
+def safe_filename(filename: str) -> str:
+    name = os.path.basename(filename)
+    if not name or name != filename or name in {".", ".."}:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    return name
 
 # Global progress tracking for uploads
 upload_progress: Dict[str, Dict] = {}
@@ -99,7 +118,7 @@ def health_check():
     # this is deliberately more than a process-alive probe.
     run_check("qdrant", check_qdrant)
     run_check("upload_storage", check_upload_storage)
-    run_check("chat_database", lambda: {"sessions": len(get_all_sessions())})
+    run_check("chat_database", lambda: (init_chat_db(), {"available": True})[1])
     checks["groq"] = {
         "status": "healthy" if os.getenv("GROQ_API_KEY") else "unhealthy",
         "configured": bool(os.getenv("GROQ_API_KEY")),
@@ -126,7 +145,10 @@ def get_upload_progress(upload_id: str):
     if upload_id not in upload_progress:
         return {"upload_id": upload_id, "status": "not_found", "files": []}
     
-    return upload_progress[upload_id]
+    progress = upload_progress[upload_id]
+    if progress.get("user_id") != get_current_user():
+        raise HTTPException(status_code=404, detail="Upload not found")
+    return progress
 
 @app.get("/api/stats")
 def get_stats():
@@ -134,7 +156,7 @@ def get_stats():
     sessions = get_all_sessions()
     
     # Check filesystem vs Qdrant discrepancy
-    uploads_dir = UPLOADS_DIR
+    uploads_dir = user_upload_dir()
     files_on_disk = []
     if os.path.exists(uploads_dir):
         files_on_disk = [f for f in os.listdir(uploads_dir) if os.path.isfile(os.path.join(uploads_dir, f))]
@@ -154,7 +176,7 @@ def get_stats():
 def list_documents():
     """List indexed documents even when Render's ephemeral disk was reset."""
     stats = get_collection_stats()
-    uploads_dir = UPLOADS_DIR
+    uploads_dir = user_upload_dir()
     available_files = []
     
     print(f"[DEBUG] Uploads directory: {uploads_dir}")
@@ -191,7 +213,7 @@ def list_documents():
 
 @app.post("/api/upload")
 async def upload_documents(files: list[UploadFile] = File(...)):
-    uploads_dir = UPLOADS_DIR
+    uploads_dir = user_upload_dir()
     os.makedirs(uploads_dir, exist_ok=True)
     
     # Generate unique upload ID for progress tracking
@@ -199,6 +221,7 @@ async def upload_documents(files: list[UploadFile] = File(...)):
     
     # Initialize progress tracking
     upload_progress[upload_id] = {
+        "user_id": get_current_user(),
         "upload_id": upload_id,
         "status": "uploading",
         "total_files": len(files),
@@ -210,7 +233,7 @@ async def upload_documents(files: list[UploadFile] = File(...)):
     errors = []
     
     for idx, file in enumerate(files):
-        filename = file.filename
+        filename = safe_filename(file.filename or "")
         save_path = os.path.join(uploads_dir, filename)
         content = await file.read()
         
@@ -237,7 +260,7 @@ async def upload_documents(files: list[UploadFile] = File(...)):
             
         try:
             # Run heavy vector ingestion in threadpool to prevent event-loop freezing
-            await asyncio.to_thread(ingest_file, save_path)
+            await asyncio.to_thread(ingest_file, save_path, get_current_user())
             
             # Update progress: file completed
             upload_progress[upload_id]["files"][file_idx]["status"] = "completed"
@@ -264,8 +287,8 @@ async def upload_documents(files: list[UploadFile] = File(...)):
 
 @app.delete("/api/documents/{filename}")
 def delete_document(filename: str):
-    uploads_dir = UPLOADS_DIR
-    filename = os.path.basename(filename)
+    uploads_dir = user_upload_dir()
+    filename = safe_filename(filename)
     file_path = os.path.join(uploads_dir, filename)
     
     # Delete Qdrant first.  If the remote operation fails, retain the source
@@ -286,7 +309,8 @@ def delete_document(filename: str):
 
 @app.get("/api/download/{filename}")
 def download_document(filename: str):
-    uploads_dir = UPLOADS_DIR
+    uploads_dir = user_upload_dir()
+    filename = safe_filename(filename)
     file_path = os.path.join(uploads_dir, filename)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
@@ -294,20 +318,22 @@ def download_document(filename: str):
 
 @app.post("/api/documents/{filename}/reindex")
 def reindex_document(filename: str):
-    uploads_dir = UPLOADS_DIR
+    uploads_dir = user_upload_dir()
+    filename = safe_filename(filename)
     file_path = os.path.join(uploads_dir, filename)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
     try:
         delete_file_from_collection(filename)
-        ingest_file(file_path)
+        ingest_file(file_path, get_current_user())
         return {"success": True, "filename": filename}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error re-indexing {filename}: {e}")
 
 @app.get("/api/pdf-info")
 def get_pdf_info(filename: str = Query(...)):
-    uploads_dir = UPLOADS_DIR
+    uploads_dir = user_upload_dir()
+    filename = safe_filename(filename)
     file_path = os.path.join(uploads_dir, filename)
     if not os.path.exists(file_path):
         return {"filename": filename, "total_pages": 1}
@@ -316,7 +342,8 @@ def get_pdf_info(filename: str = Query(...)):
 
 @app.get("/api/file-content")
 def get_file_content(filename: str = Query(...)):
-    uploads_dir = UPLOADS_DIR
+    uploads_dir = user_upload_dir()
+    filename = safe_filename(filename)
     file_path = os.path.join(uploads_dir, filename)
     if not os.path.exists(file_path):
         return {"filename": filename, "content": "File content unavailable."}
@@ -330,7 +357,8 @@ def get_file_content(filename: str = Query(...)):
 
 @app.get("/api/pdf-page-image")
 def get_pdf_page_image(filename: str = Query(...), page: int = Query(1, ge=1)):
-    uploads_dir = UPLOADS_DIR
+    uploads_dir = user_upload_dir()
+    filename = safe_filename(filename)
     file_path = os.path.join(uploads_dir, filename)
     
     if not os.path.exists(file_path):

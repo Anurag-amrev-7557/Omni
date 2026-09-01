@@ -3,6 +3,7 @@ import re
 from functools import lru_cache
 from rank_bm25 import BM25Okapi
 from langchain_qdrant import QdrantVectorStore
+from qdrant_client.models import Filter, FieldCondition, MatchValue
 
 # Restrict thread pools to avoid memory spikes on cloud instances
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -13,6 +14,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 try:
     from src.db import get_qdrant_client
     from src.config import COLLECTION_NAME
+    from src.auth import get_current_user
 except ImportError:
     from db import get_qdrant_client
     from config import COLLECTION_NAME
@@ -141,7 +143,7 @@ def hybrid_search(query: str, k: int = 5) -> list[dict]:
     # 1. Dense retrieval (k*2 candidates)
     candidate_limit = max(k * 2, 8)
     print(f"[DEBUG] Searching for {candidate_limit} candidates with query: {query}")
-    docs_with_scores = vectorstore.similarity_search_with_score(query, k=candidate_limit)
+    docs_with_scores = vectorstore.similarity_search_with_score(query, k=candidate_limit, filter=Filter(must=[FieldCondition(key="metadata.user_id", match=MatchValue(value=get_current_user()))]))
 
     if not docs_with_scores:
         print(f"[DEBUG] No documents found in collection {COLLECTION_NAME}")

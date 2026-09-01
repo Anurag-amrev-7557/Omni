@@ -39,7 +39,7 @@ def load_pages_with_pymupdf(file_path: str) -> list[Document]:
     doc.close()
     return pages
 
-def ingest_file(file_path: str):
+def ingest_file(file_path: str, user_id: str | None = None):
     init_db()
     filename = os.path.basename(file_path)
     ext = os.path.splitext(filename)[1].lower()
@@ -81,6 +81,7 @@ def ingest_file(file_path: str):
                 Document(
                     page_content=child_content,
                     metadata={
+                        "user_id": user_id,
                         "filename": filename,
                         "summary": summary,
                         "page": page_num,

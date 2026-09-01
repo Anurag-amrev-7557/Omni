@@ -1,11 +1,22 @@
 """Supabase JWT validation for Render API requests."""
 import os
+from contextvars import ContextVar
 from functools import lru_cache
 import jwt
 from fastapi import Header, HTTPException
 from jwt import PyJWKClient
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
+current_user_id: ContextVar[str | None] = ContextVar("current_user_id", default=None)
+
+def set_current_user(user_id: str):
+    return current_user_id.set(user_id)
+
+def get_current_user() -> str:
+    user_id = current_user_id.get()
+    if not user_id:
+        raise RuntimeError("No authenticated user context")
+    return user_id
 
 @lru_cache(maxsize=1)
 def jwks_client():
