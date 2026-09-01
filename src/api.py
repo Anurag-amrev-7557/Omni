@@ -76,7 +76,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def authenticate_api(request: Request, call_next):
-    if request.method == "OPTIONS" or request.url.path == "/api/health":
+    if request.method == "OPTIONS" or request.url.path in ("/", "/api/health", "/docs", "/redoc", "/openapi.json"):
         return await call_next(request)
     if request.url.path.startswith("/api/"):
         try:
@@ -87,6 +87,17 @@ async def authenticate_api(request: Request, call_next):
         except Exception as exc:
             return JSONResponse(status_code=401, content={"detail": "Authentication required"})
     return await call_next(request)
+
+@app.get("/")
+def root():
+    """Root endpoint for health checks and service uptime monitors."""
+    return {
+        "name": "Enterprise Multi-Document RAG API",
+        "status": "online",
+        "version": "2.0.0",
+        "health": "/api/health",
+        "docs": "/docs"
+    }
 
 def user_upload_dir() -> str:
     path = os.path.join(get_uploads_dir(), get_current_user())

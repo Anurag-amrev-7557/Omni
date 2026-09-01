@@ -2,6 +2,7 @@
 import os
 import json
 import urllib.request
+import urllib.parse
 import urllib.error
 from typing import Optional
 
@@ -21,6 +22,10 @@ def is_storage_configured() -> bool:
 
 def get_storage_key(user_id: str, filename: str) -> str:
     return f"{user_id}/{filename}"
+
+
+def get_encoded_key(user_id: str, filename: str) -> str:
+    return f"{urllib.parse.quote(user_id)}/{urllib.parse.quote(filename)}"
 
 
 def _get_headers() -> dict:
@@ -43,7 +48,8 @@ def save_file(user_id: str, filename: str, content: bytes, local_path: Optional[
 
     base_url = SUPABASE_URL.rstrip("/")
     key = get_storage_key(user_id, filename)
-    url = f"{base_url}/storage/v1/object/{BUCKET_NAME}/{key}"
+    encoded_key = get_encoded_key(user_id, filename)
+    url = f"{base_url}/storage/v1/object/{BUCKET_NAME}/{encoded_key}"
 
     headers = _get_headers()
     headers["Content-Type"] = "application/octet-stream"
@@ -78,7 +84,8 @@ def get_file_bytes(user_id: str, filename: str, local_path: Optional[str] = None
 
     base_url = SUPABASE_URL.rstrip("/")
     key = get_storage_key(user_id, filename)
-    url = f"{base_url}/storage/v1/object/authenticated/{BUCKET_NAME}/{key}"
+    encoded_key = get_encoded_key(user_id, filename)
+    url = f"{base_url}/storage/v1/object/authenticated/{BUCKET_NAME}/{encoded_key}"
 
     headers = _get_headers()
 
@@ -97,7 +104,7 @@ def get_file_bytes(user_id: str, filename: str, local_path: Optional[str] = None
     except urllib.error.HTTPError as exc:
         # Fallback to public object URL in case bucket is public
         try:
-            pub_url = f"{base_url}/storage/v1/object/public/{BUCKET_NAME}/{key}"
+            pub_url = f"{base_url}/storage/v1/object/public/{BUCKET_NAME}/{encoded_key}"
             pub_req = urllib.request.Request(pub_url, headers=headers, method="GET")
             with urllib.request.urlopen(pub_req, timeout=15) as resp:
                 data = resp.read()

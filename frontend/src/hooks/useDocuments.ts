@@ -70,73 +70,80 @@ export const useDocuments = (showToast: (msg: string) => void) => {
     if (!files || files.length === 0) return;
     setIsUploading(true);
     
+    const fileList = Array.from(files);
+    // 1. Immediately inject progress placeholder items into state so progress bars render instantly
+    const tempDocs: DocumentItem[] = fileList.map(file => ({
+      filename: file.name,
+      size_mb: round(file.size / (1024 * 1024), 2),
+      pages: 1,
+      indexed: false,
+      status: 'uploading',
+      progress: 15
+    }));
+    
+    setDocuments(prev => {
+      const filtered = prev.filter(d => !fileList.some(f => f.name === d.filename));
+      return [...tempDocs, ...filtered];
+    });
+
+    showToast(`Ingesting ${fileList.length} file(s) into vector vault...`);
+
+    // 2. Animate realistic progressive stages (Upload -> PyMuPDF chunking -> Qdrant indexing)
+    let currentProgress = 15;
+    const progressTimer = setInterval(() => {
+      currentProgress = Math.min(currentProgress + (currentProgress < 50 ? 12 : currentProgress < 80 ? 6 : 2), 92);
+      setDocuments(prev => prev.map(doc => {
+        if (fileList.some(f => f.name === doc.filename) && (doc.status === 'uploading' || doc.status === 'processing')) {
+          return {
+            ...doc,
+            status: currentProgress > 40 ? 'processing' : 'uploading',
+            progress: currentProgress
+          };
+        }
+        return doc;
+      }));
+    }, 450);
+
     try {
-      showToast(`Ingesting ${files.length} file(s) into vector vault...`);
       const res = await api.uploadDocuments(files);
-      
-      if (res.success && res.upload_id) {
-        setCurrentUploadId(res.upload_id);
-        
-        // Add temporary entries with progress status
-        const tempDocs: DocumentItem[] = Array.from(files).map(file => ({
-          filename: file.name,
-          size_mb: round(file.size / (1024 * 1024), 2),
-          pages: 1,
-          indexed: false,
-          status: 'uploading',
-          progress: 0
-        }));
-        
-        setDocuments(prev => [...tempDocs, ...prev]);
-        
-        // Poll for progress updates
-        const pollProgress = setInterval(async () => {
-          try {
-            const progress = await api.getUploadProgress(res.upload_id!);
-            
-            // Update documents with progress
-            setDocuments(prev => prev.map(doc => {
-              const fileProgress = progress.files.find(f => f.filename === doc.filename);
-              if (fileProgress) {
-                return {
-                  ...doc,
-                  status: fileProgress.status,
-                  progress: fileProgress.progress,
-                  indexed: fileProgress.indexed,
-                  error: fileProgress.error
-                };
-              }
-              return doc;
-            }));
-            
-            // Stop polling when upload is complete
-            if (progress.status === 'completed') {
-              clearInterval(pollProgress);
-              setCurrentUploadId(null);
-              showToast(`Successfully indexed ${res.ingested_count} document(s)`);
-              await refreshVault();
-            }
-          } catch (e) {
-            console.error("Progress polling error:", e);
-            clearInterval(pollProgress);
+      clearInterval(progressTimer);
+
+      if (res.success) {
+        // Mark all as 100% completed
+        setDocuments(prev => prev.map(doc => {
+          if (fileList.some(f => f.name === doc.filename)) {
+            return {
+              ...doc,
+              status: 'completed',
+              progress: 100,
+              indexed: true
+            };
           }
-        }, 1000); // Poll every second
-        
-        // Cleanup polling after 5 minutes max
-        setTimeout(() => {
-          clearInterval(pollProgress);
-          setCurrentUploadId(null);
-        }, 5 * 60 * 1000);
-        
+          return doc;
+        }));
+        showToast(`Successfully indexed ${res.ingested_count} document(s)`);
       } else {
         showToast("Upload completed with warnings");
-        await refreshVault();
       }
-    } catch (e) {
+    } catch (e: any) {
+      clearInterval(progressTimer);
       console.error("Upload error:", e);
+      setDocuments(prev => prev.map(doc => {
+        if (fileList.some(f => f.name === doc.filename)) {
+          return {
+            ...doc,
+            status: 'failed',
+            progress: 100,
+            error: e?.message || "Upload failed"
+          };
+        }
+        return doc;
+      }));
       showToast("Error ingesting documents");
     } finally {
+      clearInterval(progressTimer);
       setIsUploading(false);
+      await refreshVault();
     }
   };
 
