@@ -28,6 +28,7 @@ try:
     from src.chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session
     from src.pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
     from src.auth import require_user, set_current_user, get_current_user
+    from src.state_db import init_state_db, upsert_document
 except ImportError:
     from db import init_db, clear_collection, get_collection_stats, delete_file_from_collection, get_qdrant_client
     from ingest import ingest_file
@@ -77,6 +78,7 @@ upload_progress: Dict[str, Dict] = {}
 def startup_event():
     init_db()
     init_chat_db()
+    init_state_db()
 
 @app.get("/api/health")
 def health_check():
@@ -240,6 +242,7 @@ async def upload_documents(files: list[UploadFile] = File(...)):
         # Add file to progress tracking
         file_size = len(content)
         size_mb = round(file_size / (1024 * 1024), 2)
+        upsert_document(get_current_user(), filename, "processing", size_bytes=file_size)
         
         upload_progress[upload_id]["files"].append({
             "filename": filename,
@@ -269,11 +272,13 @@ async def upload_documents(files: list[UploadFile] = File(...)):
             upload_progress[upload_id]["completed_files"] += 1
             
             ingested_count += 1
+            upsert_document(get_current_user(), filename, "indexed", size_bytes=file_size)
         except Exception as e:
             # Update progress: file failed
             upload_progress[upload_id]["files"][file_idx]["status"] = "failed"
             upload_progress[upload_id]["files"][file_idx]["error"] = str(e)
             errors.append(f"{filename}: {str(e)}")
+            upsert_document(get_current_user(), filename, "failed", size_bytes=file_size, error=str(e))
     
     # Mark overall upload as complete
     upload_progress[upload_id]["status"] = "completed"
