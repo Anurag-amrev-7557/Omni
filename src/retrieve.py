@@ -1,9 +1,15 @@
+import os
 import re
 from functools import lru_cache
 from rank_bm25 import BM25Okapi
-from sentence_transformers import CrossEncoder
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_qdrant import QdrantVectorStore
+
+# Restrict thread pools to avoid memory spikes on limited cloud instances
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 try:
     from src.db import get_qdrant_client
     from src.config import COLLECTION_NAME
@@ -14,12 +20,31 @@ except ImportError:
 
 @lru_cache(maxsize=1)
 def get_embeddings():
-    return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    """Lazy-loaded memory-optimized HuggingFace embeddings."""
+    try:
+        import torch
+        torch.set_num_threads(1)
+    except Exception:
+        pass
+    from langchain_huggingface import HuggingFaceEmbeddings
+    return HuggingFaceEmbeddings(
+        model_name="all-MiniLM-L6-v2",
+        model_kwargs={"device": "cpu"},
+        encode_kwargs={"normalize_embeddings": True, "batch_size": 8}
+    )
 
 
 @lru_cache(maxsize=1)
 def get_reranker():
-    return CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+    """Lazy-loaded lightweight Cross-Encoder with fallback."""
+    try:
+        import torch
+        torch.set_num_threads(1)
+        from sentence_transformers import CrossEncoder
+        return CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device="cpu")
+    except Exception as e:
+        print(f"Notice: CrossEncoder reranker disabled to conserve memory ({e}). Using RRF.")
+        return None
 
 
 def tokenize_text(text: str) -> list[str]:
@@ -58,83 +83,95 @@ def compute_reciprocal_rank_fusion(
     # Map dense ranks
     dense_rank_map = {idx: rank + 1 for rank, idx in enumerate(range(len(dense_results)))}
 
-    fused_candidates = []
+    # 2. Compute combined RRF score
+    fused_docs = []
     for idx, doc in enumerate(candidate_docs):
-        d_rank = dense_rank_map.get(idx, len(candidate_docs) + 1)
-        b_rank = bm25_rank_map.get(idx, len(candidate_docs) + 1)
+        r_dense = dense_rank_map.get(idx, len(candidate_docs))
+        r_bm25 = bm25_rank_map.get(idx, len(candidate_docs))
         
-        # RRF formula: 0.6 dense weight + 0.4 BM25 weight
-        dense_rrf = 0.6 * (1.0 / (rrf_k + d_rank))
-        bm25_rrf = 0.4 * (1.0 / (rrf_k + b_rank))
-        rrf_score = round(dense_rrf + bm25_rrf, 6)
+        # Weighted RRF: 0.6 Dense + 0.4 BM25
+        rrf_score = (0.6 / (rrf_k + r_dense)) + (0.4 / (rrf_k + r_bm25))
         
-        item = dict(doc)
-        item["dense_rank"] = d_rank
-        item["bm25_rank"] = b_rank
-        item["bm25_score"] = round(float(bm25_scores[idx]), 4)
-        item["rrf_score"] = rrf_score
-        fused_candidates.append(item)
+        doc_copy = dict(doc)
+        doc_copy["rrf_score"] = rrf_score
+        fused_docs.append(doc_copy)
 
-    fused_candidates.sort(key=lambda x: x["rrf_score"], reverse=True)
-    return fused_candidates
+    # Sort descending by RRF score
+    fused_docs.sort(key=lambda d: d["rrf_score"], reverse=True)
+    return fused_docs
 
 
-def hybrid_search(query: str, limit: int = 3, candidate_k: int = 12) -> list[dict]:
-    """
-    PRODUCTION TWO-STAGE RETRIEVAL PIPELINE:
-    1. Dense Vector Search: Shortlist top candidate chunks from Qdrant.
-    2. Reciprocal Rank Fusion (RRF): Fuse dense similarity rankings with BM25 lexical token rankings.
-    3. Cross-Encoder Deep Reranking: Rescore fused candidates with ms-marco-MiniLM cross-attention.
-    """
-    embeddings_model = get_embeddings()
+def rank_with_cross_encoder(query: str, candidate_docs: list[dict], top_n: int = 5) -> list[dict]:
+    """Re-ranks top candidate documents using cross-encoder, with graceful fallback to RRF."""
+    if not candidate_docs:
+        return []
+
+    reranker = get_reranker()
+    if reranker is None:
+        return candidate_docs[:top_n]
+
+    try:
+        pairs = [[query, doc["content"]] for doc in candidate_docs]
+        scores = reranker.predict(pairs)
+        
+        scored_docs = []
+        for i, doc in enumerate(candidate_docs):
+            doc_copy = dict(doc)
+            doc_copy["rerank_score"] = float(scores[i])
+            scored_docs.append(doc_copy)
+            
+        scored_docs.sort(key=lambda x: x["rerank_score"], reverse=True)
+        return scored_docs[:top_n]
+    except Exception as e:
+        print(f"Reranking error ({e}), falling back to RRF candidates.")
+        return candidate_docs[:top_n]
+
+
+def hybrid_search(query: str, k: int = 5) -> list[dict]:
+    """Executes dense vector search and BM25 hybrid reciprocal rank fusion."""
     client = get_qdrant_client()
+    embeddings_model = get_embeddings()
 
-    vector_store = QdrantVectorStore(
+    vectorstore = QdrantVectorStore(
         client=client,
         collection_name=COLLECTION_NAME,
         embedding=embeddings_model,
     )
 
-    try:
-        docs_and_scores = vector_store.similarity_search_with_score(query, k=candidate_k)
-    except Exception as e:
-        print(f"Vector search exception: {e}")
-        docs_and_scores = []
+    # 1. Dense retrieval (k*2 candidates)
+    candidate_limit = max(k * 2, 8)
+    docs_with_scores = vectorstore.similarity_search_with_score(query, k=candidate_limit)
 
-    if not docs_and_scores:
+    if not docs_with_scores:
         return []
 
-    initial_candidates = []
-    for doc, score in docs_and_scores:
-        full_content = doc.metadata.get("parent_content") or doc.page_content
-        initial_candidates.append({
-            "content": full_content,
-            "child_snippet": doc.page_content,
+    candidate_docs = []
+    dense_results = []
+    for doc, score in docs_with_scores:
+        entry = {
+            "content": doc.page_content,
             "filename": doc.metadata.get("filename", "Unknown"),
             "page": doc.metadata.get("page", 1),
-            "vector_score": round(float(score), 4),
-        })
+            "parent_content": doc.metadata.get("parent_content", doc.page_content),
+            "summary": doc.metadata.get("summary", ""),
+            "dense_score": float(score)
+        }
+        candidate_docs.append(entry)
+        dense_results.append(entry)
 
-    # Stage 1: Reciprocal Rank Fusion (Dense + BM25)
-    fused_candidates = compute_reciprocal_rank_fusion(
-        dense_results=initial_candidates,
-        candidate_docs=initial_candidates,
-        query=query
-    )
+    # 2. Reciprocal Rank Fusion (Dense + BM25)
+    fused_docs = compute_reciprocal_rank_fusion(dense_results, candidate_docs, query)
 
-    # Stage 2: Cross-Encoder Deep Reranking
-    try:
-        reranker = get_reranker()
-        pairs = [[query, doc["content"]] for doc in fused_candidates]
-        rerank_scores = reranker.predict(pairs)
+    # 3. Stage 2: Deep Cross-Encoder Reranker
+    reranked_docs = rank_with_cross_encoder(query, fused_docs, top_n=k)
 
-        for idx, score in enumerate(rerank_scores):
-            fused_candidates[idx]["rerank_score"] = round(float(score), 4)
+    # 4. Deduplicate parent context blocks
+    seen_parents = set()
+    final_docs = []
+    for doc in reranked_docs:
+        parent_text = doc["parent_content"]
+        if parent_text not in seen_parents:
+            seen_parents.add(parent_text)
+            final_docs.append(doc)
 
-        fused_candidates.sort(key=lambda x: x["rerank_score"], reverse=True)
-    except Exception as e:
-        print(f"Cross-Encoder reranking error, falling back to RRF scores: {e}")
-        for doc in fused_candidates:
-            doc["rerank_score"] = doc.get("rrf_score", 0.0)
-
-    return fused_candidates[:limit]
+    return final_docs

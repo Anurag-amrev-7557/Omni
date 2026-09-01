@@ -4,15 +4,16 @@ import pymupdf
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_groq import ChatGroq
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
 from langchain_qdrant import QdrantVectorStore
 try:
     from src.db import get_qdrant_client, init_db
     from src.config import COLLECTION_NAME
+    from src.retrieve import get_embeddings
 except ImportError:
     from db import get_qdrant_client, init_db
     from config import COLLECTION_NAME
+    from retrieve import get_embeddings
 
 
 def generate_summary(pages: list[Document]) -> str:
@@ -87,7 +88,7 @@ def ingest_file(file_path: str):
             )
             child_count += 1
         
-    embeddings_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    embeddings_model = get_embeddings()
     client = get_qdrant_client()
     vector_store = QdrantVectorStore(
         client=client,
