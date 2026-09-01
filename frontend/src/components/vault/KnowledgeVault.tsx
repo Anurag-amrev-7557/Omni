@@ -275,6 +275,7 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
                   stage={doc.stage}
                   error={doc.error}
                   onCancel={onCancelUpload ? () => onCancelUpload(doc.upload_id, doc.filename) : undefined}
+                  onRetry={() => onReindex(doc.filename)}
                 />
               ))}
             </div>

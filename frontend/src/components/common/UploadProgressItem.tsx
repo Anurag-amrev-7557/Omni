@@ -1,5 +1,5 @@
 import React from 'react';
-import { Loader2, CheckCircle, XCircle, Clock, X } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, Clock, X, RotateCcw } from 'lucide-react';
 
 interface UploadProgressItemProps {
   filename: string;
@@ -8,6 +8,7 @@ interface UploadProgressItemProps {
   stage?: string;
   error?: string;
   onCancel?: () => void;
+  onRetry?: () => void;
 }
 
 export const UploadProgressItem: React.FC<UploadProgressItemProps> = ({
@@ -16,7 +17,8 @@ export const UploadProgressItem: React.FC<UploadProgressItemProps> = ({
   progress,
   stage,
   error,
-  onCancel
+  onCancel,
+  onRetry
 }) => {
   const getStatusIcon = () => {
     switch (status) {
@@ -97,11 +99,25 @@ export const UploadProgressItem: React.FC<UploadProgressItemProps> = ({
         )}
       </div>
 
-      {/* Progress Percentage & Cancel Button */}
+      {/* Progress Percentage & Cancel/Retry Button */}
       <div className="flex items-center gap-2 flex-shrink-0">
         <span className="text-xs font-mono text-[var(--text-muted)]">
           {progress}%
         </span>
+        {status === 'failed' && onRetry && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRetry();
+            }}
+            className="px-2 py-1 rounded-md text-xs font-medium text-[var(--accent-primary)] hover:bg-[var(--accent-subtle)] transition-colors cursor-pointer inline-flex items-center gap-1"
+            title="Retry indexing"
+          >
+            <RotateCcw size={12} />
+            <span>Retry</span>
+          </button>
+        )}
         {onCancel && (status === 'uploading' || status === 'processing') && (
           <button
             type="button"

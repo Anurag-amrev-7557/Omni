@@ -23,12 +23,36 @@ export const VaultUploadModal: React.FC<VaultUploadModalProps> = ({
 
   if (!isOpen) return null;
 
+  const ALLOWED_EXTS = ['.pdf', '.md', '.txt'];
+  const MAX_SIZE_BYTES = 35 * 1024 * 1024; // 35 MB
+
   const handleFilesChosen = (files: FileList | null) => {
     if (!files) return;
-    const newFiles = Array.from(files);
+    const incoming = Array.from(files);
+    const valid: File[] = [];
+
+    for (const file of incoming) {
+      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+      if (!ALLOWED_EXTS.includes(ext)) {
+        showToast(`"${file.name}" is not supported. Use PDF, Markdown, or Text.`);
+        continue;
+      }
+      if (file.size > MAX_SIZE_BYTES) {
+        showToast(`"${file.name}" exceeds maximum allowed size of 35 MB.`);
+        continue;
+      }
+      valid.push(file);
+    }
+
+    if (valid.length === 0) return;
+
     setSelectedFiles(prev => {
       const existing = new Set(prev.map(f => `${f.name}_${f.size}`));
-      const unique = newFiles.filter(f => !existing.has(`${f.name}_${f.size}`));
+      const unique = valid.filter(f => !existing.has(`${f.name}_${f.size}`));
+      if (prev.length + unique.length > 10) {
+        showToast("Maximum 10 files allowed per upload batch.");
+        return [...prev, ...unique].slice(0, 10);
+      }
       return [...prev, ...unique];
     });
   };
@@ -103,7 +127,7 @@ export const VaultUploadModal: React.FC<VaultUploadModalProps> = ({
               ref={fileInputRef}
               type="file"
               multiple
-              accept=".pdf,.md,.txt,.docx"
+              accept=".pdf,.md,.txt"
               onChange={(e) => handleFilesChosen(e.target.files)}
               className="hidden"
             />
@@ -114,7 +138,7 @@ export const VaultUploadModal: React.FC<VaultUploadModalProps> = ({
               Drag and drop files here, or <span className="text-[var(--accent-primary)] font-semibold underline underline-offset-2">browse</span>
             </div>
             <div className="text-[12px] text-[var(--text-muted)]">
-              PDF, Markdown (.md), or Text (.txt) up to 50MB each
+              PDF, Markdown (.md), or Text (.txt) up to 35MB each (Max 10 files)
             </div>
           </div>
 

@@ -1,43 +1,71 @@
 import os
 import uuid
+import concurrent.futures
 import pymupdf
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_groq import ChatGroq
 from langchain_core.documents import Document
 from langchain_qdrant import QdrantVectorStore
 try:
-    from src.db import get_qdrant_client, init_db
+    from src.db import get_qdrant_client, init_db, delete_file_from_collection
     from src.config import COLLECTION_NAME
     from src.retrieve import get_embeddings
 except ImportError:
-    from db import get_qdrant_client, init_db
+    from db import get_qdrant_client, init_db, delete_file_from_collection
     from config import COLLECTION_NAME
     from retrieve import get_embeddings
 
 
 def generate_summary(pages: list[Document]) -> str:
+    """Generates a brief summary with strict 3-second timeout and heuristic fallback."""
     try:
-        from src.generate import invoke_groq_with_fallback
-    except ImportError:
-        from generate import invoke_groq_with_fallback
-    preview = "\n\n".join([p.page_content for p in pages[:3]])[:1500]
-    prompt = f"Write a concise one-sentence title summary of this document:\n\n{preview}"
-    res = invoke_groq_with_fallback(prompt)
-    return res if res else "Document text excerpt."
+        preview = "\n\n".join([p.page_content for p in pages[:2]])[:1200].strip()
+        if not preview:
+            return "Document knowledge excerpt."
+
+        def _call_groq():
+            try:
+                from src.generate import invoke_groq_with_fallback
+            except ImportError:
+                from generate import invoke_groq_with_fallback
+            prompt = f"Write a concise one-sentence title summary (max 15 words) for this document:\n\n{preview}"
+            return invoke_groq_with_fallback(prompt)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_call_groq)
+            res = future.result(timeout=3.0)
+            if res and len(res.strip()) > 5:
+                return res.strip().replace("\n", " ")
+    except Exception as exc:
+        print(f"[Ingest] Summary generation fallback: {exc}")
+
+    # Fast heuristic fallback (first clean sentence or 120 chars)
+    first_text = pages[0].page_content.strip()
+    first_sentence = first_text.split(".")[0].strip().replace("\n", " ")
+    if 10 < len(first_sentence) < 150:
+        return f"{first_sentence}."
+    return first_text[:120].strip().replace("\n", " ") or "Knowledge document excerpt."
 
 
 def load_pages_with_pymupdf(file_path: str) -> list[Document]:
-    """Loads PDF pages using PyMuPDF for high-fidelity text extraction."""
-    doc = pymupdf.open(file_path)
+    """Loads PDF pages using PyMuPDF for high-fidelity text extraction with error resilience."""
+    try:
+        doc = pymupdf.open(file_path)
+    except Exception as exc:
+        raise ValueError(f"Could not open PDF file. The file may be damaged or password-protected: {exc}")
+
     pages = []
-    for page_num in range(len(doc)):
-        page = doc.load_page(page_num)
-        text = page.get_text("text")
-        if text.strip():
-            pages.append(Document(page_content=text, metadata={"page": page_num + 1}))
-    doc.close()
+    try:
+        for page_num in range(len(doc)):
+            page = doc.load_page(page_num)
+            text = page.get_text("text")
+            if text and text.strip():
+                pages.append(Document(page_content=text, metadata={"page": page_num + 1}))
+    finally:
+        doc.close()
+
     return pages
+
 
 def ingest_file(file_path: str, user_id: str | None = None, progress_callback = None):
     init_db()
@@ -51,23 +79,27 @@ def ingest_file(file_path: str, user_id: str | None = None, progress_callback = 
     if ext == ".pdf":
         pages = load_pages_with_pymupdf(file_path)
     elif ext in [".txt", ".md"]:
-        loader = TextLoader(file_path, encoding="utf-8")
-        pages = loader.load()
+        try:
+            loader = TextLoader(file_path, encoding="utf-8")
+            pages = loader.load()
+        except UnicodeDecodeError:
+            loader = TextLoader(file_path, encoding="latin-1")
+            pages = loader.load()
     else:
         raise ValueError(f"Unsupported file format '{ext}'. Only PDF, TXT, and MD are supported.")
 
-    if not pages:
-        raise ValueError(f"No text content could be extracted from {filename}.")
+    if not pages or not any(p.page_content.strip() for p in pages):
+        raise ValueError(f"No extractable text found in '{filename}'. Scanned or empty documents are not supported.")
     
     print(f"[DEBUG] Extracted {len(pages)} pages from {filename}")
     if progress_callback:
-        progress_callback(40, "Generating contextual summary...")
+        progress_callback(35, "Generating contextual summary...")
     summary = generate_summary(pages)
     print(f"[DEBUG] Generated summary: {summary[:100]}...")
     
     # 1. PARENT CHUNKING (1500 chars)
     if progress_callback:
-        progress_callback(60, "Chunking document blocks...")
+        progress_callback(55, "Chunking document blocks...")
     parent_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
     parent_docs = parent_splitter.split_documents(pages)
     
@@ -100,9 +132,16 @@ def ingest_file(file_path: str, user_id: str | None = None, progress_callback = 
             child_count += 1
         
     if progress_callback:
-        progress_callback(80, "Generating vector embeddings...")
+        progress_callback(75, "Generating vector embeddings...")
     embeddings_model = get_embeddings()
     client = get_qdrant_client()
+    
+    # Clean deduplication: Remove any previous vectors for this file before re-inserting
+    try:
+        delete_file_from_collection(filename)
+    except Exception as exc:
+        print(f"[Ingest] Deduplication warning for {filename}: {exc}")
+
     vector_store = QdrantVectorStore(
         client=client,
         collection_name=COLLECTION_NAME,
@@ -110,7 +149,7 @@ def ingest_file(file_path: str, user_id: str | None = None, progress_callback = 
     )
     
     if progress_callback:
-        progress_callback(92, "Writing vectors to Qdrant...")
+        progress_callback(90, "Writing vectors to Qdrant...")
     vector_store.add_documents(child_documents)
     print(f"[DEBUG] Ingested {filename} into Qdrant: {len(parent_docs)} parent blocks, {len(child_documents)} child vectors.")
     print(f"[DEBUG] Collection name used: {COLLECTION_NAME}")
