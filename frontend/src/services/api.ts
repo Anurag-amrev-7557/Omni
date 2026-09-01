@@ -1,5 +1,5 @@
 import { ChatSession, ChatMessage } from '../types/chat';
-import { DocumentItem, CollectionStats, UploadResponse } from '../types/document';
+import { DocumentItem, CollectionStats, UploadResponse, UploadProgress } from '../types/document';
 
 export const API_BASE = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
 
@@ -49,6 +49,11 @@ export const api = {
       formData.append('files', files[i]);
     }
     const res = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: formData });
+    return res.json();
+  },
+
+  async getUploadProgress(uploadId: string): Promise<UploadProgress> {
+    const res = await fetch(`${API_BASE}/api/upload-progress/${uploadId}`);
     return res.json();
   },
 

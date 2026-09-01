@@ -1,6 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DocumentItem, CollectionStats } from '../types/document';
+import { DocumentItem, CollectionStats, UploadProgress } from '../types/document';
 import { api } from '../services/api';
+
+const round = (num: number, decimals: number = 2) => {
+  const factor = Math.pow(10, decimals);
+  return Math.round(num * factor) / factor;
+};
 
 export const useDocuments = (showToast: (msg: string) => void) => {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
@@ -11,6 +16,7 @@ export const useDocuments = (showToast: (msg: string) => void) => {
   });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [currentUploadId, setCurrentUploadId] = useState<string | null>(null);
 
   const fetchDocuments = useCallback(async () => {
     try {
@@ -44,15 +50,69 @@ export const useDocuments = (showToast: (msg: string) => void) => {
   const uploadFiles = async (files: FileList | File[]) => {
     if (!files || files.length === 0) return;
     setIsUploading(true);
+    
     try {
       showToast(`Ingesting ${files.length} file(s) into vector vault...`);
       const res = await api.uploadDocuments(files);
-      if (res.success) {
-        showToast(`Successfully indexed ${res.ingested_count} document(s)`);
+      
+      if (res.success && res.upload_id) {
+        setCurrentUploadId(res.upload_id);
+        
+        // Add temporary entries with progress status
+        const tempDocs: DocumentItem[] = Array.from(files).map(file => ({
+          filename: file.name,
+          size_mb: round(file.size / (1024 * 1024), 2),
+          pages: 1,
+          indexed: false,
+          status: 'uploading',
+          progress: 0
+        }));
+        
+        setDocuments(prev => [...tempDocs, ...prev]);
+        
+        // Poll for progress updates
+        const pollProgress = setInterval(async () => {
+          try {
+            const progress = await api.getUploadProgress(res.upload_id!);
+            
+            // Update documents with progress
+            setDocuments(prev => prev.map(doc => {
+              const fileProgress = progress.files.find(f => f.filename === doc.filename);
+              if (fileProgress) {
+                return {
+                  ...doc,
+                  status: fileProgress.status,
+                  progress: fileProgress.progress,
+                  indexed: fileProgress.indexed,
+                  error: fileProgress.error
+                };
+              }
+              return doc;
+            }));
+            
+            // Stop polling when upload is complete
+            if (progress.status === 'completed') {
+              clearInterval(pollProgress);
+              setCurrentUploadId(null);
+              showToast(`Successfully indexed ${res.ingested_count} document(s)`);
+              await refreshVault();
+            }
+          } catch (e) {
+            console.error("Progress polling error:", e);
+            clearInterval(pollProgress);
+          }
+        }, 1000); // Poll every second
+        
+        // Cleanup polling after 5 minutes max
+        setTimeout(() => {
+          clearInterval(pollProgress);
+          setCurrentUploadId(null);
+        }, 5 * 60 * 1000);
+        
       } else {
         showToast("Upload completed with warnings");
+        await refreshVault();
       }
-      await refreshVault();
     } catch (e) {
       console.error("Upload error:", e);
       showToast("Error ingesting documents");

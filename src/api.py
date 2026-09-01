@@ -4,7 +4,8 @@ import json
 import shutil
 import tempfile
 import asyncio
-from typing import Optional
+import uuid
+from typing import Optional, Dict
 from fastapi import FastAPI, File, UploadFile, Query, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response, JSONResponse, FileResponse
@@ -43,6 +44,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Global progress tracking for uploads
+upload_progress: Dict[str, Dict] = {}
+
 
 @app.on_event("startup")
 def startup_event():
@@ -52,6 +56,14 @@ def startup_event():
 @app.get("/api/health")
 def health_check():
     return {"status": "online", "version": "2.0.0"}
+
+@app.get("/api/upload-progress/{upload_id}")
+def get_upload_progress(upload_id: str):
+    """Get real-time progress for a specific upload session."""
+    if upload_id not in upload_progress:
+        return {"upload_id": upload_id, "status": "not_found", "files": []}
+    
+    return upload_progress[upload_id]
 
 @app.get("/api/stats")
 def get_stats():
@@ -112,25 +124,70 @@ async def upload_documents(files: list[UploadFile] = File(...)):
     uploads_dir = os.path.join(ROOT_DIR, "data", "uploaded_docs")
     os.makedirs(uploads_dir, exist_ok=True)
     
+    # Generate unique upload ID for progress tracking
+    upload_id = str(uuid.uuid4())
+    
+    # Initialize progress tracking
+    upload_progress[upload_id] = {
+        "upload_id": upload_id,
+        "status": "uploading",
+        "total_files": len(files),
+        "completed_files": 0,
+        "files": []
+    }
+    
     ingested_count = 0
     errors = []
     
-    for file in files:
+    for idx, file in enumerate(files):
         filename = file.filename
         save_path = os.path.join(uploads_dir, filename)
         content = await file.read()
+        
+        # Add file to progress tracking
+        file_size = len(content)
+        size_mb = round(file_size / (1024 * 1024), 2)
+        
+        upload_progress[upload_id]["files"].append({
+            "filename": filename,
+            "size_mb": size_mb,
+            "status": "uploading",
+            "progress": 0,
+            "indexed": False
+        })
+        
+        # Save file first
         with open(save_path, "wb") as f:
             f.write(content)
+        
+        # Update progress: file saved
+        file_idx = idx
+        upload_progress[upload_id]["files"][file_idx]["status"] = "processing"
+        upload_progress[upload_id]["files"][file_idx]["progress"] = 50
             
         try:
             # Run heavy vector ingestion in threadpool to prevent event-loop freezing
             await asyncio.to_thread(ingest_file, save_path)
+            
+            # Update progress: file completed
+            upload_progress[upload_id]["files"][file_idx]["status"] = "completed"
+            upload_progress[upload_id]["files"][file_idx]["progress"] = 100
+            upload_progress[upload_id]["files"][file_idx]["indexed"] = True
+            upload_progress[upload_id]["completed_files"] += 1
+            
             ingested_count += 1
         except Exception as e:
+            # Update progress: file failed
+            upload_progress[upload_id]["files"][file_idx]["status"] = "failed"
+            upload_progress[upload_id]["files"][file_idx]["error"] = str(e)
             errors.append(f"{filename}: {str(e)}")
-            
+    
+    # Mark overall upload as complete
+    upload_progress[upload_id]["status"] = "completed"
+    
     return {
         "success": True,
+        "upload_id": upload_id,
         "ingested_count": ingested_count,
         "errors": errors
     }

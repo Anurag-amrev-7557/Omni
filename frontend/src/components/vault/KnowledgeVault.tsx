@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { RefreshCw, UploadCloud, Plus, Database, Trash2 } from 'lucide-react';
+import { RefreshCw, UploadCloud, Plus, Database, Trash2, Loader2 } from 'lucide-react';
 import { DocumentItem, CollectionStats } from '../../types/document';
 import { VaultToolbar } from './VaultToolbar';
 import { VaultDocList, SortField, SortDirection } from './VaultDocList';
 import { VaultUploadModal } from './VaultUploadModal';
 import { VaultMassActionsBar } from './VaultMassActionsBar';
 import { VaultBottomRibbon } from './VaultBottomRibbon';
+import { UploadProgressItem } from '../common/UploadProgressItem';
 
 interface KnowledgeVaultProps {
   documents: DocumentItem[];
@@ -53,6 +54,10 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
   const pdfCount = documents.filter(d => d.filename.toLowerCase().endsWith('.pdf')).length;
   const mdCount = documents.filter(d => d.filename.toLowerCase().endsWith('.md')).length;
   const txtCount = documents.filter(d => d.filename.toLowerCase().endsWith('.txt')).length;
+  
+  // Separate uploading documents from completed ones
+  const uploadingDocs = documents.filter(d => d.status === 'uploading' || d.status === 'processing');
+  const completedDocs = documents.filter(d => d.status !== 'uploading' && d.status !== 'processing');
 
   // In-Header Column Sorting Handler
   const handleSort = (field: SortField) => {
@@ -64,7 +69,7 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
     }
   };
 
-  const filteredDocuments = documents
+  const filteredDocuments = completedDocs
     .filter(doc => {
       const matches = doc.filename.toLowerCase().includes(searchQuery.toLowerCase());
       if (!matches) return false;
@@ -94,6 +99,12 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
 
   // Multi-Selection Logic
   const handleToggleSelect = (filename: string) => {
+    // Only allow selection of completed documents
+    const doc = documents.find(d => d.filename === filename);
+    if (doc && (doc.status === 'uploading' || doc.status === 'processing')) {
+      return; // Don't allow selection of uploading files
+    }
+    
     setSelectedFilenames(prev => 
       prev.includes(filename) 
         ? prev.filter(f => f !== filename) 
@@ -102,10 +113,14 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
   };
 
   const handleSelectAll = () => {
-    if (selectedFilenames.length === filteredDocuments.length) {
+    const selectableDocs = filteredDocuments.filter(d => 
+      d.status !== 'uploading' && d.status !== 'processing'
+    );
+    
+    if (selectedFilenames.length === selectableDocs.length) {
       setSelectedFilenames([]);
     } else {
-      setSelectedFilenames(filteredDocuments.map(d => d.filename));
+      setSelectedFilenames(selectableDocs.map(d => d.filename));
     }
   };
 
@@ -233,12 +248,31 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
             activeFilter={activeFilter}
             setActiveFilter={setActiveFilter}
             counts={{
-              all: documents.length,
-              pdf: pdfCount,
-              md: mdCount,
-              txt: txtCount,
+              all: completedDocs.length,
+              pdf: completedDocs.filter(d => d.filename.toLowerCase().endsWith('.pdf')).length,
+              md: completedDocs.filter(d => d.filename.toLowerCase().endsWith('.md')).length,
+              txt: completedDocs.filter(d => d.filename.toLowerCase().endsWith('.txt')).length,
             }}
           />
+
+          {/* Upload Progress Section */}
+          {uploadingDocs.length > 0 && (
+            <div className="space-y-2 mb-4">
+              <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-main)]">
+                <Loader2 size={16} className="animate-spin text-blue-500" />
+                <span>Processing {uploadingDocs.length} file(s)...</span>
+              </div>
+              {uploadingDocs.map(doc => (
+                <UploadProgressItem
+                  key={doc.filename}
+                  filename={doc.filename}
+                  status={doc.status || 'uploading'}
+                  progress={doc.progress || 0}
+                  error={doc.error}
+                />
+              ))}
+            </div>
+          )}
 
           {/* Prominent Enterprise Data Table */}
           <VaultDocList
@@ -261,15 +295,15 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
 
       {/* Docked Bottom Status & Metrics Ribbon */}
       <VaultBottomRibbon
-        totalFiles={documents.length}
+        totalFiles={completedDocs.length}
         totalMb={totalMb}
-        totalChunks={stats.total_chunks || (documents.length * 120)}
+        totalChunks={stats.total_chunks || (completedDocs.length * 120)}
       />
 
       {/* Floating Mass Actions Dock Bar (Floats above bottom ribbon) */}
       <VaultMassActionsBar
         selectedFilenames={selectedFilenames}
-        documents={documents}
+        documents={completedDocs}
         onClearSelection={handleClearSelection}
         onBatchReindex={(filenames) => {
           onBatchReindex?.(filenames);
