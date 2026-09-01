@@ -153,21 +153,30 @@ export default function App() {
     api.createSession('New Chat').catch(() => {});
   };
 
-  // Delete Thread
-  const handleDeleteSession = async (sessionId: string) => {
-    try {
-      await api.deleteSession(sessionId);
-      const remaining = sessions.filter(s => s.session_id !== sessionId);
-      setSessions(remaining);
-      showToast("Thread deleted");
+  // Delete Thread (Instant 0ms Optimistic UI + Seamless Shift to Recent Top Chat)
+  const handleDeleteSession = (sessionId: string) => {
+    // 1. Instantly remove from local sidebar state
+    const remaining = sessions.filter(s => s.session_id !== sessionId);
+    setSessions(remaining);
+    showToast("Thread deleted");
+
+    // 2. If deleting the currently active chat, shift instantly to the top recent chat
+    if (currentSessionId === sessionId) {
       if (remaining.length > 0) {
-        setCurrentSessionId(remaining[0].session_id);
+        const nextActiveId = remaining[0].session_id;
+        setCurrentSessionId(nextActiveId);
+        loadMessages(nextActiveId);
       } else {
         handleNewChat();
       }
-    } catch (e) {
-      console.error("Error deleting session:", e);
     }
+
+    // 3. Asynchronous non-blocking server delete with automatic rollback
+    api.deleteSession(sessionId).catch((e) => {
+      console.error("Error deleting session on server:", e);
+      showToast("Could not delete session from server");
+      loadSessions();
+    });
   };
 
   // Inspect document in sidecar reader

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Copy, Check, RotateCw, Edit3, Volume2, FileText, ChevronDown, ChevronUp, ExternalLink, Sparkles, ThumbsUp, ThumbsDown, Globe } from 'lucide-react';
 import { ChatMessage, ContextChunk } from '../../types/chat';
 import { FormatBadge } from '../common/FormatBadge';
@@ -191,6 +192,17 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     );
   }
 
+  // Normalize any inline collapsed markdown tables
+  const formattedBody = useMemo(() => {
+    if (!bodyText) return '';
+    let s = bodyText;
+    // Turn "| |---|---|" into "\n|---|---|\n"
+    s = s.replace(/\|\s*\|\s*([-:]+[-| :]*)\|/g, '|\n| $1 |\n');
+    // Turn "| | Penile" into "|\n| Penile"
+    s = s.replace(/\|\s*\|\s*([^|\n]+)/g, '|\n| $1');
+    return s;
+  }, [bodyText]);
+
   // 2. ASSISTANT MESSAGE RENDER
   return (
     <div className="w-full flex flex-col my-5 fade-in">
@@ -209,6 +221,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       ) : (
         <div className="omni-prose max-w-none text-sm text-[var(--text-main)] leading-relaxed font-sans">
           <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
             components={{
               a: ({ href, children }) => (
                 <a 
@@ -221,9 +234,91 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                   <ExternalLink size={10} className="inline opacity-70" />
                 </a>
               ),
+              table: ({ children }) => (
+                <div className="overflow-x-auto my-3.5 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] shadow-xs">
+                  <table className="min-w-full divide-y divide-[var(--border-color)] text-xs text-left">
+                    {children}
+                  </table>
+                </div>
+              ),
+              thead: ({ children }) => (
+                <thead className="bg-[var(--bg-sidebar)] text-[var(--text-muted)] font-semibold text-[11.5px] uppercase tracking-wider">
+                  {children}
+                </thead>
+              ),
+              th: ({ children }) => (
+                <th className="px-3.5 py-2.5 font-semibold text-[var(--text-main)] border-b border-[var(--border-color)] whitespace-nowrap">
+                  {children}
+                </th>
+              ),
+              td: ({ children }) => (
+                <td className="px-3.5 py-2.5 text-[var(--text-main)] border-b border-[var(--border-color)]/40 leading-relaxed align-top">
+                  {children}
+                </td>
+              ),
+              tr: ({ children }) => (
+                <tr className="hover:bg-[var(--bg-hover)]/40 transition-colors last:border-b-0">
+                  {children}
+                </tr>
+              ),
+              ul: ({ children }) => (
+                <ul className="list-disc pl-5 my-2.5 space-y-1.5 text-[var(--text-main)]">
+                  {children}
+                </ul>
+              ),
+              ol: ({ children }) => (
+                <ol className="list-decimal pl-5 my-2.5 space-y-1.5 text-[var(--text-main)]">
+                  {children}
+                </ol>
+              ),
+              li: ({ children }) => (
+                <li className="leading-relaxed text-[var(--text-main)]">
+                  {children}
+                </li>
+              ),
+              h1: ({ children }) => (
+                <h1 className="text-xl font-bold text-[var(--text-main)] mt-5 mb-2.5 tracking-tight">
+                  {children}
+                </h1>
+              ),
+              h2: ({ children }) => (
+                <h2 className="text-lg font-bold text-[var(--text-main)] mt-4 mb-2 tracking-tight">
+                  {children}
+                </h2>
+              ),
+              h3: ({ children }) => (
+                <h3 className="text-[15px] font-semibold text-[var(--text-main)] mt-3 mb-1.5">
+                  {children}
+                </h3>
+              ),
+              p: ({ children }) => (
+                <p className="my-2 leading-relaxed text-[var(--text-main)]">
+                  {children}
+                </p>
+              ),
+              blockquote: ({ children }) => (
+                <blockquote className="border-l-4 border-[var(--accent-primary)] pl-3.5 py-1.5 my-3 italic text-[var(--text-muted)] bg-[var(--bg-hover)]/30 rounded-r-xl">
+                  {children}
+                </blockquote>
+              ),
+              code: ({ children, className }) => {
+                const isInline = !className;
+                if (isInline) {
+                  return (
+                    <code className="px-1.5 py-0.5 rounded-md bg-[var(--bg-hover)] text-[var(--accent-primary)] font-mono text-xs border border-[var(--border-color)]/60">
+                      {children}
+                    </code>
+                  );
+                }
+                return (
+                  <div className="my-3 overflow-x-auto rounded-xl bg-[var(--bg-sidebar)] border border-[var(--border-color)] p-3.5 text-xs font-mono text-[var(--text-main)]">
+                    <code>{children}</code>
+                  </div>
+                );
+              }
             }}
           >
-            {bodyText}
+            {formattedBody}
           </ReactMarkdown>
         </div>
       )}
