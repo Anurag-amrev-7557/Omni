@@ -86,47 +86,70 @@ export const useDocuments = (showToast: (msg: string) => void) => {
       return [...tempDocs, ...filtered];
     });
 
-    showToast(`Ingesting ${fileList.length} file(s) into vector vault...`);
-
-    // 2. Animate realistic progressive stages (Upload -> PyMuPDF chunking -> Qdrant indexing)
-    let currentProgress = 15;
-    const progressTimer = setInterval(() => {
-      currentProgress = Math.min(currentProgress + (currentProgress < 50 ? 12 : currentProgress < 80 ? 6 : 2), 92);
-      setDocuments(prev => prev.map(doc => {
-        if (fileList.some(f => f.name === doc.filename) && (doc.status === 'uploading' || doc.status === 'processing')) {
-          return {
-            ...doc,
-            status: currentProgress > 40 ? 'processing' : 'uploading',
-            progress: currentProgress
-          };
-        }
-        return doc;
-      }));
-    }, 450);
+    showToast(`Uploading ${fileList.length} file(s)...`);
 
     try {
       const res = await api.uploadDocuments(files);
-      clearInterval(progressTimer);
+      
+      if (res.success && res.upload_id) {
+        setCurrentUploadId(res.upload_id);
+        
+        // 2. Poll server for actual background vector ingestion progress
+        const pollInterval = 600;
+        const maxPolls = 100; // 60s max
+        let pollCount = 0;
 
-      if (res.success) {
-        // Mark all as 100% completed
-        setDocuments(prev => prev.map(doc => {
-          if (fileList.some(f => f.name === doc.filename)) {
-            return {
-              ...doc,
-              status: 'completed',
-              progress: 100,
-              indexed: true
-            };
+        const poller = setInterval(async () => {
+          pollCount++;
+          try {
+            const progress = await api.getUploadProgress(res.upload_id!);
+            
+            if (progress && progress.files && progress.files.length > 0) {
+              setDocuments(prev => prev.map(doc => {
+                const fProgress = progress.files.find(f => f.filename === doc.filename);
+                if (fProgress) {
+                  return {
+                    ...doc,
+                    status: fProgress.status,
+                    progress: fProgress.progress ?? (fProgress.status === 'completed' ? 100 : 60),
+                    indexed: fProgress.indexed ?? (fProgress.status === 'completed'),
+                    error: fProgress.error
+                  };
+                }
+                return doc;
+              }));
+            }
+
+            const allDone = progress.status === 'completed' || 
+              (progress.files && progress.files.every(f => f.status === 'completed' || f.status === 'failed'));
+
+            if (allDone || pollCount >= maxPolls) {
+              clearInterval(poller);
+              setCurrentUploadId(null);
+              setIsUploading(false);
+              
+              // Brief delay so user sees the 100% completed checkmark state
+              setTimeout(async () => {
+                await refreshVault();
+                showToast(`Indexed ${fileList.length} document(s) successfully`);
+              }, 1200);
+            }
+          } catch (err) {
+            console.error("Progress polling error:", err);
+            if (pollCount >= 10) {
+              clearInterval(poller);
+              setIsUploading(false);
+              await refreshVault();
+            }
           }
-          return doc;
-        }));
-        showToast(`Successfully indexed ${res.ingested_count} document(s)`);
+        }, pollInterval);
+
       } else {
         showToast("Upload completed with warnings");
+        setIsUploading(false);
+        await refreshVault();
       }
     } catch (e: any) {
-      clearInterval(progressTimer);
       console.error("Upload error:", e);
       setDocuments(prev => prev.map(doc => {
         if (fileList.some(f => f.name === doc.filename)) {
@@ -140,80 +163,107 @@ export const useDocuments = (showToast: (msg: string) => void) => {
         return doc;
       }));
       showToast("Error ingesting documents");
-    } finally {
-      clearInterval(progressTimer);
       setIsUploading(false);
-      await refreshVault();
     }
   };
 
   const deleteDocument = async (filename: string) => {
     if (!window.confirm(`Delete "${filename}" and its vector embeddings from Qdrant?`)) return;
+    
+    // Optimistic UI removal
+    setDocuments(prev => prev.filter(d => d.filename !== filename));
+    setStats(prev => ({
+      ...prev,
+      files_count: Math.max(0, prev.files_count - 1),
+      files: prev.files.filter(f => f !== filename)
+    }));
+    
     try {
       const res = await api.deleteDocument(filename);
       if (res.success) {
         showToast(`Removed "${filename}" from vault`);
-        await refreshVault();
       }
     } catch (e) {
       console.error("Delete error:", e);
       showToast("Failed to delete document");
+    } finally {
+      await refreshVault();
     }
   };
 
   const reindexDocument = async (filename: string) => {
+    // Optimistic state transition
+    setDocuments(prev => prev.map(d => d.filename === filename ? { ...d, status: 'processing', progress: 50, indexed: false } : d));
     try {
       showToast(`Re-indexing "${filename}"...`);
       const res = await api.reindexDocument(filename);
       if (res.success) {
+        setDocuments(prev => prev.map(d => d.filename === filename ? { ...d, status: 'completed', progress: 100, indexed: true } : d));
         showToast(`Re-indexed "${filename}" successfully`);
-        await refreshVault();
       }
     } catch (e) {
       console.error("Reindex error:", e);
       showToast("Failed to re-index document");
+    } finally {
+      await refreshVault();
     }
   };
 
-  const downloadDocument = (filename: string) => {
-    window.open(api.getDownloadUrl(filename), '_blank');
+  const downloadDocument = async (filename: string) => {
+    try {
+      await api.downloadFile(filename);
+      showToast(`Downloaded "${filename}"`);
+    } catch (e) {
+      console.error("Download error:", e);
+      showToast("Failed to download file");
+    }
   };
 
-  // Mass / Batch Operations
+  // Mass / Batch Operations with Optimistic UI Updates
   const batchDeleteDocuments = async (filenames: string[]) => {
     if (filenames.length === 0) return;
     if (!window.confirm(`Delete ${filenames.length} selected document(s) and their vector embeddings from Qdrant?`)) return;
+    
+    // Optimistic batch removal
+    setDocuments(prev => prev.filter(d => !filenames.includes(d.filename)));
+    setStats(prev => ({
+      ...prev,
+      files_count: Math.max(0, prev.files_count - filenames.length),
+      files: prev.files.filter(f => !filenames.includes(f))
+    }));
+
     try {
       showToast(`Deleting ${filenames.length} document(s)...`);
-      for (const fn of filenames) {
-        await api.deleteDocument(fn);
-      }
+      await Promise.all(filenames.map(fn => api.deleteDocument(fn)));
       showToast(`Successfully deleted ${filenames.length} document(s)`);
-      await refreshVault();
     } catch (e) {
       console.error("Batch delete error:", e);
       showToast("Failed to delete some documents");
+    } finally {
+      await refreshVault();
     }
   };
 
   const batchReindexDocuments = async (filenames: string[]) => {
     if (filenames.length === 0) return;
+    setDocuments(prev => prev.map(d => filenames.includes(d.filename) ? { ...d, status: 'processing', progress: 50, indexed: false } : d));
     try {
       showToast(`Re-indexing ${filenames.length} document(s)...`);
-      for (const fn of filenames) {
-        await api.reindexDocument(fn);
-      }
+      await Promise.all(filenames.map(fn => api.reindexDocument(fn)));
       showToast(`Successfully re-indexed ${filenames.length} document(s)`);
-      await refreshVault();
     } catch (e) {
       console.error("Batch reindex error:", e);
       showToast("Failed to reindex some documents");
+    } finally {
+      await refreshVault();
     }
   };
 
-  const batchDownloadDocuments = (filenames: string[]) => {
+  const batchDownloadDocuments = async (filenames: string[]) => {
     if (filenames.length === 0) return;
-    filenames.forEach(fn => downloadDocument(fn));
+    for (const fn of filenames) {
+      await downloadDocument(fn);
+    }
     showToast(`Downloaded ${filenames.length} document(s)`);
   };
 
@@ -237,6 +287,7 @@ export const useDocuments = (showToast: (msg: string) => void) => {
     health,
     isLoading,
     isUploading,
+    currentUploadId,
     fetchDocuments,
     fetchStats,
     fetchHealth,

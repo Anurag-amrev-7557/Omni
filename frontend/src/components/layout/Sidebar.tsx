@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Plus, MessageSquare, Folder, Database, Eye, Search, 
   PanelLeft, MoreVertical, Trash2, Edit3, Star, ChevronsUpDown, 
-  Settings, Info, X, Check, LogOut
+  Settings, Info, X, Check, LogOut, User
 } from 'lucide-react';
 import { ChatSession } from '../../types/chat';
+import { supabase } from '../../lib/supabase';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -43,6 +44,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string>('Account');
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const user = data?.user;
+      if (user) {
+        setUserEmail(user.email ?? null);
+        const fullName = user.user_metadata?.full_name || user.user_metadata?.name;
+        if (fullName) {
+          setUserName(fullName);
+        } else if (user.email) {
+          const prefix = user.email.split('@')[0];
+          setUserName(prefix.charAt(0).toUpperCase() + prefix.slice(1));
+        }
+      }
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user;
+      if (user) {
+        setUserEmail(user.email ?? null);
+        const fullName = user.user_metadata?.full_name || user.user_metadata?.name;
+        if (fullName) {
+          setUserName(fullName);
+        } else if (user.email) {
+          const prefix = user.email.split('@')[0];
+          setUserName(prefix.charAt(0).toUpperCase() + prefix.slice(1));
+        }
+      } else {
+        setUserEmail(null);
+        setUserName('Account');
+      }
+    });
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
   const [activeMenuSessionId, setActiveMenuSessionId] = useState<string | null>(null);
   const [menuCoords, setMenuCoords] = useState<{ top: number; left: number } | null>(null);
 
@@ -239,13 +279,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
           className="flex items-center justify-between p-2.5 rounded-xl hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
           onClick={() => setProfileMenuOpen(!profileMenuOpen)}
         >
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[var(--bg-input)] text-[var(--text-main)] flex items-center justify-center text-xs font-bold border border-[var(--border-color)]">
-              A
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-primary)] flex items-center justify-center text-xs font-bold border border-[var(--border-color)] flex-shrink-0">
+              {userName.charAt(0).toUpperCase()}
             </div>
-            <span className="text-sm font-medium text-[var(--text-main)]">Anurag</span>
+            <div className="flex flex-col min-w-0 truncate">
+              <span className="text-sm font-medium text-[var(--text-main)] truncate">{userName}</span>
+              {userEmail && (
+                <span className="text-[11px] text-[var(--text-muted)] truncate">{userEmail}</span>
+              )}
+            </div>
           </div>
-          <ChevronsUpDown size={15} className="text-[var(--text-dark)]" />
+          <ChevronsUpDown size={15} className="text-[var(--text-dark)] flex-shrink-0" />
         </div>
 
         {profileMenuOpen && (
@@ -257,8 +302,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div 
               className="dropdown-popover-bottom absolute left-3 right-3 bottom-16 z-50 py-2 px-1.5 bg-[var(--bg-modal)] border border-[var(--border-color)] rounded-2xl shadow-[0_16px_48px_rgba(0,0,0,0.25)] backdrop-blur-2xl"
             >
-              <div className="px-3 py-1 text-[10.5px] font-bold text-[var(--text-dark)] uppercase tracking-wider select-none">
-                Account & Preferences
+              <div className="px-3 py-1 text-[10.5px] font-bold text-[var(--text-dark)] uppercase tracking-wider select-none truncate">
+                {userEmail || 'Account & Preferences'}
               </div>
               <div 
                 className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium text-[var(--text-main)] hover:bg-[var(--bg-hover)] rounded-xl cursor-pointer transition-all"
@@ -276,8 +321,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div className="my-1.5 border-t border-[var(--border-color)]" />
               <div 
-                className="flex items-center gap-2.5 px-3 py-2 text-[13px] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] rounded-xl cursor-pointer transition-all"
-                onClick={() => { showToast("Session reset"); setProfileMenuOpen(false); }}
+                className="flex items-center gap-2.5 px-3 py-2 text-[13px] text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl cursor-pointer transition-all"
+                onClick={async () => {
+                  setProfileMenuOpen(false);
+                  await supabase.auth.signOut();
+                  showToast("Signed out successfully");
+                }}
               >
                 <LogOut size={15} />
                 <span>Sign out</span>

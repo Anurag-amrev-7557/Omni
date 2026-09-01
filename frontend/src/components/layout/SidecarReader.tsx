@@ -29,6 +29,7 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
   const [content, setContent] = useState<string>('');
   const [totalPages, setTotalPages] = useState<number>(1);
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageImageUrl, setPageImageUrl] = useState<string | null>(null);
   const [zoom, setZoom] = useState<number>(100);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isPageLoading, setIsPageLoading] = useState<boolean>(false);
@@ -59,9 +60,45 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
       .finally(() => setIsLoading(false));
   }, [doc]);
 
+  // Load PDF page image blob with authenticated token
+  useEffect(() => {
+    if (!doc?.filename || !doc.filename.toLowerCase().endsWith('.pdf')) {
+      setPageImageUrl(null);
+      return;
+    }
+
+    let active = true;
+    let createdUrl: string | null = null;
+    setIsPageLoading(true);
+
+    api.getPdfPageImageBlob(doc.filename, currentPage)
+      .then(url => {
+        if (active) {
+          createdUrl = url;
+          setPageImageUrl(url);
+        } else {
+          URL.revokeObjectURL(url);
+        }
+      })
+      .catch(err => {
+        console.error("PDF page image load failed:", err);
+        if (active) setPageImageUrl(null);
+      })
+      .finally(() => {
+        if (active) setIsPageLoading(false);
+      });
+
+    return () => {
+      active = false;
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
+    };
+  }, [doc?.filename, currentPage]);
+
   // Keyboard navigation shortcuts
   useEffect(() => {
     if (!isOpen) return;
+
+    const isPdf = doc?.filename ? doc.filename.toLowerCase().endsWith('.pdf') : false;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -75,7 +112,7 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, totalPages, onClose]);
+  }, [isOpen, totalPages, doc?.filename, onClose]);
 
   const handleCopyText = useCallback(() => {
     if (!content) return;
@@ -83,6 +120,15 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [content]);
+
+  const handleDownload = async () => {
+    if (!doc?.filename) return;
+    try {
+      await api.downloadFile(doc.filename);
+    } catch (e) {
+      console.error("Download failed:", e);
+    }
+  };
 
   const isPdf = doc?.filename ? doc.filename.toLowerCase().endsWith('.pdf') : false;
 
@@ -186,7 +232,7 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
           {/* Download Original File */}
           <button 
             className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] shadow-xs transition-all cursor-pointer"
-            onClick={() => window.open(api.getDownloadUrl(doc.filename), '_blank')}
+            onClick={handleDownload}
             title="Download original file"
           >
             <Download size={14} />
@@ -209,7 +255,7 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
           <div className="h-full flex flex-col items-center justify-center p-12">
             <OrbitingOrbLoader size="lg" />
           </div>
-        ) : isPdf ? (
+        ) : isPdf && pageImageUrl ? (
           <div className="w-full flex flex-col items-center justify-start">
             <div 
               className="relative w-full flex justify-center"
@@ -220,9 +266,8 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
               }}
             >
               <img 
-                src={api.getPdfPageImageUrl(doc.filename, currentPage)} 
+                src={pageImageUrl} 
                 alt={`Page ${currentPage} of ${doc.filename}`}
-                onLoad={() => setIsPageLoading(false)}
                 className={`w-full h-auto block select-text transition-opacity duration-200 ${isPageLoading ? 'opacity-40' : 'opacity-100'}`}
                 style={{ imageRendering: '-webkit-optimize-contrast' }}
                 loading="eager"
@@ -244,7 +289,7 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
             )}
           </div>
         ) : (
-          /* Text / Markdown Render Directly in Viewport */
+          /* Text / Markdown Render Directly in Viewport (or PDF text fallback) */
           <div 
             className="w-full p-6 sm:p-8 omni-prose"
             style={{ 

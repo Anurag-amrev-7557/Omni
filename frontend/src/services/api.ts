@@ -127,6 +127,27 @@ export const api = {
     return res.json();
   },
 
+  async getPdfPageImageBlob(filename: string, page: number): Promise<string> {
+    const res = await apiFetch(`/api/pdf-page-image?filename=${encodeURIComponent(filename)}&page=${page}`);
+    if (!res.ok) throw new Error("Failed to load PDF page image");
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  },
+
+  async downloadFile(filename: string): Promise<void> {
+    const res = await apiFetch(`/api/download/${encodeURIComponent(filename)}`);
+    if (!res.ok) throw new Error("Download failed");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+
   getDownloadUrl(filename: string): string {
     return `${API_BASE}/api/download/${encodeURIComponent(filename)}`;
   },

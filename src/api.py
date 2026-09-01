@@ -47,8 +47,8 @@ def get_uploads_dir() -> str:
                 f.write("ok")
             os.remove(test_file)
             return candidate
-        except (PermissionError, OSError) as exc:
-            print(f"[Warning] Configured UPLOADS_DIR '{candidate}' is not accessible ({exc}). Falling back to local storage.")
+        except (PermissionError, OSError):
+            pass  # Fall back silently to local app directory or tmp
     fallback = os.path.join(ROOT_DIR, "data", "uploaded_docs")
     try:
         os.makedirs(fallback, exist_ok=True)
@@ -99,13 +99,17 @@ async def logging_and_auth_middleware(request: Request, call_next):
     # Public route bypass
     if request.method == "OPTIONS" or request.url.path in ("/", "/api/health", "/docs", "/redoc", "/openapi.json"):
         response = await call_next(request)
-        latency = round((time.perf_counter() - start_time) * 1000, 1)
         return response
 
     # Authenticate API requests
     if request.url.path.startswith("/api/"):
         try:
-            user_id = require_user(request.headers.get("authorization"))
+            auth_header = request.headers.get("authorization")
+            if not auth_header:
+                token_param = request.query_params.get("token")
+                if token_param:
+                    auth_header = f"Bearer {token_param}"
+            user_id = require_user(auth_header)
             set_current_user(user_id)
         except HTTPException as exc:
             return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})

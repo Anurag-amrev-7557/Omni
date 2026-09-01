@@ -85,28 +85,20 @@ def get_file_bytes(user_id: str, filename: str, local_path: Optional[str] = None
     base_url = SUPABASE_URL.rstrip("/")
     key = get_storage_key(user_id, filename)
     encoded_key = get_encoded_key(user_id, filename)
-    url = f"{base_url}/storage/v1/object/authenticated/{BUCKET_NAME}/{encoded_key}"
+    
+    # Try standard object endpoint first, then authenticated, then public
+    urls_to_try = [
+        f"{base_url}/storage/v1/object/{BUCKET_NAME}/{encoded_key}",
+        f"{base_url}/storage/v1/object/authenticated/{BUCKET_NAME}/{encoded_key}",
+        f"{base_url}/storage/v1/object/public/{BUCKET_NAME}/{encoded_key}",
+    ]
 
     headers = _get_headers()
 
-    try:
-        req = urllib.request.Request(url, headers=headers, method="GET")
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = resp.read()
-            if local_path:
-                try:
-                    os.makedirs(os.path.dirname(local_path), exist_ok=True)
-                    with open(local_path, "wb") as f:
-                        f.write(data)
-                except Exception:
-                    pass
-            return data
-    except urllib.error.HTTPError as exc:
-        # Fallback to public object URL in case bucket is public
+    for url in urls_to_try:
         try:
-            pub_url = f"{base_url}/storage/v1/object/public/{BUCKET_NAME}/{encoded_key}"
-            pub_req = urllib.request.Request(pub_url, headers=headers, method="GET")
-            with urllib.request.urlopen(pub_req, timeout=15) as resp:
+            req = urllib.request.Request(url, headers=headers, method="GET")
+            with urllib.request.urlopen(req, timeout=15) as resp:
                 data = resp.read()
                 if local_path:
                     try:
@@ -117,11 +109,9 @@ def get_file_bytes(user_id: str, filename: str, local_path: Optional[str] = None
                         pass
                 return data
         except Exception:
-            pass
-        print(f"[Warning] Supabase Storage download failed ({exc.code}) for {key}")
-    except Exception as exc:
-        print(f"[Warning] Supabase Storage download exception: {exc}")
+            continue
 
+    print(f"[Warning] Supabase Storage download failed for {key}")
     return None
 
 
