@@ -16,6 +16,25 @@ ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
+try:
+    from src.db import init_db, clear_collection, get_collection_stats, delete_file_from_collection, get_qdrant_client
+    from src.ingest import ingest_file
+    from src.generate import answer_query_stream, answer_query_stream_with_prompt, prepare_context_and_prompt
+    from src.chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session
+    from src.pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
+    from src.auth import require_user, set_current_user, get_current_user
+    from src.state_db import init_state_db, upsert_document, save_upload_job, get_upload_job, delete_document_record
+    from src.storage import save_file, get_file_bytes, delete_file, is_r2_configured
+except ImportError:
+    from db import init_db, clear_collection, get_collection_stats, delete_file_from_collection, get_qdrant_client
+    from ingest import ingest_file
+    from generate import answer_query_stream, answer_query_stream_with_prompt, prepare_context_and_prompt
+    from chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session
+    from pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
+    from auth import require_user, set_current_user, get_current_user
+    from state_db import init_state_db, upsert_document, save_upload_job, get_upload_job, delete_document_record
+    from storage import save_file, get_file_bytes, delete_file, is_r2_configured
+
 def get_uploads_dir() -> str:
     candidate = os.getenv("UPLOADS_DIR")
     if candidate:
@@ -267,9 +286,8 @@ async def upload_documents(files: list[UploadFile] = File(...)):
         })
         save_upload_job(upload_id, get_current_user(), "uploading", len(files), upload_progress[upload_id]["completed_files"], upload_progress[upload_id]["files"])
         
-        # Save file first
-        with open(save_path, "wb") as f:
-            f.write(content)
+        # Save file to local cache and Cloudflare R2
+        save_file(get_current_user(), filename, content, local_path=save_path)
         
         # Update progress: file saved
         file_idx = idx
@@ -320,12 +338,8 @@ def delete_document(filename: str):
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Could not delete vectors from Qdrant: {exc}")
 
-    # Delete the local source if this Render instance still has it.
-    if os.path.exists(file_path):
-        try:
-            os.remove(file_path)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error deleting file: {e}")
+    # Delete from local cache and Cloudflare R2
+    delete_file(get_current_user(), filename, local_path=file_path)
 
     # Clean up PostgreSQL document state
     try:
@@ -340,9 +354,14 @@ def download_document(filename: str):
     uploads_dir = user_upload_dir()
     filename = safe_filename(filename)
     file_path = os.path.join(uploads_dir, filename)
-    if not os.path.exists(file_path):
+    file_bytes = get_file_bytes(get_current_user(), filename, local_path=file_path)
+    if not file_bytes:
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(file_path, filename=filename)
+    return Response(
+        content=file_bytes,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
 
 @app.post("/api/documents/{filename}/reindex")
 def reindex_document(filename: str):
@@ -350,7 +369,9 @@ def reindex_document(filename: str):
     filename = safe_filename(filename)
     file_path = os.path.join(uploads_dir, filename)
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
+        data = get_file_bytes(get_current_user(), filename, local_path=file_path)
+        if not data:
+            raise HTTPException(status_code=404, detail="File not found")
     try:
         delete_file_from_collection(filename)
         ingest_file(file_path, get_current_user())
@@ -364,6 +385,8 @@ def get_pdf_info(filename: str = Query(...)):
     filename = safe_filename(filename)
     file_path = os.path.join(uploads_dir, filename)
     if not os.path.exists(file_path):
+        get_file_bytes(get_current_user(), filename, local_path=file_path)
+    if not os.path.exists(file_path):
         return {"filename": filename, "total_pages": 1}
     count = get_pdf_page_count(file_path)
     return {"filename": filename, "total_pages": count or 1}
@@ -373,6 +396,8 @@ def get_file_content(filename: str = Query(...)):
     uploads_dir = user_upload_dir()
     filename = safe_filename(filename)
     file_path = os.path.join(uploads_dir, filename)
+    if not os.path.exists(file_path):
+        get_file_bytes(get_current_user(), filename, local_path=file_path)
     if not os.path.exists(file_path):
         return {"filename": filename, "content": "File content unavailable."}
     
@@ -389,6 +414,8 @@ def get_pdf_page_image(filename: str = Query(...), page: int = Query(1, ge=1)):
     filename = safe_filename(filename)
     file_path = os.path.join(uploads_dir, filename)
     
+    if not os.path.exists(file_path):
+        get_file_bytes(get_current_user(), filename, local_path=file_path)
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
         
