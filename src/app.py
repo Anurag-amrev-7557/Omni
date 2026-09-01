@@ -14,13 +14,13 @@ if ROOT_DIR not in sys.path:
 try:
     from src.db import init_db, clear_collection, get_collection_stats
     from src.ingest import ingest_file
-    from src.generate import answer_query_stream, prepare_context_and_prompt
+    from src.generate import answer_query_stream, answer_query_stream_with_prompt, prepare_context_and_prompt
     from src.chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session
     from src.pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
 except ImportError:
     from db import init_db, clear_collection, get_collection_stats
     from ingest import ingest_file
-    from generate import answer_query_stream, prepare_context_and_prompt
+    from generate import answer_query_stream, answer_query_stream_with_prompt, prepare_context_and_prompt
     from chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session
     from pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
 
@@ -232,8 +232,12 @@ with tab_chat:
 
         with st.chat_message("assistant"):
             prompt_str, retrieved_contexts = prepare_context_and_prompt(prompt_input, current_messages)
-            stream_gen = answer_query_stream(prompt_input, current_messages)
-            full_response = st.write_stream(stream_gen)
+            
+            if not prompt_str:
+                st.error("I couldn't find any relevant information in the database to answer that.")
+            else:
+                stream_gen = answer_query_stream_with_prompt(prompt_str)
+                full_response = st.write_stream(stream_gen)
             
             if retrieved_contexts:
                 with st.expander("🔍 Source Inspector & Cross-Encoder Scores"):

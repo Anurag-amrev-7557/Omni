@@ -150,10 +150,43 @@ def answer_query_stream(query: str, chat_history: list[dict] = None) -> Generato
             if model_name == DEFAULT_MODELS[-1]:
                 yield f"\n\n⚠️ *Groq API Rate Limit reached (429). Please try again in a few minutes or switch model.*"
 
+def answer_query_stream_with_prompt(prompt: str) -> Generator[str, None, None]:
+    """Streams answer tokens chunk-by-chunk using a pre-prepared prompt (avoids duplicate context preparation)."""
+    if not prompt:
+        yield "I couldn't find any relevant information in the database to answer that."
+        return
+
+    for model_name in DEFAULT_MODELS:
+        try:
+            llm = ChatGroq(model=model_name, temperature=0, streaming=True)
+            for chunk in llm.stream(prompt):
+                if chunk.content:
+                    yield chunk.content
+            return
+        except Exception as e:
+            print(f"[Warning] Groq model {model_name} stream error: {e}")
+            if model_name == DEFAULT_MODELS[-1]:
+                yield f"\n\n⚠️ *Groq API Rate Limit reached (429). Please try again in a few minutes or switch model.*"
+
 
 def answer_query(query: str, chat_history: list[dict] = None) -> str:
     """Synchronous fallback answer generation with multi-model failover."""
     prompt, contexts = prepare_context_and_prompt(query, chat_history)
+    if not prompt:
+        return "I couldn't find any relevant information in the database to answer that."
+
+    for model_name in DEFAULT_MODELS:
+        try:
+            llm = ChatGroq(model=model_name, temperature=0)
+            response = llm.invoke(prompt)
+            return response.content
+        except Exception as e:
+            print(f"[Warning] Groq model {model_name} sync error: {e}")
+
+    return "I couldn't generate an answer due to an upstream LLM connection issue."
+
+def answer_query_with_prompt(prompt: str) -> str:
+    """Synchronous fallback answer generation using a pre-prepared prompt."""
     if not prompt:
         return "I couldn't find any relevant information in the database to answer that."
 

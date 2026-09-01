@@ -17,13 +17,13 @@ if ROOT_DIR not in sys.path:
 try:
     from src.db import init_db, clear_collection, get_collection_stats, delete_file_from_collection
     from src.ingest import ingest_file
-    from src.generate import answer_query_stream, prepare_context_and_prompt
+    from src.generate import answer_query_stream, answer_query_stream_with_prompt, prepare_context_and_prompt
     from src.chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session
     from src.pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
 except ImportError:
     from db import init_db, clear_collection, get_collection_stats, delete_file_from_collection
     from ingest import ingest_file
-    from generate import answer_query_stream, prepare_context_and_prompt
+    from generate import answer_query_stream, answer_query_stream_with_prompt, prepare_context_and_prompt
     from chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session
     from pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
 
@@ -281,14 +281,23 @@ def stream_chat(data: dict):
     messages = get_session_messages(session_id)
     add_message(session_id, "user", prompt)
     
-    prompt_str, retrieved_contexts = prepare_context_and_prompt(prompt, messages)
-    
     def sse_event_generator():
         try:
+            # Prepare context and prompt once, then reuse for both frontend and LLM
+            prompt_str, retrieved_contexts = prepare_context_and_prompt(prompt, messages)
+            
             yield f"data: {json.dumps({'type': 'contexts', 'contexts': retrieved_contexts})}\n\n"
             
+            # If no contexts found, yield the error message and return early
+            if not prompt_str:
+                error_msg = "I couldn't find any relevant information in the database to answer that."
+                yield f"data: {json.dumps({'type': 'token', 'token': error_msg})}\n\n"
+                yield f"data: {json.dumps({'type': 'done', 'full_text': error_msg})}\n\n"
+                return
+            
             full_text = ""
-            stream_gen = answer_query_stream(prompt, messages)
+            # Stream the LLM response using the already-prepared prompt
+            stream_gen = answer_query_stream_with_prompt(prompt_str)
             for token in stream_gen:
                 full_text += token
                 yield f"data: {json.dumps({'type': 'token', 'token': token})}\n\n"
