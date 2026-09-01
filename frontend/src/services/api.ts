@@ -108,6 +108,25 @@ export const api = {
     return res.json();
   },
 
+  async transcribeAudio(audioBlob: Blob): Promise<{ success: boolean; text: string }> {
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'audio.webm');
+    const res = await apiFetch('/api/audio/transcribe', {
+      method: 'POST',
+      body: formData
+    });
+    return res.json();
+  },
+
+  async submitFeedback(data: { session_id?: string; message_id?: string; rating: boolean; feedback?: string }): Promise<{ success: boolean; feedback_id: string }> {
+    const res = await apiFetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return res.json();
+  },
+
   getDownloadUrl(filename: string): string {
     return `${API_BASE}/api/download/${encodeURIComponent(filename)}`;
   },

@@ -326,6 +326,7 @@ export default function App() {
             {(activeTab === 'chats' || activeTab === 'chats_list') && (
               <ChatCanvas
                 messages={messages}
+                sessionId={currentSessionId}
                 isStreaming={isStreaming}
                 inputPrompt={inputPrompt}
                 setInputPrompt={setInputPrompt}

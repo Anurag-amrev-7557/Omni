@@ -1,13 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Copy, Check, RotateCw, Edit3, Volume2, FileText, ChevronDown, ChevronUp, ExternalLink, Sparkles } from 'lucide-react';
+import { Copy, Check, RotateCw, Edit3, Volume2, FileText, ChevronDown, ChevronUp, ExternalLink, Sparkles, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { ChatMessage, ContextChunk } from '../../types/chat';
 import { FormatBadge } from '../common/FormatBadge';
 import { DocumentSquareTile } from '../common/DocumentSquareTile';
 import { OrbitingOrbLoader } from '../common/OrbitingOrbLoader';
+import { api } from '../../services/api';
 
 interface MessageItemProps {
   message: ChatMessage;
+  sessionId?: string;
   isLastAssistant: boolean;
   isStreaming: boolean;
   onRetry: (content: string) => void;
@@ -26,6 +28,7 @@ interface ParsedCitation {
 
 export const MessageItem: React.FC<MessageItemProps> = ({
   message,
+  sessionId,
   isLastAssistant,
   isStreaming,
   onRetry,
@@ -37,12 +40,27 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const [copied, setCopied] = useState(false);
   const [referencesOpen, setReferencesOpen] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [feedbackGiven, setFeedbackGiven] = useState<'up' | 'down' | null>(null);
 
   const handleCopy = (textToCopy: string) => {
     navigator.clipboard.writeText(textToCopy);
     setCopied(true);
     showToast("Copied to clipboard");
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleFeedback = async (rating: boolean) => {
+    setFeedbackGiven(rating ? 'up' : 'down');
+    try {
+      await api.submitFeedback({
+        session_id: sessionId,
+        rating,
+        feedback: rating ? 'Helpful answer' : 'Needs improvement'
+      });
+      showToast(rating ? "Thank you for the positive feedback!" : "Feedback recorded.");
+    } catch {
+      showToast("Could not record feedback");
+    }
   };
 
   // Parse User Prompt & Referenced Vault Documents
@@ -75,7 +93,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     if (message.role !== 'assistant') return { bodyText: message.content, parsedCitations: [] };
 
     const raw = message.content;
-    // Catch any header like "References & Sources", "References:", "### References", etc.
     const refHeaderRegex = /(?:^|\n+)(?:[#*_\s]*)(?:References\s*&\s*Sources|References\s*and\s*Sources|References|Sources|Cited\s*Sources)(?:[#*_\s]*)(?::)?(?:\s*(?:\r?\n)+)/i;
     const match = raw.match(refHeaderRegex);
 
@@ -86,12 +103,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     const body = raw.slice(0, match.index).trim();
     const refsRaw = raw.slice(match.index + match[0].length).trim();
 
-    // Parse citation lines: [2] Resume_final.pdf (Page 1) — "Skills..."
     const lines = refsRaw.split(/\r?\n+/).map(l => l.trim()).filter(Boolean);
     const citations: ParsedCitation[] = [];
 
     for (const line of lines) {
-      // Match pattern: [2] filename.pdf (Page 1) — "quote"
       const citMatch = line.match(/^\[(\d+)\]\s*([^\n(—–:]+?)(?:\s*\((?:Page\s*(\d+)|p\.\s*(\d+))\))?(?:\s*(?:[—–-]|:)\s*["“]?([\s\S]*?)["”]?)?$/i);
       if (citMatch) {
         citations.push({
@@ -101,7 +116,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           quote: citMatch[5] ? citMatch[5].replace(/^["“]|["”]$/g, '').trim() : undefined,
         });
       } else if (line.length > 3) {
-        // Fallback for unformatted reference line
         citations.push({
           id: String(citations.length + 1),
           filename: 'Cited Document',
@@ -113,11 +127,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     return { bodyText: body, parsedCitations: citations };
   }, [message]);
 
-  // 1. USER MESSAGE RENDER (Detached square document preview blocks above bubble)
+  // 1. USER MESSAGE RENDER
   if (message.role === 'user') {
     return (
       <div className="w-full flex flex-col items-end my-4 fade-in select-none">
-        {/* Detached True Square Document Preview Blocks Above User Query Bubble */}
         {referencedFiles.length > 0 && (
           <div className="flex flex-wrap items-center justify-end gap-2.5 mb-2">
             {referencedFiles.map(fn => (
@@ -130,14 +143,12 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           </div>
         )}
 
-        {/* Clean User Query Bubble */}
         <div className="max-w-[85%] sm:max-w-[80%] rounded-2xl rounded-tr-sm bg-[var(--bg-user-bubble)] text-[var(--text-main)] border border-[var(--border-color)] text-sm shadow-sm leading-relaxed px-4 py-2.5 select-text">
           <div className="text-[14.5px] leading-relaxed text-[var(--text-main)] font-sans whitespace-pre-wrap break-words">
             {userPrompt}
           </div>
         </div>
 
-        {/* User Prompt Action Icons */}
         <div className="flex items-center gap-1.5 mt-1 px-1 text-[11px] text-[var(--text-muted)]">
           <button 
             className="p-1 rounded-md hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
@@ -168,7 +179,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   // 2. ASSISTANT MESSAGE RENDER
   return (
     <div className="w-full flex flex-col my-5 fade-in">
-      {/* Loading Pure Orbiting Orb or Markdown Content Body */}
       {isLastAssistant && isStreaming && !bodyText.trim() ? (
         <div className="py-2.5">
           <OrbitingOrbLoader size="md" />
@@ -177,7 +187,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         <div className="omni-prose max-w-none text-sm text-[var(--text-main)] leading-relaxed font-sans">
           <ReactMarkdown
             components={{
-              // Interactive Link / Footnote Renderer
               a: ({ href, children }) => (
                 <span className="text-[var(--accent-primary)] font-medium cursor-pointer underline hover:text-[var(--accent-hover)] transition-colors">
                   {children}
@@ -190,7 +199,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         </div>
       )}
 
-      {/* COLLAPSIBLE STRUCTURED GROUNDED REFERENCES & SOURCES ACCORDION */}
+      {/* COLLAPSIBLE GROUNDED REFERENCES & SOURCES */}
       {parsedCitations.length > 0 && (
         <div className="mt-4 border border-[var(--border-color)] rounded-2xl bg-[var(--bg-card)] p-3 shadow-xs">
           <div 
@@ -216,7 +225,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                   key={cit.id}
                   className="p-3 rounded-xl bg-[var(--bg-sidebar)] border border-[var(--border-color)] shadow-xs hover:border-[var(--accent-primary)]/50 transition-all"
                 >
-                  {/* Header Row */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 truncate">
                       <span className="w-5 h-5 rounded-md bg-[var(--accent-subtle)] text-[var(--accent-primary)] font-mono text-[11px] font-bold flex items-center justify-center flex-shrink-0">
@@ -243,7 +251,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                     </button>
                   </div>
 
-                  {/* Grounded Excerpt Quote */}
                   {cit.quote && (
                     <div className="mt-2 pl-3 py-1.5 border-l-2 border-[var(--accent-primary)] text-[12.5px] text-[var(--text-muted)] italic font-serif leading-relaxed bg-[var(--bg-hover)]/30 rounded-r-xl pr-2">
                       &ldquo;{cit.quote}&rdquo;
@@ -256,7 +263,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         </div>
       )}
 
-      {/* RETRIEVED GROUNDING CONTEXT SOURCES ACCORDION */}
+      {/* RETRIEVED GROUNDING CONTEXT SOURCES */}
       {message.contexts && message.contexts.length > 0 && (
         <div className="mt-3 border border-[var(--border-color)] rounded-2xl bg-[var(--bg-card)] p-3 shadow-xs">
           <div 
@@ -308,26 +315,56 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         </div>
       )}
 
-      {/* Message Actions Bar */}
-      <div className="flex items-center gap-2 mt-2 text-[var(--text-muted)] text-xs select-none">
-        <button 
-          className="px-2 py-1 rounded-lg hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-1.5 cursor-pointer font-medium"
-          onClick={() => handleCopy(message.content)}
-          title="Copy Response"
-        >
-          {copied ? <Check size={12} className="text-[var(--status-active-text)]" /> : <Copy size={12} />}
-          <span className="text-[11.5px]">{copied ? 'Copied' : 'Copy'}</span>
-        </button>
+      {/* Message Actions Bar with Feedback & Voice - Only visible after response has completely arrived */}
+      {!(isLastAssistant && isStreaming) && bodyText.trim().length > 0 && (
+        <div className="flex items-center justify-between mt-2 text-[var(--text-muted)] text-xs select-none fade-in">
+          <div className="flex items-center gap-2">
+            <button 
+              className="px-2 py-1 rounded-lg hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-1.5 cursor-pointer font-medium"
+              onClick={() => handleCopy(message.content)}
+              title="Copy Response"
+            >
+              {copied ? <Check size={12} className="text-[var(--status-active-text)]" /> : <Copy size={12} />}
+              <span className="text-[11.5px]">{copied ? 'Copied' : 'Copy'}</span>
+            </button>
 
-        <button 
-          className="px-2 py-1 rounded-lg hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-1.5 cursor-pointer font-medium"
-          onClick={() => onReadAloud(bodyText || message.content)}
-          title="Read Aloud"
-        >
-          <Volume2 size={12} />
-          <span className="text-[11.5px]">Read</span>
-        </button>
-      </div>
+            <button 
+              className="px-2 py-1 rounded-lg hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors flex items-center gap-1.5 cursor-pointer font-medium"
+              onClick={() => onReadAloud(bodyText || message.content)}
+              title="Read Aloud"
+            >
+              <Volume2 size={12} />
+              <span className="text-[11.5px]">Read</span>
+            </button>
+          </div>
+
+          {/* RLHF User Feedback Buttons */}
+          <div className="flex items-center gap-1">
+            <button
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                feedbackGiven === 'up'
+                  ? 'bg-green-500/20 text-green-500 font-bold'
+                  : 'hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
+              }`}
+              onClick={() => handleFeedback(true)}
+              title="Helpful response"
+            >
+              <ThumbsUp size={13} />
+            </button>
+            <button
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                feedbackGiven === 'down'
+                  ? 'bg-red-500/20 text-red-500 font-bold'
+                  : 'hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
+              }`}
+              onClick={() => handleFeedback(false)}
+              title="Unhelpful response"
+            >
+              <ThumbsDown size={13} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

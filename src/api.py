@@ -23,8 +23,9 @@ try:
     from src.chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session
     from src.pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
     from src.auth import require_user, set_current_user, get_current_user
-    from src.state_db import init_state_db, upsert_document, save_upload_job, get_upload_job, delete_document_record
+    from src.state_db import init_state_db, upsert_document, save_upload_job, get_upload_job, delete_document_record, save_feedback
     from src.storage import save_file, get_file_bytes, delete_file
+    from src.audio import transcribe_audio
 except ImportError:
     from db import init_db, clear_collection, get_collection_stats, delete_file_from_collection, get_qdrant_client
     from ingest import ingest_file
@@ -32,8 +33,9 @@ except ImportError:
     from chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session
     from pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
     from auth import require_user, set_current_user, get_current_user
-    from state_db import init_state_db, upsert_document, save_upload_job, get_upload_job, delete_document_record
+    from state_db import init_state_db, upsert_document, save_upload_job, get_upload_job, delete_document_record, save_feedback
     from storage import save_file, get_file_bytes, delete_file
+    from audio import transcribe_audio
 
 def get_uploads_dir() -> str:
     candidate = os.getenv("UPLOADS_DIR")
@@ -65,19 +67,42 @@ app = FastAPI(
     version="2.0.0"
 )
 
+# Rate limiter setup
+try:
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+    from slowapi.util import get_remote_address
+    from slowapi.errors import RateLimitExceeded
+
+    limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+except Exception:
+    class DummyLimiter:
+        def limit(self, *args, **kwargs):
+            return lambda fn: fn
+    limiter = DummyLimiter()
+
 # CORS middleware for Web Frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin for origin in os.getenv("CORS_ORIGINS", "").split(",") if origin],
+    allow_origins=[origin.strip() for origin in os.getenv("CORS_ORIGINS", "*").split(",") if origin.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 @app.middleware("http")
-async def authenticate_api(request: Request, call_next):
+async def logging_and_auth_middleware(request: Request, call_next):
+    start_time = time.perf_counter()
+    user_id = None
+    
+    # Public route bypass
     if request.method == "OPTIONS" or request.url.path in ("/", "/api/health", "/docs", "/redoc", "/openapi.json"):
-        return await call_next(request)
+        response = await call_next(request)
+        latency = round((time.perf_counter() - start_time) * 1000, 1)
+        return response
+
+    # Authenticate API requests
     if request.url.path.startswith("/api/"):
         try:
             user_id = require_user(request.headers.get("authorization"))
@@ -86,7 +111,12 @@ async def authenticate_api(request: Request, call_next):
             return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
         except Exception as exc:
             return JSONResponse(status_code=401, content={"detail": "Authentication required"})
-    return await call_next(request)
+
+    response = await call_next(request)
+    latency_ms = round((time.perf_counter() - start_time) * 1000, 1)
+    if not request.url.path.startswith("/api/health"):
+        print(f"[HTTP] {request.method} {request.url.path} -> {response.status_code} ({latency_ms}ms) user={user_id or 'anon'}")
+    return response
 
 @app.get("/")
 def root():
@@ -256,85 +286,133 @@ def list_documents():
     print(f"[DEBUG] Returning {len(available_files)} available files")
     return {"documents": available_files}
 
-@app.post("/api/upload")
-async def upload_documents(files: list[UploadFile] = File(...)):
-    uploads_dir = user_upload_dir()
-    os.makedirs(uploads_dir, exist_ok=True)
-    
-    # Generate unique upload ID for progress tracking
-    upload_id = str(uuid.uuid4())
-    
-    # Initialize progress tracking
-    upload_progress[upload_id] = {
-        "user_id": get_current_user(),
-        "upload_id": upload_id,
-        "status": "uploading",
-        "total_files": len(files),
-        "completed_files": 0,
-        "files": []
-    }
-    save_upload_job(upload_id, get_current_user(), "uploading", len(files), 0, [])
-    
-    ingested_count = 0
+MAX_FILE_SIZE_BYTES = 35 * 1024 * 1024  # 35 MB
+MAX_FILES_PER_BATCH = 10
+ALLOWED_EXTENSIONS = {".pdf", ".txt", ".md"}
+
+def process_upload_batch_sync(upload_id: str, user_id: str, file_records: list[dict]):
+    """Background worker that ingests files and updates progress in database."""
+    set_current_user(user_id)
+    completed = 0
     errors = []
     
-    for idx, file in enumerate(files):
+    for idx, rec in enumerate(file_records):
+        fname = rec["filename"]
+        fpath = rec["path"]
+        fsize = rec["size_bytes"]
+        
+        try:
+            ingest_file(fpath, user_id)
+            upsert_document(user_id, fname, "indexed", size_bytes=fsize)
+            completed += 1
+            rec["status"] = "completed"
+            rec["progress"] = 100
+            rec["indexed"] = True
+        except Exception as exc:
+            rec["status"] = "failed"
+            rec["error"] = str(exc)
+            errors.append(f"{fname}: {exc}")
+            upsert_document(user_id, fname, "failed", size_bytes=fsize, error=str(exc))
+            
+        upload_progress[upload_id]["files"] = file_records
+        upload_progress[upload_id]["completed_files"] = completed
+        save_upload_job(upload_id, user_id, "uploading", len(file_records), completed, file_records)
+        
+    final_status = "completed" if completed > 0 else "failed"
+    upload_progress[upload_id]["status"] = final_status
+    save_upload_job(upload_id, user_id, final_status, len(file_records), completed, file_records)
+
+@app.post("/api/upload", status_code=202)
+@limiter.limit("20/minute")
+async def upload_documents(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    files: list[UploadFile] = File(...)
+):
+    if len(files) > MAX_FILES_PER_BATCH:
+        raise HTTPException(status_code=400, detail=f"Maximum {MAX_FILES_PER_BATCH} files allowed per upload.")
+        
+    uploads_dir = user_upload_dir()
+    os.makedirs(uploads_dir, exist_ok=True)
+    user_id = get_current_user()
+    
+    upload_id = str(uuid.uuid4())
+    file_records = []
+    
+    for file in files:
         filename = safe_filename(file.filename or "")
-        save_path = os.path.join(uploads_dir, filename)
+        ext = os.path.splitext(filename)[1].lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(status_code=400, detail=f"Unsupported file format '{ext}'. Only PDF, TXT, and MD are allowed.")
+            
         content = await file.read()
-        
-        # Add file to progress tracking
         file_size = len(content)
-        size_mb = round(file_size / (1024 * 1024), 2)
-        upsert_document(get_current_user(), filename, "processing", size_bytes=file_size)
+        if file_size > MAX_FILE_SIZE_BYTES:
+            raise HTTPException(status_code=400, detail=f"File '{filename}' exceeds maximum allowed size of 35MB.")
+            
+        save_path = os.path.join(uploads_dir, filename)
+        save_file(user_id, filename, content, local_path=save_path)
+        upsert_document(user_id, filename, "processing", size_bytes=file_size)
         
-        upload_progress[upload_id]["files"].append({
+        file_records.append({
             "filename": filename,
-            "size_mb": size_mb,
-            "status": "uploading",
-            "progress": 0,
+            "path": save_path,
+            "size_bytes": file_size,
+            "size_mb": round(file_size / (1024 * 1024), 2),
+            "status": "processing",
+            "progress": 25,
             "indexed": False
         })
-        save_upload_job(upload_id, get_current_user(), "uploading", len(files), upload_progress[upload_id]["completed_files"], upload_progress[upload_id]["files"])
         
-        # Save file to local cache and Cloudflare R2
-        save_file(get_current_user(), filename, content, local_path=save_path)
-        
-        # Update progress: file saved
-        file_idx = idx
-        upload_progress[upload_id]["files"][file_idx]["status"] = "processing"
-        upload_progress[upload_id]["files"][file_idx]["progress"] = 50
-            
-        try:
-            # Run heavy vector ingestion in threadpool to prevent event-loop freezing
-            await asyncio.to_thread(ingest_file, save_path, get_current_user())
-            
-            # Update progress: file completed
-            upload_progress[upload_id]["files"][file_idx]["status"] = "completed"
-            upload_progress[upload_id]["files"][file_idx]["progress"] = 100
-            upload_progress[upload_id]["files"][file_idx]["indexed"] = True
-            upload_progress[upload_id]["completed_files"] += 1
-            save_upload_job(upload_id, get_current_user(), "uploading", len(files), upload_progress[upload_id]["completed_files"], upload_progress[upload_id]["files"])
-            
-            ingested_count += 1
-            upsert_document(get_current_user(), filename, "indexed", size_bytes=file_size)
-        except Exception as e:
-            # Update progress: file failed
-            upload_progress[upload_id]["files"][file_idx]["status"] = "failed"
-            upload_progress[upload_id]["files"][file_idx]["error"] = str(e)
-            errors.append(f"{filename}: {str(e)}")
-            upsert_document(get_current_user(), filename, "failed", size_bytes=file_size, error=str(e))
+    upload_progress[upload_id] = {
+        "user_id": user_id,
+        "upload_id": upload_id,
+        "status": "processing",
+        "total_files": len(files),
+        "completed_files": 0,
+        "files": file_records
+    }
+    save_upload_job(upload_id, user_id, "processing", len(files), 0, file_records)
     
-    # Mark overall upload as complete
-    upload_progress[upload_id]["status"] = "completed"
-    save_upload_job(upload_id, get_current_user(), "completed", len(files), upload_progress[upload_id]["completed_files"], upload_progress[upload_id]["files"])
+    # Spawn non-blocking background ingestion worker
+    background_tasks.add_task(process_upload_batch_sync, upload_id, user_id, file_records)
     
     return {
         "success": True,
         "upload_id": upload_id,
-        "ingested_count": ingested_count,
-        "errors": errors
+        "status": "processing",
+        "files_count": len(files)
     }
+
+@app.post("/api/audio/transcribe")
+@limiter.limit("30/minute")
+async def transcribe_audio_endpoint(request: Request, file: UploadFile = File(...)):
+    """Transcribes audio using Groq Whisper LPU endpoint."""
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty audio recording")
+    try:
+        text = transcribe_audio(content, filename=file.filename or "audio.webm")
+        return {"success": True, "text": text}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Transcription error: {exc}")
+
+@app.post("/api/feedback")
+def submit_feedback(data: dict):
+    """Saves user rating and qualitative feedback for RAG evaluation."""
+    session_id = data.get("session_id")
+    message_id = data.get("message_id")
+    rating = bool(data.get("rating", True))
+    feedback = data.get("feedback")
+    
+    feedback_id = save_feedback(
+        user_id=get_current_user(),
+        session_id=session_id,
+        message_id=message_id,
+        rating=rating,
+        feedback=feedback
+    )
+    return {"success": True, "feedback_id": feedback_id}
 
 @app.delete("/api/documents/{filename}")
 def delete_document(filename: str):

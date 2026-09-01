@@ -1,12 +1,13 @@
 import React, { useRef, useEffect } from 'react';
+import { Download } from 'lucide-react';
 import { MessageItem } from './MessageItem';
 import { ChatInput } from './ChatInput';
 import { ChatMessage } from '../../types/chat';
-
 import { DocumentItem } from '../../types/document';
 
 interface ChatCanvasProps {
   messages: ChatMessage[];
+  sessionId?: string | null;
   isStreaming: boolean;
   inputPrompt: string;
   setInputPrompt: (val: string) => void;
@@ -30,6 +31,7 @@ interface ChatCanvasProps {
 
 export const ChatCanvas: React.FC<ChatCanvasProps> = ({
   messages,
+  sessionId,
   isStreaming,
   inputPrompt,
   setInputPrompt,
@@ -56,8 +58,40 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isStreaming]);
 
+  const handleExportMarkdown = () => {
+    if (messages.length === 0) return;
+    let md = `# Omni RAG Chat Export\n*Exported on ${new Date().toLocaleString()}*\n\n---\n\n`;
+    messages.forEach((m) => {
+      md += `### ${m.role === 'user' ? '👤 User' : '🤖 Omni Assistant'}\n\n${m.content}\n\n---\n\n`;
+    });
+
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `omni-chat-${sessionId || 'session'}.md`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Chat exported to Markdown');
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[var(--bg-dark)]">
+      {/* Top action bar when messages exist */}
+      {messages.length > 0 && (
+        <div className="flex items-center justify-end px-6 py-2 border-b border-[var(--border-color)]/40 bg-[var(--bg-dark)]/80 backdrop-blur-xs select-none">
+          <button
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
+            onClick={handleExportMarkdown}
+            title="Export conversation to Markdown"
+          >
+            <Download size={13} />
+            <span>Export Chat</span>
+          </button>
+        </div>
+      )}
+
       {/* Scrollable Message Feed */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 pt-6 pb-6 scroll-smooth">
         <div className="max-w-4xl mx-auto w-full">
@@ -78,6 +112,7 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
             <MessageItem
               key={idx}
               message={msg}
+              sessionId={sessionId || undefined}
               isLastAssistant={idx === messages.length - 1 && msg.role === 'assistant'}
               isStreaming={isStreaming}
               onRetry={(text) => onSend(text)}
@@ -93,7 +128,6 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
 
       {/* Docked Bottom Input Area with Smooth Upward Gradient Fade */}
       <div className="flex-shrink-0 relative z-20 bg-[var(--bg-dark)] pb-4 pt-1 px-4 sm:px-6">
-        {/* Soft, Seamless Gradient Fade Overlay directly above the input boundary */}
         <div className="absolute inset-x-0 bottom-full h-14 pointer-events-none bg-gradient-to-t from-[var(--bg-dark)] to-transparent" />
 
         <div className="w-full max-w-4xl mx-auto">
