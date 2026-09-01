@@ -16,25 +16,29 @@ ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-# Set UPLOADS_DIR to a Render Persistent Disk mount (for example
-# /var/data/uploaded_docs) in production.  The repository directory on Render
-# is ephemeral and is only suitable for local development.
-UPLOADS_DIR = os.getenv("UPLOADS_DIR", os.path.join(ROOT_DIR, "data", "uploaded_docs"))
+def get_uploads_dir() -> str:
+    candidate = os.getenv("UPLOADS_DIR")
+    if candidate:
+        try:
+            os.makedirs(candidate, exist_ok=True)
+            test_file = os.path.join(candidate, ".perm_test")
+            with open(test_file, "w") as f:
+                f.write("ok")
+            os.remove(test_file)
+            return candidate
+        except (PermissionError, OSError) as exc:
+            print(f"[Warning] Configured UPLOADS_DIR '{candidate}' is not accessible ({exc}). Falling back to local storage.")
+    fallback = os.path.join(ROOT_DIR, "data", "uploaded_docs")
+    try:
+        os.makedirs(fallback, exist_ok=True)
+        return fallback
+    except (PermissionError, OSError):
+        temp_dir = os.path.join(tempfile.gettempdir(), "uploaded_docs")
+        os.makedirs(temp_dir, exist_ok=True)
+        return temp_dir
 
-try:
-    from src.db import init_db, clear_collection, get_collection_stats, delete_file_from_collection, get_qdrant_client
-    from src.ingest import ingest_file
-    from src.generate import answer_query_stream, answer_query_stream_with_prompt, prepare_context_and_prompt
-    from src.chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session
-    from src.pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
-    from src.auth import require_user, set_current_user, get_current_user
-    from src.state_db import init_state_db, upsert_document
-except ImportError:
-    from db import init_db, clear_collection, get_collection_stats, delete_file_from_collection, get_qdrant_client
-    from ingest import ingest_file
-    from generate import answer_query_stream, answer_query_stream_with_prompt, prepare_context_and_prompt
-    from chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session
-    from pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
+# Set UPLOADS_DIR with fallback
+UPLOADS_DIR = get_uploads_dir()
 
 app = FastAPI(
     title="Enterprise Multi-Document RAG API",
@@ -56,11 +60,17 @@ async def authenticate_api(request: Request, call_next):
     if request.method == "OPTIONS" or request.url.path == "/api/health":
         return await call_next(request)
     if request.url.path.startswith("/api/"):
-        set_current_user(require_user(request.headers.get("authorization")))
+        try:
+            user_id = require_user(request.headers.get("authorization"))
+            set_current_user(user_id)
+        except HTTPException as exc:
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        except Exception as exc:
+            return JSONResponse(status_code=401, content={"detail": "Authentication required"})
     return await call_next(request)
 
 def user_upload_dir() -> str:
-    path = os.path.join(UPLOADS_DIR, get_current_user())
+    path = os.path.join(get_uploads_dir(), get_current_user())
     os.makedirs(path, exist_ok=True)
     return path
 
@@ -106,14 +116,14 @@ def health_check():
         }
 
     def check_upload_storage():
-        os.makedirs(UPLOADS_DIR, exist_ok=True)
-        with tempfile.NamedTemporaryFile(dir=UPLOADS_DIR, prefix=".health-", delete=True) as probe:
+        active_dir = get_uploads_dir()
+        with tempfile.NamedTemporaryFile(dir=active_dir, prefix=".health-", delete=True) as probe:
             probe.write(b"ok")
             probe.flush()
         return {
-            "path": UPLOADS_DIR,
+            "path": active_dir,
             "writable": True,
-            "persistence": "persistent" if os.getenv("UPLOADS_DIR") else "ephemeral",
+            "persistence": "persistent" if os.getenv("UPLOADS_DIR") == active_dir else "ephemeral",
         }
 
     # Every check touches the real dependency used by an upload/chat request;
@@ -144,6 +154,9 @@ def health_check():
 @app.get("/api/upload-progress/{upload_id}")
 def get_upload_progress(upload_id: str):
     """Get real-time progress for a specific upload session."""
+    persisted = get_upload_job(upload_id, get_current_user())
+    if persisted:
+        return dict(persisted)
     if upload_id not in upload_progress:
         return {"upload_id": upload_id, "status": "not_found", "files": []}
     
@@ -230,6 +243,7 @@ async def upload_documents(files: list[UploadFile] = File(...)):
         "completed_files": 0,
         "files": []
     }
+    save_upload_job(upload_id, get_current_user(), "uploading", len(files), 0, [])
     
     ingested_count = 0
     errors = []
@@ -251,6 +265,7 @@ async def upload_documents(files: list[UploadFile] = File(...)):
             "progress": 0,
             "indexed": False
         })
+        save_upload_job(upload_id, get_current_user(), "uploading", len(files), upload_progress[upload_id]["completed_files"], upload_progress[upload_id]["files"])
         
         # Save file first
         with open(save_path, "wb") as f:
@@ -270,6 +285,7 @@ async def upload_documents(files: list[UploadFile] = File(...)):
             upload_progress[upload_id]["files"][file_idx]["progress"] = 100
             upload_progress[upload_id]["files"][file_idx]["indexed"] = True
             upload_progress[upload_id]["completed_files"] += 1
+            save_upload_job(upload_id, get_current_user(), "uploading", len(files), upload_progress[upload_id]["completed_files"], upload_progress[upload_id]["files"])
             
             ingested_count += 1
             upsert_document(get_current_user(), filename, "indexed", size_bytes=file_size)
@@ -282,6 +298,7 @@ async def upload_documents(files: list[UploadFile] = File(...)):
     
     # Mark overall upload as complete
     upload_progress[upload_id]["status"] = "completed"
+    save_upload_job(upload_id, get_current_user(), "completed", len(files), upload_progress[upload_id]["completed_files"], upload_progress[upload_id]["files"])
     
     return {
         "success": True,
@@ -309,6 +326,12 @@ def delete_document(filename: str):
             os.remove(file_path)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error deleting file: {e}")
+
+    # Clean up PostgreSQL document state
+    try:
+        delete_document_record(get_current_user(), filename)
+    except Exception as exc:
+        print(f"[Warning] Could not delete document record from DB: {exc}")
 
     return {"success": True, "filename": filename}
 
@@ -428,10 +451,12 @@ def stream_chat(data: dict):
     if not session_id or not prompt:
         raise HTTPException(status_code=400, detail="Missing session_id or prompt")
         
+    user_id = get_current_user()
     messages = get_session_messages(session_id)
     add_message(session_id, "user", prompt)
     
     def sse_event_generator():
+        set_current_user(user_id)
         try:
             # Prepare context and prompt once, then reuse for both frontend and LLM
             prompt_str, retrieved_contexts = prepare_context_and_prompt(prompt, messages)

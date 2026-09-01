@@ -1,118 +1,50 @@
-import sqlite3
+"""User-scoped chat persistence in Supabase Postgres."""
 import json
 import uuid
-import os
+from psycopg.types.json import Jsonb
 from src.auth import get_current_user
-from datetime import datetime
-
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "chat_history.db")
-
-def get_db_connection():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+from src.state_db import connection
 
 def init_chat_db():
-    """Creates sessions and messages tables if they do not exist."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS sessions (
-            session_id TEXT PRIMARY KEY,
-            title TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    columns = {row[1] for row in cursor.execute("PRAGMA table_info(sessions)")}
-    if "user_id" not in columns:
-        cursor.execute("ALTER TABLE sessions ADD COLUMN user_id TEXT")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)")
-    
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS messages (
-            message_id TEXT PRIMARY KEY,
-            session_id TEXT NOT NULL,
-            role TEXT NOT NULL,
-            content TEXT NOT NULL,
-            contexts_json TEXT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (session_id) REFERENCES sessions (session_id) ON DELETE CASCADE
-        )
-    """)
-    
-    conn.commit()
-    conn.close()
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute("""CREATE TABLE IF NOT EXISTS chat_sessions (
+            session_id UUID PRIMARY KEY, user_id UUID NOT NULL, title TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now())""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS chat_messages (
+            message_id UUID PRIMARY KEY, session_id UUID NOT NULL REFERENCES chat_sessions(session_id) ON DELETE CASCADE,
+            role TEXT NOT NULL CHECK(role IN ('user','assistant')), content TEXT NOT NULL,
+            contexts_json JSONB, created_at TIMESTAMPTZ NOT NULL DEFAULT now())""")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_chat_sessions_user ON chat_sessions(user_id, created_at DESC)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id, created_at)")
 
 def create_session(title: str = "New Chat") -> str:
     session_id = str(uuid.uuid4())
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO sessions (session_id, title, created_at, user_id) VALUES (?, ?, ?, ?)",
-        (session_id, title, datetime.now().isoformat(), get_current_user())
-    )
-    conn.commit()
-    conn.close()
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute("INSERT INTO chat_sessions (session_id,user_id,title) VALUES (%s,%s,%s)", (session_id, get_current_user(), title))
     return session_id
 
 def get_all_sessions() -> list[dict]:
-    init_chat_db()
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT session_id, title, created_at FROM sessions WHERE user_id = ? ORDER BY created_at DESC", (get_current_user(),))
-    rows = cursor.fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute("SELECT session_id::text, title, created_at FROM chat_sessions WHERE user_id=%s ORDER BY created_at DESC", (get_current_user(),))
+        return [dict(row) for row in cur.fetchall()]
 
-def add_message(session_id: str, role: str, content: str, contexts: list[dict] = None):
-    message_id = str(uuid.uuid4())
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT 1 FROM sessions WHERE session_id = ? AND user_id = ?", (session_id, get_current_user()))
-    if cursor.fetchone() is None:
-        conn.close()
-        raise PermissionError("Session not found")
-    
-    # Auto-update session title if it's the first user question
-    if role == "user":
-        cursor.execute("SELECT COUNT(*) as count FROM messages WHERE session_id = ?", (session_id,))
-        count = cursor.fetchone()["count"]
-        if count == 0:
-            short_title = content[:30] + ("..." if len(content) > 30 else "")
-            cursor.execute("UPDATE sessions SET title = ? WHERE session_id = ?", (short_title, session_id))
-            
-    contexts_json = json.dumps(contexts) if contexts else None
-    cursor.execute(
-        "INSERT INTO messages (message_id, session_id, role, content, contexts_json, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-        (message_id, session_id, role, content, contexts_json, datetime.now().isoformat())
-    )
-    conn.commit()
-    conn.close()
+def add_message(session_id: str, role: str, content: str, contexts: list[dict] | None = None):
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM chat_sessions WHERE session_id=%s AND user_id=%s", (session_id, get_current_user()))
+        if cur.fetchone() is None:
+            raise PermissionError("Session not found")
+        if role == "user":
+            cur.execute("SELECT count(*) AS message_count FROM chat_messages WHERE session_id=%s", (session_id,))
+            if cur.fetchone()["message_count"] == 0:
+                cur.execute("UPDATE chat_sessions SET title=%s WHERE session_id=%s", (content[:30] + ("..." if len(content) > 30 else ""), session_id))
+        cur.execute("INSERT INTO chat_messages (message_id,session_id,role,content,contexts_json) VALUES (%s,%s,%s,%s,%s)", (str(uuid.uuid4()), session_id, role, content, Jsonb(contexts) if contexts else None))
 
 def get_session_messages(session_id: str) -> list[dict]:
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT m.role, m.content, m.contexts_json FROM messages m JOIN sessions s ON s.session_id=m.session_id WHERE m.session_id = ? AND s.user_id = ? ORDER BY m.timestamp ASC", (session_id, get_current_user()))
-    rows = cursor.fetchall()
-    conn.close()
-    
-    messages = []
-    for r in rows:
-        msg = {"role": r["role"], "content": r["content"]}
-        if r["contexts_json"]:
-            try:
-                msg["contexts"] = json.loads(r["contexts_json"])
-            except Exception:
-                msg["contexts"] = None
-        messages.append(msg)
-    return messages
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute("""SELECT m.role,m.content,m.contexts_json FROM chat_messages m JOIN chat_sessions s ON s.session_id=m.session_id
+            WHERE m.session_id=%s AND s.user_id=%s ORDER BY m.created_at""", (session_id, get_current_user()))
+        return [{"role": r["role"], "content": r["content"], **({"contexts": r["contexts_json"]} if r["contexts_json"] else {})} for r in cur.fetchall()]
 
 def delete_session(session_id: str):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM messages WHERE session_id IN (SELECT session_id FROM sessions WHERE session_id = ? AND user_id = ?)", (session_id, get_current_user()))
-    cursor.execute("DELETE FROM sessions WHERE session_id = ? AND user_id = ?", (session_id, get_current_user()))
-    conn.commit()
-    conn.close()
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM chat_sessions WHERE session_id=%s AND user_id=%s", (session_id, get_current_user()))

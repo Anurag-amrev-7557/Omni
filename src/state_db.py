@@ -2,13 +2,16 @@
 import os
 import psycopg
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+def get_database_url() -> str:
+    return os.getenv("DATABASE_URL") or ""
 
 def connection():
-    if not DATABASE_URL:
+    db_url = get_database_url()
+    if not db_url:
         raise RuntimeError("DATABASE_URL is not configured")
-    return psycopg.connect(DATABASE_URL, row_factory=dict_row)
+    return psycopg.connect(db_url, row_factory=dict_row)
 
 def init_state_db():
     with connection() as conn, conn.cursor() as cur:
@@ -33,3 +36,20 @@ def upsert_document(user_id, filename, status, **values):
         status=EXCLUDED.status,size_bytes=EXCLUDED.size_bytes,page_count=EXCLUDED.page_count,
         chunk_count=EXCLUDED.chunk_count,error=EXCLUDED.error,updated_at=now()""",
         (user_id, filename, status, values.get('size_bytes'), values.get('page_count'), values.get('chunk_count'), values.get('error')))
+
+def delete_document_record(user_id, filename):
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM documents WHERE user_id=%s AND filename=%s", (user_id, filename))
+
+def save_upload_job(job_id, user_id, status, total_files, completed_files, details):
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute("""INSERT INTO upload_jobs (id,user_id,status,total_files,completed_files,details)
+        VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT (id) DO UPDATE SET status=EXCLUDED.status,
+        completed_files=EXCLUDED.completed_files,details=EXCLUDED.details,updated_at=now()""",
+        (job_id, user_id, status, total_files, completed_files, Jsonb(details)))
+
+def get_upload_job(job_id, user_id):
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute("SELECT id::text AS upload_id,status,total_files,completed_files,details AS files FROM upload_jobs WHERE id=%s AND user_id=%s", (job_id, user_id))
+        return cur.fetchone()
+
