@@ -4,7 +4,7 @@ from functools import lru_cache
 from rank_bm25 import BM25Okapi
 from langchain_qdrant import QdrantVectorStore
 
-# Restrict thread pools to avoid memory spikes on limited cloud instances
+# Restrict thread pools to avoid memory spikes on cloud instances
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -20,30 +20,28 @@ except ImportError:
 
 @lru_cache(maxsize=1)
 def get_embeddings():
-    """Lazy-loaded memory-optimized HuggingFace embeddings."""
+    """Ultra-lightweight ONNX FastEmbed (~30MB RAM) with HuggingFace fallback."""
     try:
-        import torch
-        torch.set_num_threads(1)
-    except Exception:
-        pass
-    from langchain_huggingface import HuggingFaceEmbeddings
-    return HuggingFaceEmbeddings(
-        model_name="all-MiniLM-L6-v2",
-        model_kwargs={"device": "cpu"},
-        encode_kwargs={"normalize_embeddings": True, "batch_size": 8}
-    )
+        from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
+        return FastEmbedEmbeddings(model_name="BAAI/bge-small-en-v1.5")
+    except Exception as e:
+        print(f"FastEmbed notice: {e}, attempting HuggingFace fallback...")
+        from langchain_huggingface import HuggingFaceEmbeddings
+        return HuggingFaceEmbeddings(
+            model_name="all-MiniLM-L6-v2",
+            model_kwargs={"device": "cpu"},
+            encode_kwargs={"normalize_embeddings": True, "batch_size": 8}
+        )
 
 
 @lru_cache(maxsize=1)
 def get_reranker():
-    """Lazy-loaded lightweight Cross-Encoder with fallback."""
+    """Lightweight Cross-Encoder with graceful RRF fallback on constrained environments."""
     try:
-        import torch
-        torch.set_num_threads(1)
         from sentence_transformers import CrossEncoder
         return CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device="cpu")
-    except Exception as e:
-        print(f"Notice: CrossEncoder reranker disabled to conserve memory ({e}). Using RRF.")
+    except Exception:
+        # Gracefully disabled on memory-constrained servers to stay under 512MB RAM
         return None
 
 
@@ -123,7 +121,7 @@ def rank_with_cross_encoder(query: str, candidate_docs: list[dict], top_n: int =
         scored_docs.sort(key=lambda x: x["rerank_score"], reverse=True)
         return scored_docs[:top_n]
     except Exception as e:
-        print(f"Reranking error ({e}), falling back to RRF candidates.")
+        print(f"Reranking fallback to RRF candidates ({e}).")
         return candidate_docs[:top_n]
 
 
@@ -162,7 +160,7 @@ def hybrid_search(query: str, k: int = 5) -> list[dict]:
     # 2. Reciprocal Rank Fusion (Dense + BM25)
     fused_docs = compute_reciprocal_rank_fusion(dense_results, candidate_docs, query)
 
-    # 3. Stage 2: Deep Cross-Encoder Reranker
+    # 3. Stage 2: Deep Cross-Encoder Reranker (or RRF fallback)
     reranked_docs = rank_with_cross_encoder(query, fused_docs, top_n=k)
 
     # 4. Deduplicate parent context blocks
