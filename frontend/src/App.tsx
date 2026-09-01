@@ -133,18 +133,24 @@ export default function App() {
     }
   }, [currentSessionId, loadMessages]);
 
-  // Create New Thread
-  const handleNewChat = async () => {
-    try {
-      const newSess = await api.createSession('New chat');
-      await loadSessions();
-      setCurrentSessionId(newSess.session_id);
-      setMessages([]);
-      setActiveTab('chats');
-      showToast("Started new chat");
-    } catch (e) {
-      console.error("Error creating session:", e);
-    }
+  // Create New Thread (Instant 0ms UI switch with optimistic state)
+  const handleNewChat = () => {
+    const tempId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `sess-${Date.now()}`;
+    setCurrentSessionId(tempId);
+    setMessages([]);
+    setInputPrompt('');
+    setReferencedVaultDocs([]);
+    setAttachedFiles([]);
+    setActiveTab('chats');
+    showToast("Started new chat");
+
+    setSessions(prev => {
+      if (prev.some(s => s.session_id === tempId)) return prev;
+      return [{ session_id: tempId, title: 'New Chat', created_at: new Date().toISOString() }, ...prev];
+    });
+
+    // Non-blocking background sync
+    api.createSession('New Chat').catch(() => {});
   };
 
   // Delete Thread

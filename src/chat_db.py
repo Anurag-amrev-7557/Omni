@@ -32,18 +32,22 @@ def add_message(session_id: str, role: str, content: str, contexts: list[dict] |
     with connection() as conn, conn.cursor() as cur:
         cur.execute("SELECT 1 FROM chat_sessions WHERE session_id=%s AND user_id=%s", (session_id, get_current_user()))
         if cur.fetchone() is None:
-            raise PermissionError("Session not found")
-        if role == "user":
+            title = (content[:30] + ("..." if len(content) > 30 else "")) if role == "user" else "New Chat"
+            cur.execute("INSERT INTO chat_sessions (session_id,user_id,title) VALUES (%s,%s,%s) ON CONFLICT (session_id) DO NOTHING", (session_id, get_current_user(), title))
+        elif role == "user":
             cur.execute("SELECT count(*) AS message_count FROM chat_messages WHERE session_id=%s", (session_id,))
             if cur.fetchone()["message_count"] == 0:
                 cur.execute("UPDATE chat_sessions SET title=%s WHERE session_id=%s", (content[:30] + ("..." if len(content) > 30 else ""), session_id))
         cur.execute("INSERT INTO chat_messages (message_id,session_id,role,content,contexts_json) VALUES (%s,%s,%s,%s,%s)", (str(uuid.uuid4()), session_id, role, content, Jsonb(contexts) if contexts else None))
 
 def get_session_messages(session_id: str) -> list[dict]:
-    with connection() as conn, conn.cursor() as cur:
-        cur.execute("""SELECT m.role,m.content,m.contexts_json FROM chat_messages m JOIN chat_sessions s ON s.session_id=m.session_id
-            WHERE m.session_id=%s AND s.user_id=%s ORDER BY m.created_at""", (session_id, get_current_user()))
-        return [{"role": r["role"], "content": r["content"], **({"contexts": r["contexts_json"]} if r["contexts_json"] else {})} for r in cur.fetchall()]
+    try:
+        with connection() as conn, conn.cursor() as cur:
+            cur.execute("""SELECT m.role,m.content,m.contexts_json FROM chat_messages m JOIN chat_sessions s ON s.session_id=m.session_id
+                WHERE m.session_id=%s AND s.user_id=%s ORDER BY m.created_at""", (session_id, get_current_user()))
+            return [{"role": r["role"], "content": r["content"], **({"contexts": r["contexts_json"]} if r["contexts_json"] else {})} for r in cur.fetchall()]
+    except Exception:
+        return []
 
 def delete_session(session_id: str):
     with connection() as conn, conn.cursor() as cur:
