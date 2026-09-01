@@ -100,44 +100,66 @@ export default function App() {
 
   const { speakText, startVoiceDictation } = useSpeech(showToast);
 
+  // In-memory message cache for instant 0ms chat window transitions
+  const messageCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
+
+  // Switch Session Instantly (0ms cache read + optimistic clear)
+  const handleSelectSession = useCallback((sessionId: string) => {
+    if (!sessionId) return;
+    setCurrentSessionId(sessionId);
+    setActiveTab('chats');
+    setInputPrompt('');
+    setReferencedVaultDocs([]);
+    setAttachedFiles([]);
+
+    // 1. Instant cache hit: render immediately (0ms)
+    const cached = messageCacheRef.current.get(sessionId);
+    if (cached !== undefined) {
+      setMessages(cached);
+    } else {
+      // Clear previous messages immediately so stale chat does not linger
+      setMessages([]);
+    }
+
+    // 2. Non-blocking SWR background fetch to keep messages synchronized
+    api.getMessages(sessionId).then((msgs) => {
+      messageCacheRef.current.set(sessionId, msgs);
+      setMessages(msgs);
+    }).catch((e) => {
+      console.error("Error loading session messages:", e);
+    });
+  }, []);
+
+  // Sync cache with current active messages as they stream/arrive
+  useEffect(() => {
+    if (currentSessionId && messages.length > 0) {
+      messageCacheRef.current.set(currentSessionId, messages);
+    }
+  }, [currentSessionId, messages]);
+
   // Fetch Sessions
   const loadSessions = useCallback(async () => {
     try {
       const sess = await api.getSessions();
       setSessions(sess);
       if (sess.length > 0 && !currentSessionId) {
-        setCurrentSessionId(sess[0].session_id);
+        handleSelectSession(sess[0].session_id);
       }
     } catch (e) {
       console.error("Error loading sessions:", e);
     }
-  }, [currentSessionId]);
-
-  // Fetch Messages for active session
-  const loadMessages = useCallback(async (sessionId: string) => {
-    try {
-      const msgs = await api.getMessages(sessionId);
-      setMessages(msgs);
-    } catch (e) {
-      console.error("Error loading messages:", e);
-    }
-  }, []);
+  }, [currentSessionId, handleSelectSession]);
 
   useEffect(() => {
     loadSessions();
   }, [loadSessions]);
-
-  useEffect(() => {
-    if (currentSessionId) {
-      loadMessages(currentSessionId);
-    }
-  }, [currentSessionId, loadMessages]);
 
   // Create New Thread (Instant 0ms UI switch with optimistic state)
   const handleNewChat = () => {
     const tempId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `sess-${Date.now()}`;
     setCurrentSessionId(tempId);
     setMessages([]);
+    messageCacheRef.current.set(tempId, []);
     setInputPrompt('');
     setReferencedVaultDocs([]);
     setAttachedFiles([]);
@@ -155,23 +177,24 @@ export default function App() {
 
   // Delete Thread (Instant 0ms Optimistic UI + Seamless Shift to Recent Top Chat)
   const handleDeleteSession = (sessionId: string) => {
-    // 1. Instantly remove from local sidebar state
+    // 1. Clear from in-memory cache
+    messageCacheRef.current.delete(sessionId);
+
+    // 2. Instantly remove from local sidebar state
     const remaining = sessions.filter(s => s.session_id !== sessionId);
     setSessions(remaining);
     showToast("Thread deleted");
 
-    // 2. If deleting the currently active chat, shift instantly to the top recent chat
+    // 3. If deleting the currently active chat, shift instantly to the top recent chat
     if (currentSessionId === sessionId) {
       if (remaining.length > 0) {
-        const nextActiveId = remaining[0].session_id;
-        setCurrentSessionId(nextActiveId);
-        loadMessages(nextActiveId);
+        handleSelectSession(remaining[0].session_id);
       } else {
         handleNewChat();
       }
     }
 
-    // 3. Asynchronous non-blocking server delete with automatic rollback
+    // 4. Asynchronous non-blocking server delete with automatic rollback
     api.deleteSession(sessionId).catch((e) => {
       console.error("Error deleting session on server:", e);
       showToast("Could not delete session from server");
@@ -379,7 +402,7 @@ export default function App() {
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         sessions={sessions}
         currentSessionId={currentSessionId}
-        onSelectSession={(id) => setCurrentSessionId(id)}
+        onSelectSession={handleSelectSession}
         onNewChat={handleNewChat}
         onDeleteSession={handleDeleteSession}
         activeTab={activeTab}
@@ -535,10 +558,7 @@ export default function App() {
         onClose={() => setSearchOpen(false)}
         sessions={sessions}
         documents={documents}
-        onSelectSession={(id) => {
-          setCurrentSessionId(id);
-          setActiveTab('chats');
-        }}
+        onSelectSession={handleSelectSession}
         onSelectDocument={(doc) => {
           handleInspectDoc({ filename: doc.filename });
         }}
