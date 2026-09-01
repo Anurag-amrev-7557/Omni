@@ -81,46 +81,55 @@ def decompose_query(query: str) -> list[str]:
 
 
 def prepare_context_and_prompt(query: str, chat_history: list[dict] = None) -> tuple[str, list[dict]]:
-    """Helper to reformulate, decompose, search vector DB, and format prompt."""
+    """Helper to reformulate, decompose, search vector DB with full parent contexts, and format prompt."""
     standalone_query = reformulate_query(query, chat_history)
     sub_queries = decompose_query(standalone_query)
     
+    # Always include the user's direct raw query alongside reformulated and decomposed queries
+    search_queries = list(dict.fromkeys([query, standalone_query] + sub_queries))
+    
     all_contexts = []
-    for sq in sub_queries:
+    for sq in search_queries:
+        if not sq.strip():
+            continue
         print(f"[DEBUG] Searching for: {sq}")
-        contexts = hybrid_search(sq, k=3)
+        contexts = hybrid_search(sq, k=6)
         print(f"[DEBUG] Found {len(contexts)} contexts for query: {sq}")
         all_contexts.extend(contexts)
         
     if not all_contexts:
-        print(f"[DEBUG] No contexts found for any sub-queries: {sub_queries}")
+        print(f"[DEBUG] No contexts found for search queries: {search_queries}")
         return None, []
         
-    # Deduplicate contexts while preserving order
+    # Deduplicate contexts by parent_content and content while preserving order
     seen = set()
     unique_contexts = []
     for ctx in all_contexts:
-        if ctx['content'] not in seen:
-            seen.add(ctx['content'])
+        parent = ctx.get('parent_content') or ctx.get('content') or ''
+        key = (ctx.get('filename'), ctx.get('page'), parent[:80])
+        if key not in seen:
+            seen.add(key)
             unique_contexts.append(ctx)
             
     combined_context = ""
     for idx, ctx in enumerate(unique_contexts, start=1):
         page_info = f", Page {ctx['page']}" if ctx.get('page') else ""
-        combined_context += f"--- SOURCE [{idx}]: {ctx['filename']}{page_info} ---\n{ctx['content']}\n\n"
+        # CRITICAL: Always use full parent_content so table rows, line items, and surrounding context are intact!
+        full_text = ctx.get('parent_content') or ctx.get('content') or ""
+        combined_context += f"--- SOURCE [{idx}]: {ctx['filename']}{page_info} ---\n{full_text.strip()}\n\n"
         
     prompt = f"""
-    You are an expert technical analyst. Answer the user's question using ONLY the provided context below.
+    You are an expert technical and document analyst. Answer the user's question accurately, thoroughly, and directly using the provided context below.
     
     CRITICAL PRESENTATION & CITATION INSTRUCTIONS:
-    1. EXCELLENT PRESENTATION: Present your answer with clean structure. Use bullet points (`-`), bold sub-headers (`**Category:**`), and paragraph breaks. NEVER collapse multiple items or categories into a single unformatted wall of text.
-    2. INLINE CITATIONS: Whenever stating a fact or detail from a source, insert a bracketed numerical citation immediately following the statement, e.g., `[1]` or `[1, 2]`.
-    3. REFERENCES FOOTER: At the very end of your answer, add a horizontal divider `---` followed by the header `##### References & Sources`. DO NOT use any emojis (such as 📚 or 📖). Write ONLY clean text without any emoji!
-    4. CITATION LIST FORMAT: Under `##### References & Sources`, list each referenced source on a new line using this format:
+    1. EXCELLENT PRESENTATION: Present your answer with clean structure. Use bullet points (`-`), bold sub-headers (`**Category:**`), and clear line breaks. NEVER collapse multiple items or categories into a single unformatted wall of text.
+    2. ACCURATE EXTRACTION: Carefully read all tables, line items, item descriptions, rates, quantities, taxes, and totals in the context. When asked about a specific item (e.g. headphones vs amplifier), identify the exact matching item and provide its full details (rate, taxes, MRP, total).
+    3. INLINE CITATIONS: Whenever stating a fact, price, or detail from a source, insert a bracketed numerical citation immediately following the statement, e.g., `[1]` or `[1, 2]`.
+    4. REFERENCES FOOTER: At the very end of your answer, add a horizontal divider `---` followed by the header `##### References & Sources`. DO NOT use any emojis. Write ONLY clean text without any emoji!
+    5. CITATION LIST FORMAT: Under `##### References & Sources`, list each referenced source on a new line using this format:
 
        - **[1] filename.pdf** *(Page X)* — *"Exact short quote or excerpt snippet..."*
-    5. If the context does not contain the answer, politely state "I don't know based on the provided documents."
-
+    6. Only if the provided context truly contains no information related to the question, state "I don't know based on the provided documents."
     
     Context:
     {combined_context}

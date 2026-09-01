@@ -171,7 +171,8 @@ def health_check():
         client = get_qdrant_client()
         collection = client.get_collection(collection_name=os.getenv("COLLECTION_NAME", "pdf_chunks"))
         payload_schema = getattr(collection, "payload_schema", {}) or {}
-        if "metadata.filename" not in payload_schema:
+        is_cloud = bool(os.getenv("QDRANT_URL"))
+        if is_cloud and "metadata.filename" not in payload_schema:
             raise RuntimeError("Required keyword index metadata.filename is missing")
         return {
             "collection": os.getenv("COLLECTION_NAME", "pdf_chunks"),

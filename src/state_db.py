@@ -9,7 +9,13 @@ from psycopg.types.json import Jsonb
 _pool = None
 
 def get_database_url() -> str:
-    return os.getenv("DATABASE_URL") or ""
+    return (
+        os.getenv("DATABASE_URL")
+        or os.getenv("NEON_DATABASE_URL")
+        or os.getenv("SUPABASE_DATABASE_URL")
+        or os.getenv("POSTGRES_URL")
+        or ""
+    )
 
 def get_connection_pool():
     global _pool
@@ -48,23 +54,50 @@ def connection():
 def init_state_db():
     with connection() as conn, conn.cursor() as cur:
         cur.execute("""CREATE TABLE IF NOT EXISTS documents (
-            user_id UUID NOT NULL,
+            user_id UUID,
             filename TEXT NOT NULL, storage_key TEXT, size_bytes BIGINT,
             page_count INTEGER, chunk_count INTEGER, status TEXT NOT NULL,
             error TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY(user_id, filename))""")
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now())""")
+        cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS user_id UUID")
+        cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS filename TEXT")
+        cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS status TEXT")
+        cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS size_bytes BIGINT")
+        cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS page_count INTEGER")
+        cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS chunk_count INTEGER")
+        cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS error TEXT")
+        cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()")
+        cur.execute("ALTER TABLE documents ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now()")
+
         cur.execute("""CREATE TABLE IF NOT EXISTS upload_jobs (
             id UUID PRIMARY KEY, user_id UUID NOT NULL, status TEXT NOT NULL,
             total_files INTEGER NOT NULL, completed_files INTEGER NOT NULL DEFAULT 0,
             details JSONB NOT NULL DEFAULT '[]'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             updated_at TIMESTAMPTZ NOT NULL DEFAULT now())""")
+        cur.execute("ALTER TABLE upload_jobs ADD COLUMN IF NOT EXISTS user_id UUID")
+
         cur.execute("""CREATE TABLE IF NOT EXISTS chat_feedback (
             id UUID PRIMARY KEY, user_id UUID NOT NULL, session_id UUID,
             message_id TEXT, rating BOOLEAN NOT NULL, feedback TEXT,
             created_at TIMESTAMPTZ NOT NULL DEFAULT now())""")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_user ON documents(user_id)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_upload_jobs_user ON upload_jobs(user_id)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_feedback_user ON chat_feedback(user_id, created_at DESC)")
+        cur.execute("ALTER TABLE chat_feedback ADD COLUMN IF NOT EXISTS user_id UUID")
+
+        try:
+            cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_user_filename ON documents(user_id, filename)")
+        except Exception:
+            pass
+        try:
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_user ON documents(user_id)")
+        except Exception:
+            pass
+        try:
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_upload_jobs_user ON upload_jobs(user_id)")
+        except Exception:
+            pass
+        try:
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_feedback_user ON chat_feedback(user_id, created_at DESC)")
+        except Exception:
+            pass
 
 def upsert_document(user_id, filename, status, **values):
     with connection() as conn, conn.cursor() as cur:
