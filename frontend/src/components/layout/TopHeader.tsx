@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { PanelLeft, ChevronDown, Share2, Settings, Palette, Check } from 'lucide-react';
+import { AuthControls } from './AuthControls';
 import { useTheme } from '../../context/ThemeContext';
 
 interface TopHeaderProps {
@@ -45,6 +46,8 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
       {/* Right Action Icons & Theme Quick Switcher */}
       <div className="flex items-center gap-2">
+        <AuthControls />
+
         {/* Theme Quick Switcher Dropdown */}
         <div className="relative">
           <button 

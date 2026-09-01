@@ -1,5 +1,12 @@
 from qdrant_client import QdrantClient
-from qdrant_client.models import VectorParams, Distance, Filter, FieldCondition, MatchValue
+from qdrant_client.models import (
+    VectorParams,
+    Distance,
+    Filter,
+    FieldCondition,
+    MatchValue,
+    PayloadSchemaType,
+)
 try:
     from src.config import QDRANT_URL, QDRANT_API_KEY, QDRANT_PATH, COLLECTION_NAME
 except ImportError:
@@ -37,6 +44,20 @@ def init_db():
             print(f"Qdrant collection '{COLLECTION_NAME}' created successfully.")
         else:
             print(f"Qdrant collection '{COLLECTION_NAME}' already exists.")
+
+        # Qdrant Cloud requires a payload index before a field can be used in a
+        # filter.  LangChain stores Document.metadata under `metadata`, so the
+        # actual payload path is `metadata.filename` (not simply `filename`).
+        # Keep the legacy flat-field index as well for collections created by
+        # older versions of the application.
+        for field_name in ("metadata.filename", "filename"):
+            client.create_payload_index(
+                collection_name=COLLECTION_NAME,
+                field_name=field_name,
+                field_schema=PayloadSchemaType.KEYWORD,
+                wait=True,
+            )
+        print("Qdrant filename payload indexes are ready.")
             
         # Check collection stats
         info = client.get_collection(collection_name=COLLECTION_NAME)
@@ -54,6 +75,13 @@ def clear_collection():
             collection_name=COLLECTION_NAME,
             vectors_config=VectorParams(size=384, distance=Distance.COSINE),
         )
+        for field_name in ("metadata.filename", "filename"):
+            client.create_payload_index(
+                collection_name=COLLECTION_NAME,
+                field_name=field_name,
+                field_schema=PayloadSchemaType.KEYWORD,
+                wait=True,
+            )
         print(f"Qdrant collection '{COLLECTION_NAME}' cleared successfully.")
     except Exception as e:
         print(f"Error clearing Qdrant collection: {e}")
@@ -62,51 +90,66 @@ def clear_collection():
 def delete_file_from_collection(filename: str):
     """Deletes all vector chunks belonging to a specific filename."""
     client = get_qdrant_client()
-    try:
-        client.delete(
-            collection_name=COLLECTION_NAME,
-            points_selector=Filter(
-                must=[
-                    FieldCondition(
-                        key="filename",
-                        match=MatchValue(value=filename)
-                    )
-                ]
-            )
-        )
-        print(f"Deleted vector chunks for '{filename}' from Qdrant.")
-    except Exception as e:
-        print(f"Error deleting vectors for '{filename}': {e}")
+    # `should` supports both the current LangChain payload layout and data from
+    # an older flat-payload layout.  Both paths are indexed in init_db().
+    client.delete(
+        collection_name=COLLECTION_NAME,
+        points_selector=Filter(
+            should=[
+                FieldCondition(key="metadata.filename", match=MatchValue(value=filename)),
+                FieldCondition(key="filename", match=MatchValue(value=filename)),
+            ]
+        ),
+        wait=True,
+    )
+    print(f"Deleted vector chunks for '{filename}' from Qdrant.")
 
 
 
 def get_collection_stats() -> dict:
-    """Returns total points count and list of unique ingested filenames."""
+    """Returns collection totals plus document metadata stored in Qdrant."""
     client = get_qdrant_client()
     try:
         collections = [c.name for c in client.get_collections().collections]
         if COLLECTION_NAME not in collections:
-            return {"total_chunks": 0, "files": []}
+            return {"total_chunks": 0, "files": [], "file_details": {}}
         
         info = client.get_collection(collection_name=COLLECTION_NAME)
         total_chunks = info.points_count if hasattr(info, 'points_count') else 0
 
-        # Scroll to collect unique filenames
-        scroll_res = client.scroll(
-            collection_name=COLLECTION_NAME,
-            limit=500,
-            with_payload=True,
-            with_vectors=False
-        )
-        points = scroll_res[0] if scroll_res else []
-        files = set()
-        for p in points:
-            if not p.payload:
-                continue
-            fname = p.payload.get("filename") or p.payload.get("metadata", {}).get("filename")
-            if fname:
-                files.add(fname)
-        return {"total_chunks": total_chunks, "files": sorted(list(files))}
+        # Scroll through every point; a single 500-point page silently hid
+        # documents in larger collections.
+        file_details = {}
+        offset = None
+        while True:
+            points, offset = client.scroll(
+                collection_name=COLLECTION_NAME,
+                limit=500,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for point in points:
+                payload = point.payload or {}
+                metadata = payload.get("metadata") or {}
+                filename = metadata.get("filename") or payload.get("filename")
+                if not filename:
+                    continue
+                details = file_details.setdefault(filename, {"chunks": 0, "pages": set()})
+                details["chunks"] += 1
+                page = metadata.get("page") or payload.get("page")
+                if isinstance(page, int) and page > 0:
+                    details["pages"].add(page)
+            if offset is None:
+                break
+
+        for details in file_details.values():
+            details["pages"] = max(details["pages"], default=1)
+        return {
+            "total_chunks": total_chunks,
+            "files": sorted(file_details),
+            "file_details": file_details,
+        }
     except Exception as e:
         print(f"Error getting collection stats: {e}")
-        return {"total_chunks": 0, "files": []}
+        return {"total_chunks": 0, "files": [], "file_details": {}}

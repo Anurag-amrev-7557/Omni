@@ -3,6 +3,8 @@ export interface DocumentItem {
   size_mb: number;
   pages: number;
   indexed?: boolean;
+  /** Whether this Render instance still has the original uploaded file. */
+  source_file_available?: boolean;
   status?: 'uploading' | 'processing' | 'completed' | 'failed';
   progress?: number;
   error?: string;
@@ -14,6 +16,17 @@ export interface CollectionStats {
   files_count: number;
   files: string[];
   sessions_count?: number;
+}
+
+export interface PipelineHealth {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  ready: boolean;
+  checks: Record<string, {
+    status: 'healthy' | 'unhealthy';
+    latency_ms?: number;
+    error?: string;
+    [key: string]: unknown;
+  }>;
 }
 
 export interface UploadResponse {

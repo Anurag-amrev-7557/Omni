@@ -1,17 +1,22 @@
 import React from 'react';
 import { HardDrive, Database, Layers, ShieldCheck } from 'lucide-react';
+import { PipelineHealth } from '../../types/document';
 
 interface VaultBottomRibbonProps {
   totalFiles: number;
   totalMb: number;
   totalChunks: number;
+  health: PipelineHealth | null;
 }
 
 export const VaultBottomRibbon: React.FC<VaultBottomRibbonProps> = ({
   totalFiles,
   totalMb,
   totalChunks,
+  health,
 }) => {
+  const qdrantHealthy = health?.checks.qdrant?.status === 'healthy';
+  const healthLabel = !health ? 'Pipeline unknown' : qdrantHealthy ? `Qdrant ${health.status}` : 'Qdrant unavailable';
   return (
     <footer className="h-12 min-h-[48px] border-t border-[var(--border-color)] bg-[var(--bg-card)] flex items-center justify-between select-none flex-shrink-0 shadow-2xs">
       <div className="max-w-6xl mx-auto w-full px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 overflow-hidden">
@@ -46,8 +51,8 @@ export const VaultBottomRibbon: React.FC<VaultBottomRibbonProps> = ({
         {/* Right: Health & Grounding Verification */}
         <div className="flex items-center gap-2 sm:gap-3 px-2.5 sm:px-3 py-1 rounded-xl bg-[var(--bg-input)] border border-[var(--border-color)] shadow-2xs flex-shrink-0">
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-            <span className="text-[11.5px] sm:text-[12px] font-semibold text-[var(--text-main)]">Qdrant Active</span>
+            <span className={`w-2 h-2 rounded-full ${qdrantHealthy ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500'}`} />
+            <span className="text-[11.5px] sm:text-[12px] font-semibold text-[var(--text-main)]" title={health?.checks.qdrant?.error}>{healthLabel}</span>
           </div>
 
           <span className="hidden sm:inline-block w-1 h-1 rounded-full bg-[var(--text-muted)] opacity-50" />

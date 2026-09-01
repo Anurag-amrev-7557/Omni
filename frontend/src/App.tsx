@@ -12,11 +12,15 @@ import { ProjectsView } from './components/projects/ProjectsView';
 import { Toast } from './components/common/Toast';
 import { useDocuments } from './hooks/useDocuments';
 import { useSpeech } from './hooks/useSpeech';
-import { api, API_BASE } from './services/api';
+import { api, API_BASE, setAuthTokenProvider } from './services/api';
+import { supabase } from './lib/supabase';
 import { ChatSession, ChatMessage } from './types/chat';
 import { ProjectItem, INITIAL_PROJECTS } from './types/project';
 
 export default function App() {
+  useEffect(() => {
+    setAuthTokenProvider(async () => (await supabase.auth.getSession()).data.session?.access_token ?? null);
+  }, []);
   // Navigation & Layout State
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'chats' | 'projects' | 'vault' | 'chats_list'>('chats');
@@ -72,6 +76,7 @@ export default function App() {
   const {
     documents,
     stats,
+    health,
     isUploading,
     refreshVault,
     uploadFiles,
@@ -212,9 +217,10 @@ export default function App() {
     setMessages(prev => [...prev, userMsg, tempAssistantMsg]);
 
     try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
       const response = await fetch(`${API_BASE}/api/chat/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ session_id: currentSessionId, prompt: actualPrompt })
       });
 
@@ -380,6 +386,7 @@ export default function App() {
               <KnowledgeVault
                 documents={documents}
                 stats={stats}
+                health={health}
                 isUploading={isUploading}
                 onUpload={uploadFiles}
                 onRefresh={refreshVault}

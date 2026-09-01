@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DocumentItem, CollectionStats, UploadProgress } from '../types/document';
+import { DocumentItem, CollectionStats, PipelineHealth, UploadProgress } from '../types/document';
 import { api } from '../services/api';
 
 const round = (num: number, decimals: number = 2) => {
@@ -16,6 +16,7 @@ export const useDocuments = (showToast: (msg: string) => void) => {
   });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [health, setHealth] = useState<PipelineHealth | null>(null);
   const [currentUploadId, setCurrentUploadId] = useState<string | null>(null);
 
   const fetchDocuments = useCallback(async () => {
@@ -39,13 +40,31 @@ export const useDocuments = (showToast: (msg: string) => void) => {
     }
   }, []);
 
+  const fetchHealth = useCallback(async () => {
+    try {
+      setHealth(await api.getHealth());
+    } catch (error) {
+      console.error("Error fetching pipeline health:", error);
+      setHealth(null);
+    }
+  }, []);
+
   const refreshVault = useCallback(async () => {
-    await Promise.all([fetchDocuments(), fetchStats()]);
-  }, [fetchDocuments, fetchStats]);
+    await Promise.all([
+      fetchDocuments(),
+      fetchStats(),
+      fetchHealth(),
+    ]);
+  }, [fetchDocuments, fetchHealth, fetchStats]);
 
   useEffect(() => {
     refreshVault();
   }, [refreshVault]);
+
+  useEffect(() => {
+    const timer = window.setInterval(fetchHealth, 30_000);
+    return () => window.clearInterval(timer);
+  }, [fetchHealth]);
 
   const uploadFiles = async (files: FileList | File[]) => {
     if (!files || files.length === 0) return;
@@ -208,10 +227,12 @@ export const useDocuments = (showToast: (msg: string) => void) => {
   return {
     documents,
     stats,
+    health,
     isLoading,
     isUploading,
     fetchDocuments,
     fetchStats,
+    fetchHealth,
     refreshVault,
     uploadFiles,
     deleteDocument,

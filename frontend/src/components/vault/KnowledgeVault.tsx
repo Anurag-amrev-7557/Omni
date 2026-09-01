@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { RefreshCw, UploadCloud, Plus, Database, Trash2, Loader2 } from 'lucide-react';
-import { DocumentItem, CollectionStats } from '../../types/document';
+import { DocumentItem, CollectionStats, PipelineHealth } from '../../types/document';
 import { VaultToolbar } from './VaultToolbar';
 import { VaultDocList, SortField, SortDirection } from './VaultDocList';
 import { VaultUploadModal } from './VaultUploadModal';
@@ -11,6 +11,7 @@ import { UploadProgressItem } from '../common/UploadProgressItem';
 interface KnowledgeVaultProps {
   documents: DocumentItem[];
   stats: CollectionStats;
+  health: PipelineHealth | null;
   isUploading: boolean;
   onUpload: (files: FileList | File[]) => void;
   onRefresh: () => void;
@@ -28,6 +29,7 @@ interface KnowledgeVaultProps {
 export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
   documents,
   stats,
+  health,
   isUploading,
   onUpload,
   onRefresh,
@@ -298,6 +300,7 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
         totalFiles={completedDocs.length}
         totalMb={totalMb}
         totalChunks={stats.total_chunks || (completedDocs.length * 120)}
+        health={health}
       />
 
       {/* Floating Mass Actions Dock Bar (Floats above bottom ribbon) */}

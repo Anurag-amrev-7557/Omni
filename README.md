@@ -187,6 +187,30 @@ docker-compose up -d --build
 - **FastAPI API Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Qdrant Dashboard**: [http://localhost:6333/dashboard](http://localhost:6333/dashboard)
 
+### Render + Vercel + Qdrant Cloud
+
+On Render, the checked-out application directory is ephemeral. Qdrant retains
+embeddings, but it does not retain the original PDF/TXT/MD file required for
+downloads, re-indexing, and the PDF sidecar. Attach a Render Persistent Disk
+and set this backend environment variable to its mount path:
+
+```text
+UPLOADS_DIR=/var/data/uploaded_docs
+```
+
+Also configure `QDRANT_URL`, `QDRANT_API_KEY`, `COLLECTION_NAME`, and
+`GROQ_API_KEY` on Render. The application now creates the required Qdrant
+keyword indexes for `metadata.filename` at startup, so deletion works with
+Qdrant Cloud. If a document was uploaded before the disk was attached, its
+vectors remain usable and visible, but upload the original once more to restore
+download, re-index, and PDF-reader functionality.
+
+### Supabase authentication
+
+Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in Vercel. Set
+`SUPABASE_URL` to the same project URL on Render. The publishable key belongs
+only in the frontend; never expose a Supabase secret/service-role key there.
+
 ---
 
 ## 📡 API Reference

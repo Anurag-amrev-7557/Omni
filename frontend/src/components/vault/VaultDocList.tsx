@@ -133,6 +133,7 @@ export const VaultDocList: React.FC<VaultDocListProps> = ({
               const isPdf = ext === 'pdf';
               const isMd = ext === 'md';
               const isSelected = selectedFilenames.includes(doc.filename);
+              const sourceFileAvailable = doc.source_file_available !== false;
 
               return (
                 <tr
@@ -208,16 +209,18 @@ export const VaultDocList: React.FC<VaultDocListProps> = ({
                         <Eye size={14} />
                       </button>
                       <button
-                        className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-input)] transition-colors cursor-pointer"
+                        className={`p-1.5 rounded-lg text-[var(--text-muted)] transition-colors ${sourceFileAvailable ? 'hover:text-[var(--text-main)] hover:bg-[var(--bg-input)] cursor-pointer' : 'opacity-40 cursor-not-allowed'}`}
                         onClick={() => onDownload(doc.filename)}
-                        title="Download Document"
+                        title={sourceFileAvailable ? 'Download Document' : 'Original file is unavailable on this Render instance'}
+                        disabled={!sourceFileAvailable}
                       >
                         <Download size={14} />
                       </button>
                       <button
-                        className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-input)] transition-colors cursor-pointer"
+                        className={`p-1.5 rounded-lg text-[var(--text-muted)] transition-colors ${sourceFileAvailable ? 'hover:text-[var(--text-main)] hover:bg-[var(--bg-input)] cursor-pointer' : 'opacity-40 cursor-not-allowed'}`}
                         onClick={() => onReindex(doc.filename)}
-                        title="Re-index Vector Embeddings"
+                        title={sourceFileAvailable ? 'Re-index Vector Embeddings' : 'Original file is unavailable on this Render instance'}
+                        disabled={!sourceFileAvailable}
                       >
                         <RotateCw size={14} />
                       </button>
