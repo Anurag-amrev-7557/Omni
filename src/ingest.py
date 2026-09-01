@@ -21,10 +21,10 @@ def generate_summary(pages: list[Document]) -> str:
         from src.generate import invoke_groq_with_fallback
     except ImportError:
         from generate import invoke_groq_with_fallback
-    preview = "\n\n".join([p.page_content for p in pages[:3]])
-    prompt = f"Write a one-sentence summary of this document excerpt:\n\n{preview}"
+    preview = "\n\n".join([p.page_content for p in pages[:3]])[:1500]
+    prompt = f"Write a concise one-sentence title summary of this document:\n\n{preview}"
     res = invoke_groq_with_fallback(prompt)
-    return res if res else "Executive summary unavailable."
+    return res if res else "Document text excerpt."
 
 
 def load_pages_with_pymupdf(file_path: str) -> list[Document]:
@@ -39,12 +39,14 @@ def load_pages_with_pymupdf(file_path: str) -> list[Document]:
     doc.close()
     return pages
 
-def ingest_file(file_path: str, user_id: str | None = None):
+def ingest_file(file_path: str, user_id: str | None = None, progress_callback = None):
     init_db()
     filename = os.path.basename(file_path)
     ext = os.path.splitext(filename)[1].lower()
     
     print(f"[DEBUG] Starting ingestion for {filename} (type: {ext})")
+    if progress_callback:
+        progress_callback(15, "Parsing document pages...")
     
     if ext == ".pdf":
         pages = load_pages_with_pymupdf(file_path)
@@ -58,10 +60,14 @@ def ingest_file(file_path: str, user_id: str | None = None):
         raise ValueError(f"No text content could be extracted from {filename}.")
     
     print(f"[DEBUG] Extracted {len(pages)} pages from {filename}")
+    if progress_callback:
+        progress_callback(40, "Generating contextual summary...")
     summary = generate_summary(pages)
     print(f"[DEBUG] Generated summary: {summary[:100]}...")
     
     # 1. PARENT CHUNKING (1500 chars)
+    if progress_callback:
+        progress_callback(60, "Chunking document blocks...")
     parent_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
     parent_docs = parent_splitter.split_documents(pages)
     
@@ -93,6 +99,8 @@ def ingest_file(file_path: str, user_id: str | None = None):
             )
             child_count += 1
         
+    if progress_callback:
+        progress_callback(80, "Generating vector embeddings...")
     embeddings_model = get_embeddings()
     client = get_qdrant_client()
     vector_store = QdrantVectorStore(
@@ -101,9 +109,13 @@ def ingest_file(file_path: str, user_id: str | None = None):
         embedding=embeddings_model,
     )
     
+    if progress_callback:
+        progress_callback(92, "Writing vectors to Qdrant...")
     vector_store.add_documents(child_documents)
     print(f"[DEBUG] Ingested {filename} into Qdrant: {len(parent_docs)} parent blocks, {len(child_documents)} child vectors.")
     print(f"[DEBUG] Collection name used: {COLLECTION_NAME}")
+    if progress_callback:
+        progress_callback(100, "Completed")
 
 # Backward compatibility alias
 ingest_pdf = ingest_file

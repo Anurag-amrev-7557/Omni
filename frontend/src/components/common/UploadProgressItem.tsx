@@ -5,6 +5,7 @@ interface UploadProgressItemProps {
   filename: string;
   status: 'uploading' | 'processing' | 'completed' | 'failed';
   progress: number;
+  stage?: string;
   error?: string;
 }
 
@@ -12,6 +13,7 @@ export const UploadProgressItem: React.FC<UploadProgressItemProps> = ({
   filename,
   status,
   progress,
+  stage,
   error
 }) => {
   const getStatusIcon = () => {
@@ -29,11 +31,12 @@ export const UploadProgressItem: React.FC<UploadProgressItemProps> = ({
   };
 
   const getStatusText = () => {
+    if (stage) return stage;
     switch (status) {
       case 'uploading':
-        return 'Uploading...';
+        return `Uploading (${progress}%)...`;
       case 'processing':
-        return 'Processing...';
+        return `Processing (${progress}%)...`;
       case 'completed':
         return 'Completed';
       case 'failed':

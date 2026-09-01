@@ -270,6 +270,7 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
                   filename={doc.filename}
                   status={doc.status || 'uploading'}
                   progress={doc.progress || 0}
+                  stage={doc.stage}
                   error={doc.error}
                 />
               ))}

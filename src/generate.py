@@ -1,3 +1,4 @@
+import re
 from functools import lru_cache
 from typing import Generator
 from langchain_groq import ChatGroq
@@ -29,12 +30,24 @@ def invoke_groq_with_fallback(prompt: str) -> str:
     return ""
 
 
+PRONOUN_TRIGGERS = {
+    "it", "its", "they", "them", "their", "this", "that", "these", "those",
+    "he", "him", "his", "she", "her", "hers", "what about", "how about",
+    "the same", "also", "and then", "former", "latter"
+}
+
+def is_conversational_followup(query: str) -> bool:
+    """Fast regex/keyword check to avoid unnecessary LLM calls on standalone queries."""
+    q_lower = query.lower()
+    tokens = set(re.findall(r"\w+", q_lower))
+    return bool(tokens & PRONOUN_TRIGGERS) or q_lower.startswith(("and ", "also ", "what about ", "how about "))
+
 def reformulate_query(query: str, chat_history: list[dict] = None) -> str:
     """
     CONVERSATIONAL MEMORY ROUTER: Rephrases ambiguous follow-up questions 
     into self-contained standalone search queries using past chat history context.
     """
-    if not chat_history or len(chat_history) < 2:
+    if not chat_history or len(chat_history) < 2 or not is_conversational_followup(query):
         return query
         
     recent = chat_history[-4:]
@@ -54,12 +67,23 @@ def reformulate_query(query: str, chat_history: list[dict] = None) -> str:
     response = invoke_groq_with_fallback(prompt)
     return response if response else query
 
+def should_decompose_query(query: str) -> bool:
+    """Checks if query requires multi-hop decomposition."""
+    q_lower = query.lower()
+    return (
+        len(query.split()) > 10
+        and any(k in q_lower for k in ["compare", " vs ", "versus", "difference between", "both "])
+    )
+
 @lru_cache(maxsize=256)
 def decompose_query(query: str) -> list[str]:
     """
     AGENTIC ROUTING (CACHED): Uses the LLM to break a complex query into simpler sub-queries.
-    Cached via @lru_cache to eliminate duplicate LLM roundtrips for repeated prompts.
+    Fast-paths single topic queries directly without LLM latency.
     """
+    if not should_decompose_query(query):
+        return [query]
+
     prompt = f"""
     You are a search query optimizer. 
     If the user's prompt asks about multiple distinct topics that are likely in different documents, 
@@ -81,7 +105,7 @@ def decompose_query(query: str) -> list[str]:
 
 
 def prepare_context_and_prompt(query: str, chat_history: list[dict] = None) -> tuple[str, list[dict]]:
-    """Helper to reformulate, decompose, search vector DB with full parent contexts, and format prompt."""
+    """Fast-path context and prompt preparation without unnecessary LLM overhead."""
     standalone_query = reformulate_query(query, chat_history)
     sub_queries = decompose_query(standalone_query)
     

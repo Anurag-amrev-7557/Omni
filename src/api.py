@@ -83,23 +83,50 @@ except Exception:
     limiter = DummyLimiter()
 
 # CORS middleware for Web Frontend
+allowed_origins_list = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+custom_origins = os.getenv("CORS_ORIGINS")
+if custom_origins:
+    for o in custom_origins.split(","):
+        if o.strip() and o.strip() not in allowed_origins_list:
+            allowed_origins_list.append(o.strip())
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in os.getenv("CORS_ORIGINS", "*").split(",") if origin.strip()],
+    allow_origins=["*"] if not os.getenv("CORS_ORIGINS") else allowed_origins_list,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.vercel\.app|.*\.onrender\.com)(:[0-9]+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+def add_cors_headers_if_needed(response: Response, request: Request) -> Response:
+    origin = request.headers.get("origin")
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
 
 @app.middleware("http")
 async def logging_and_auth_middleware(request: Request, call_next):
     start_time = time.perf_counter()
     user_id = None
     
+    # Pre-flight OPTIONS bypass with CORS headers
+    if request.method == "OPTIONS":
+        response = Response(status_code=204)
+        return add_cors_headers_if_needed(response, request)
+
     # Public route bypass
-    if request.method == "OPTIONS" or request.url.path in ("/", "/api/health", "/docs", "/redoc", "/openapi.json"):
+    if request.url.path in ("/", "/api/health", "/docs", "/redoc", "/openapi.json"):
         response = await call_next(request)
-        return response
+        return add_cors_headers_if_needed(response, request)
 
     # Authenticate API requests
     if request.url.path.startswith("/api/"):
@@ -112,11 +139,14 @@ async def logging_and_auth_middleware(request: Request, call_next):
             user_id = require_user(auth_header)
             set_current_user(user_id)
         except HTTPException as exc:
-            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+            resp = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+            return add_cors_headers_if_needed(resp, request)
         except Exception as exc:
-            return JSONResponse(status_code=401, content={"detail": "Authentication required"})
+            resp = JSONResponse(status_code=401, content={"detail": "Authentication required"})
+            return add_cors_headers_if_needed(resp, request)
 
     response = await call_next(request)
+    response = add_cors_headers_if_needed(response, request)
     latency_ms = round((time.perf_counter() - start_time) * 1000, 1)
     if not request.url.path.startswith("/api/health"):
         print(f"[HTTP] {request.method} {request.url.path} -> {response.status_code} ({latency_ms}ms) user={user_id or 'anon'}")
@@ -309,18 +339,29 @@ def process_upload_batch_sync(upload_id: str, user_id: str, file_records: list[d
         fpath = rec["path"]
         fsize = rec["size_bytes"]
         
+        def item_progress_cb(percent: int, stage_text: str = "Processing..."):
+            rec["progress"] = percent
+            rec["stage"] = stage_text
+            rec["status"] = "completed" if percent >= 100 else "processing"
+            if upload_id in upload_progress:
+                upload_progress[upload_id]["files"] = file_records
+            save_upload_job(upload_id, user_id, "processing", len(file_records), completed, file_records)
+
         try:
             print(f"[Worker] Ingesting {fname} for user {user_id}...")
-            ingest_file(fpath, user_id)
+            item_progress_cb(10, "Starting ingestion...")
+            ingest_file(fpath, user_id, progress_callback=item_progress_cb)
             upsert_document(user_id, fname, "indexed", size_bytes=fsize)
             completed += 1
             rec["status"] = "completed"
             rec["progress"] = 100
+            rec["stage"] = "Completed"
             rec["indexed"] = True
             print(f"[Worker] Successfully indexed {fname}")
         except Exception as exc:
             print(f"[Worker] Failed to ingest {fname}: {exc}")
             rec["status"] = "failed"
+            rec["stage"] = "Failed"
             rec["error"] = str(exc)
             errors.append(f"{fname}: {exc}")
             upsert_document(user_id, fname, "failed", size_bytes=fsize, error=str(exc))

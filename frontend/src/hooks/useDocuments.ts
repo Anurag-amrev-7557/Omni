@@ -95,7 +95,8 @@ export const useDocuments = (showToast: (msg: string) => void) => {
       pages: 1,
       indexed: false,
       status: 'uploading',
-      progress: 25
+      progress: 0,
+      stage: 'Uploading to server (0%)...'
     }));
     
     setDocuments(prev => {
@@ -104,14 +105,26 @@ export const useDocuments = (showToast: (msg: string) => void) => {
     });
 
     try {
-      const res = await api.uploadDocuments(files);
+      const res = await api.uploadDocuments(files, (uploadPercent) => {
+        setDocuments(prev => prev.map(doc => {
+          if (fileList.some(f => f.name === doc.filename)) {
+            return {
+              ...doc,
+              status: 'uploading',
+              progress: uploadPercent,
+              stage: uploadPercent >= 100 ? 'Server processing...' : `Uploading to server (${uploadPercent}%)...`
+            };
+          }
+          return doc;
+        }));
+      });
       
       if (res.success && res.upload_id) {
         setCurrentUploadId(res.upload_id);
         
         // 2. Poll server for background vector ingestion progress
-        const pollInterval = 650;
-        const maxPolls = 60;
+        const pollInterval = 500;
+        const maxPolls = 120;
         let pollCount = 0;
 
         pollerRef.current = window.setInterval(async () => {
@@ -126,7 +139,8 @@ export const useDocuments = (showToast: (msg: string) => void) => {
                   return {
                     ...doc,
                     status: fProgress.status,
-                    progress: fProgress.progress ?? (fProgress.status === 'completed' ? 100 : 60),
+                    progress: fProgress.progress ?? (fProgress.status === 'completed' ? 100 : 50),
+                    stage: (fProgress as any).stage || (fProgress.status === 'completed' ? 'Completed' : 'Extracting & Indexing...'),
                     indexed: fProgress.indexed ?? (fProgress.status === 'completed'),
                     error: fProgress.error
                   };

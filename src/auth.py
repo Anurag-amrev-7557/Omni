@@ -28,10 +28,16 @@ def jwks_client():
         raise HTTPException(status_code=503, detail="SUPABASE_URL is not configured")
     return PyJWKClient(f"{SUPABASE_URL.rstrip('/')}/auth/v1/.well-known/jwks.json")
 
+DEFAULT_LOCAL_USER = "10d2f529-3fae-4a29-9a5e-312876700ff9"
+
 def require_user(authorization: str | None = Header(default=None)) -> str:
     if not authorization or not authorization.startswith("Bearer "):
+        if not SUPABASE_URL:
+            return DEFAULT_LOCAL_USER
         raise HTTPException(status_code=401, detail="Authentication required")
     token = authorization.removeprefix("Bearer ").strip()
+    if not SUPABASE_URL:
+        return DEFAULT_LOCAL_USER
     try:
         key = jwks_client().get_signing_key_from_jwt(token).key
         claims = jwt.decode(token, key, algorithms=["RS256", "ES256"], audience="authenticated")

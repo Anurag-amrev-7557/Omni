@@ -7,6 +7,7 @@ export interface DocumentItem {
   source_file_available?: boolean;
   status?: 'uploading' | 'processing' | 'completed' | 'failed';
   progress?: number;
+  stage?: string;
   error?: string;
 }
 

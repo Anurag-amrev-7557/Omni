@@ -69,13 +69,48 @@ export const api = {
     return res.json();
   },
 
-  async uploadDocuments(files: FileList | File[]): Promise<UploadResponse> {
-    const formData = new FormData();
-    for (let i = 0; i < files.length; i++) {
-      formData.append('files', files[i]);
-    }
-    const res = await apiFetch('/api/upload', { method: 'POST', body: formData });
-    return res.json();
+  uploadDocuments(
+    files: FileList | File[],
+    onProgress?: (percent: number) => void
+  ): Promise<UploadResponse> {
+    return new Promise(async (resolve, reject) => {
+      const formData = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+      }
+      
+      const token = await tokenProvider?.();
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${API_BASE}/api/upload`);
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      }
+
+      if (xhr.upload && onProgress) {
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percent = Math.round((event.loaded / event.total) * 100);
+            onProgress(percent);
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        try {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(JSON.parse(xhr.responseText));
+          } else {
+            const err = JSON.parse(xhr.responseText || '{}');
+            reject(new Error(err.detail || `Upload failed with status ${xhr.status}`));
+          }
+        } catch (e) {
+          reject(e);
+        }
+      };
+
+      xhr.onerror = () => reject(new Error('Network error during upload'));
+      xhr.send(formData);
+    });
   },
 
   async getUploadProgress(uploadId: string): Promise<UploadProgress> {
