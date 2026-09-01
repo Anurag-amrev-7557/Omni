@@ -88,7 +88,7 @@ def prepare_context_and_prompt(query: str, chat_history: list[dict] = None) -> t
     
     all_contexts = []
     for sq in sub_queries:
-        contexts = hybrid_search(sq, limit=3)
+        contexts = hybrid_search(sq, k=3)
         all_contexts.extend(contexts)
         
     if not all_contexts:
