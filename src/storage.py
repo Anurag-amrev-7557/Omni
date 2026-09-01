@@ -36,6 +36,23 @@ def _get_headers() -> dict:
     }
 
 
+def ensure_bucket_exists():
+    """Ensures Supabase storage bucket exists."""
+    if not is_storage_configured():
+        return
+    base_url = SUPABASE_URL.rstrip("/")
+    url = f"{base_url}/storage/v1/bucket"
+    headers = _get_headers()
+    headers["Content-Type"] = "application/json"
+    body = json.dumps({"id": BUCKET_NAME, "name": BUCKET_NAME, "public": True}).encode("utf-8")
+    try:
+        req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            print(f"[Supabase Storage] Verified/Created bucket '{BUCKET_NAME}'")
+    except Exception:
+        pass
+
+
 def save_file(user_id: str, filename: str, content: bytes, local_path: Optional[str] = None) -> bool:
     """Saves file to local disk cache and uploads to Supabase Storage."""
     if local_path:
@@ -46,6 +63,7 @@ def save_file(user_id: str, filename: str, content: bytes, local_path: Optional[
     if not is_storage_configured():
         return bool(local_path)
 
+    ensure_bucket_exists()
     base_url = SUPABASE_URL.rstrip("/")
     key = get_storage_key(user_id, filename)
     encoded_key = get_encoded_key(user_id, filename)

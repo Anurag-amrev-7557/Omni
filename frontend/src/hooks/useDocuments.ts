@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { DocumentItem, CollectionStats, PipelineHealth, UploadProgress } from '../types/document';
 import { api } from '../services/api';
 
@@ -18,12 +18,18 @@ export const useDocuments = (showToast: (msg: string) => void) => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [health, setHealth] = useState<PipelineHealth | null>(null);
   const [currentUploadId, setCurrentUploadId] = useState<string | null>(null);
+  const pollerRef = useRef<number | null>(null);
 
   const fetchDocuments = useCallback(async () => {
     try {
       setIsLoading(true);
       const docs = await api.getDocuments();
-      setDocuments(docs);
+      setDocuments(prev => {
+        const serverMap = new Map(docs.map(d => [d.filename, d]));
+        // Keep in-flight local uploads only if they haven't appeared on the server yet
+        const inFlight = prev.filter(d => !d.indexed && (d.status === 'uploading' || d.status === 'processing') && !serverMap.has(d.filename));
+        return [...inFlight, ...docs];
+      });
     } catch (e) {
       console.error("Error fetching documents:", e);
     } finally {
@@ -62,14 +68,25 @@ export const useDocuments = (showToast: (msg: string) => void) => {
   }, [refreshVault]);
 
   useEffect(() => {
-    const timer = window.setInterval(fetchHealth, 30_000);
-    return () => window.clearInterval(timer);
+    const timer = window.setInterval(fetchHealth, 60_000);
+    return () => {
+      window.clearInterval(timer);
+      if (pollerRef.current) {
+        window.clearInterval(pollerRef.current);
+      }
+    };
   }, [fetchHealth]);
 
   const uploadFiles = async (files: FileList | File[]) => {
     if (!files || files.length === 0) return;
     setIsUploading(true);
     
+    // Clear any active poller
+    if (pollerRef.current) {
+      window.clearInterval(pollerRef.current);
+      pollerRef.current = null;
+    }
+
     const fileList = Array.from(files);
     // 1. Immediately inject progress placeholder items into state so progress bars render instantly
     const tempDocs: DocumentItem[] = fileList.map(file => ({
@@ -78,7 +95,7 @@ export const useDocuments = (showToast: (msg: string) => void) => {
       pages: 1,
       indexed: false,
       status: 'uploading',
-      progress: 15
+      progress: 25
     }));
     
     setDocuments(prev => {
@@ -86,20 +103,18 @@ export const useDocuments = (showToast: (msg: string) => void) => {
       return [...tempDocs, ...filtered];
     });
 
-    showToast(`Uploading ${fileList.length} file(s)...`);
-
     try {
       const res = await api.uploadDocuments(files);
       
       if (res.success && res.upload_id) {
         setCurrentUploadId(res.upload_id);
         
-        // 2. Poll server for actual background vector ingestion progress
-        const pollInterval = 600;
-        const maxPolls = 100; // 60s max
+        // 2. Poll server for background vector ingestion progress
+        const pollInterval = 650;
+        const maxPolls = 60;
         let pollCount = 0;
 
-        const poller = setInterval(async () => {
+        pollerRef.current = window.setInterval(async () => {
           pollCount++;
           try {
             const progress = await api.getUploadProgress(res.upload_id!);
@@ -121,23 +136,28 @@ export const useDocuments = (showToast: (msg: string) => void) => {
             }
 
             const allDone = progress.status === 'completed' || 
-              (progress.files && progress.files.every(f => f.status === 'completed' || f.status === 'failed'));
+              (progress.files && progress.files.length > 0 && progress.files.every(f => f.status === 'completed' || f.status === 'failed' || f.indexed));
 
             if (allDone || pollCount >= maxPolls) {
-              clearInterval(poller);
+              if (pollerRef.current) {
+                window.clearInterval(pollerRef.current);
+                pollerRef.current = null;
+              }
               setCurrentUploadId(null);
               setIsUploading(false);
               
-              // Brief delay so user sees the 100% completed checkmark state
               setTimeout(async () => {
                 await refreshVault();
                 showToast(`Indexed ${fileList.length} document(s) successfully`);
-              }, 1200);
+              }, 600);
             }
           } catch (err) {
             console.error("Progress polling error:", err);
             if (pollCount >= 10) {
-              clearInterval(poller);
+              if (pollerRef.current) {
+                window.clearInterval(pollerRef.current);
+                pollerRef.current = null;
+              }
               setIsUploading(false);
               await refreshVault();
             }
@@ -145,7 +165,6 @@ export const useDocuments = (showToast: (msg: string) => void) => {
         }, pollInterval);
 
       } else {
-        showToast("Upload completed with warnings");
         setIsUploading(false);
         await refreshVault();
       }

@@ -58,8 +58,8 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
   const txtCount = documents.filter(d => d.filename.toLowerCase().endsWith('.txt')).length;
   
   // Separate uploading documents from completed ones
-  const uploadingDocs = documents.filter(d => d.status === 'uploading' || d.status === 'processing');
-  const completedDocs = documents.filter(d => d.status !== 'uploading' && d.status !== 'processing');
+  const uploadingDocs = documents.filter(d => !d.indexed && (d.status === 'uploading' || d.status === 'processing'));
+  const completedDocs = documents.filter(d => d.indexed || (d.status !== 'uploading' && d.status !== 'processing'));
 
   // In-Header Column Sorting Handler
   const handleSort = (field: SortField) => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Sidebar } from './components/layout/Sidebar';
 import { TopHeader } from './components/layout/TopHeader';
 import { SidecarReader } from './components/layout/SidecarReader';
@@ -65,11 +65,19 @@ export default function App() {
   const [projectsOpen, setProjectsOpen] = useState<boolean>(false);
   const [referencedVaultDocs, setReferencedVaultDocs] = useState<string[]>([]);
 
-  // Toast
+  // Toast (Debounced, cleanly transitions without spamming)
   const [toastMessage, setToastMessage] = useState<string>('');
+  const toastTimeoutRef = useRef<number | null>(null);
   const showToast = useCallback((msg: string) => {
+    if (!msg) return;
+    if (toastTimeoutRef.current) {
+      window.clearTimeout(toastTimeoutRef.current);
+    }
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(''), 2600);
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setToastMessage('');
+      toastTimeoutRef.current = null;
+    }, 2400);
   }, []);
 
   // Custom Hooks

@@ -276,6 +276,7 @@ def list_documents():
         fpath = os.path.join(uploads_dir, fname)
         local_file_exists = fname in files_on_disk
         details = stats.get("file_details", {}).get(fname, {})
+        is_indexed = fname in stats["files"]
         available_files.append({
             "filename": fname,
             "size_mb": round(os.path.getsize(fpath) / (1024 * 1024), 2) if local_file_exists else 0,
@@ -283,7 +284,9 @@ def list_documents():
                 get_pdf_page_count(fpath) if local_file_exists and fname.lower().endswith(".pdf")
                 else details.get("pages", 1)
             ),
-            "indexed": fname in stats["files"],
+            "indexed": is_indexed,
+            "status": "completed" if is_indexed else "processing",
+            "progress": 100 if is_indexed else 50,
             "source_file_available": local_file_exists,
         })
     
@@ -306,24 +309,29 @@ def process_upload_batch_sync(upload_id: str, user_id: str, file_records: list[d
         fsize = rec["size_bytes"]
         
         try:
+            print(f"[Worker] Ingesting {fname} for user {user_id}...")
             ingest_file(fpath, user_id)
             upsert_document(user_id, fname, "indexed", size_bytes=fsize)
             completed += 1
             rec["status"] = "completed"
             rec["progress"] = 100
             rec["indexed"] = True
+            print(f"[Worker] Successfully indexed {fname}")
         except Exception as exc:
+            print(f"[Worker] Failed to ingest {fname}: {exc}")
             rec["status"] = "failed"
             rec["error"] = str(exc)
             errors.append(f"{fname}: {exc}")
             upsert_document(user_id, fname, "failed", size_bytes=fsize, error=str(exc))
             
-        upload_progress[upload_id]["files"] = file_records
-        upload_progress[upload_id]["completed_files"] = completed
-        save_upload_job(upload_id, user_id, "uploading", len(file_records), completed, file_records)
+        if upload_id in upload_progress:
+            upload_progress[upload_id]["files"] = file_records
+            upload_progress[upload_id]["completed_files"] = completed
+        save_upload_job(upload_id, user_id, "processing" if completed < len(file_records) else "completed", len(file_records), completed, file_records)
         
     final_status = "completed" if completed > 0 else "failed"
-    upload_progress[upload_id]["status"] = final_status
+    if upload_id in upload_progress:
+        upload_progress[upload_id]["status"] = final_status
     save_upload_job(upload_id, user_id, final_status, len(file_records), completed, file_records)
 
 @app.post("/api/upload", status_code=202)
@@ -489,17 +497,70 @@ def get_file_content(filename: str = Query(...)):
     uploads_dir = user_upload_dir()
     filename = safe_filename(filename)
     file_path = os.path.join(uploads_dir, filename)
-    if not os.path.exists(file_path):
-        get_file_bytes(get_current_user(), filename, local_path=file_path)
-    if not os.path.exists(file_path):
-        return {"filename": filename, "content": "File content unavailable."}
+    user_id = get_current_user()
     
+    if not os.path.exists(file_path):
+        get_file_bytes(user_id, filename, local_path=file_path)
+        
+    if os.path.exists(file_path):
+        if filename.lower().endswith(".pdf"):
+            try:
+                pages_count = get_pdf_page_count(file_path)
+                pages_text = []
+                for p in range(1, pages_count + 1):
+                    p_text = extract_pdf_page_text(file_path, p)
+                    if p_text.strip():
+                        pages_text.append(f"### Page {p}\n\n{p_text}")
+                if pages_text:
+                    return {"filename": filename, "content": "\n\n---\n\n".join(pages_text)}
+            except Exception as e:
+                print(f"[Warning] PDF text extraction error: {e}")
+        else:
+            try:
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    return {"filename": filename, "content": f.read()}
+            except Exception as e:
+                print(f"[Warning] Text file read error: {e}")
+
+    # Fallback to retrieving indexed text from Qdrant vector store
     try:
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-            content = f.read()
-        return {"filename": filename, "content": content}
-    except Exception as e:
-        return {"filename": filename, "content": f"Error reading file: {str(e)}"}
+        client = get_qdrant_client()
+        points, _ = client.scroll(
+            collection_name=COLLECTION_NAME,
+            limit=200,
+            scroll_filter=Filter(
+                must=[
+                    FieldCondition(key="metadata.user_id", match=MatchValue(value=user_id)),
+                    FieldCondition(key="metadata.filename", match=MatchValue(value=filename)),
+                ]
+            ),
+            with_payload=True,
+            with_vectors=False
+        )
+        if points:
+            seen = set()
+            blocks = []
+            sorted_points = sorted(
+                points,
+                key=lambda pt: (
+                    (pt.payload or {}).get("metadata", {}).get("page", 1),
+                    (pt.payload or {}).get("metadata", {}).get("child_index", 0)
+                )
+            )
+            for pt in sorted_points:
+                payload = pt.payload or {}
+                meta = payload.get("metadata", {})
+                parent_text = meta.get("parent_content") or payload.get("page_content") or ""
+                if parent_text and parent_text not in seen:
+                    seen.add(parent_text)
+                    page_num = meta.get("page", 1)
+                    blocks.append(f"**[Page {page_num}]**\n{parent_text}")
+            if blocks:
+                return {"filename": filename, "content": "\n\n---\n\n".join(blocks)}
+    except Exception as exc:
+        print(f"[Warning] Qdrant content retrieval fallback error: {exc}")
+
+    return {"filename": filename, "content": "Document text indexed in Knowledge Vault."}
 
 @app.get("/api/pdf-page-image")
 def get_pdf_page_image(filename: str = Query(...), page: int = Query(1, ge=1)):

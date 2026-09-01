@@ -79,14 +79,18 @@ def clear_collection():
 def delete_file_from_collection(filename: str):
     """Deletes all vector chunks belonging to a specific filename."""
     client = get_qdrant_client()
-    # `should` supports both the current LangChain payload layout and data from
-    # an older flat-payload layout.  Both paths are indexed in init_db().
+    user_id = get_current_user()
     client.delete(
         collection_name=COLLECTION_NAME,
         points_selector=Filter(
-            must=[FieldCondition(key="metadata.user_id", match=MatchValue(value=get_current_user()))], should=[
-                FieldCondition(key="metadata.filename", match=MatchValue(value=filename)),
-                FieldCondition(key="filename", match=MatchValue(value=filename)),
+            must=[
+                FieldCondition(key="metadata.user_id", match=MatchValue(value=user_id)),
+                Filter(
+                    should=[
+                        FieldCondition(key="metadata.filename", match=MatchValue(value=filename)),
+                        FieldCondition(key="filename", match=MatchValue(value=filename)),
+                    ]
+                )
             ]
         ),
         wait=True,
