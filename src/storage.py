@@ -1,69 +1,71 @@
-"""Cloudflare R2 (S3-compatible) storage manager with local disk fallback."""
+"""Supabase Storage manager with local disk fallback and zero external dependencies."""
 import os
-import io
-import tempfile
+import json
+import urllib.request
+import urllib.error
 from typing import Optional
 
-R2_ACCOUNT_ID = os.getenv("R2_ACCOUNT_ID")
-R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID")
-R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY")
-R2_BUCKET_NAME = os.getenv("R2_BUCKET_NAME")
-R2_ENDPOINT_URL = os.getenv("R2_ENDPOINT_URL")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = (
+    os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    or os.getenv("SUPABASE_SERVICE_KEY")
+    or os.getenv("SUPABASE_PUBLISHABLE_KEY")
+    or os.getenv("SUPABASE_ANON_KEY")
+)
+BUCKET_NAME = os.getenv("SUPABASE_STORAGE_BUCKET", "documents")
 
-_s3_client = None
 
-def is_r2_configured() -> bool:
-    return bool(R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY and R2_BUCKET_NAME and (R2_ACCOUNT_ID or R2_ENDPOINT_URL))
+def is_storage_configured() -> bool:
+    return bool(SUPABASE_URL and SUPABASE_KEY)
 
-def get_s3_client():
-    global _s3_client
-    if _s3_client is not None:
-        return _s3_client
-
-    if not is_r2_configured():
-        return None
-
-    try:
-        import boto3
-        from botocore.config import Config
-
-        endpoint = R2_ENDPOINT_URL or f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-        _s3_client = boto3.client(
-            "s3",
-            endpoint_url=endpoint,
-            aws_access_key_id=R2_ACCESS_KEY_ID,
-            aws_secret_access_key=R2_SECRET_ACCESS_KEY,
-            region_name="auto",
-            config=Config(signature_version="s3v4"),
-        )
-        return _s3_client
-    except Exception as exc:
-        print(f"[Warning] Failed to initialize R2 S3 client: {exc}")
-        return None
 
 def get_storage_key(user_id: str, filename: str) -> str:
     return f"{user_id}/{filename}"
 
+
+def _get_headers() -> dict:
+    key = SUPABASE_KEY or ""
+    return {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+    }
+
+
 def save_file(user_id: str, filename: str, content: bytes, local_path: Optional[str] = None) -> bool:
-    """Saves file to Cloudflare R2 and optionally local disk cache."""
+    """Saves file to local disk cache and uploads to Supabase Storage."""
     if local_path:
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
         with open(local_path, "wb") as f:
             f.write(content)
 
-    client = get_s3_client()
-    if client and R2_BUCKET_NAME:
-        try:
-            key = get_storage_key(user_id, filename)
-            client.put_object(Bucket=R2_BUCKET_NAME, Key=key, Body=content)
-            print(f"[Storage] Uploaded {key} to Cloudflare R2 bucket '{R2_BUCKET_NAME}'")
-            return True
-        except Exception as exc:
-            print(f"[Warning] Error uploading to Cloudflare R2: {exc}")
+    if not is_storage_configured():
+        return bool(local_path)
+
+    base_url = SUPABASE_URL.rstrip("/")
+    key = get_storage_key(user_id, filename)
+    url = f"{base_url}/storage/v1/object/{BUCKET_NAME}/{key}"
+
+    headers = _get_headers()
+    headers["Content-Type"] = "application/octet-stream"
+    headers["x-upsert"] = "true"
+
+    try:
+        req = urllib.request.Request(url, data=content, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            if resp.status in (200, 201):
+                print(f"[Supabase Storage] Successfully uploaded {key} to bucket '{BUCKET_NAME}'")
+                return True
+    except urllib.error.HTTPError as exc:
+        err_msg = exc.read().decode("utf-8", errors="ignore")
+        print(f"[Warning] Supabase Storage upload failed ({exc.code}): {err_msg}")
+    except Exception as exc:
+        print(f"[Warning] Supabase Storage upload exception: {exc}")
+
     return bool(local_path)
 
+
 def get_file_bytes(user_id: str, filename: str, local_path: Optional[str] = None) -> Optional[bytes]:
-    """Retrieves file bytes from local cache or Cloudflare R2."""
+    """Retrieves file bytes from local cache or downloads from Supabase Storage."""
     if local_path and os.path.exists(local_path):
         try:
             with open(local_path, "rb") as f:
@@ -71,12 +73,19 @@ def get_file_bytes(user_id: str, filename: str, local_path: Optional[str] = None
         except Exception:
             pass
 
-    client = get_s3_client()
-    if client and R2_BUCKET_NAME:
-        try:
-            key = get_storage_key(user_id, filename)
-            response = client.get_object(Bucket=R2_BUCKET_NAME, Key=key)
-            data = response["Body"].read()
+    if not is_storage_configured():
+        return None
+
+    base_url = SUPABASE_URL.rstrip("/")
+    key = get_storage_key(user_id, filename)
+    url = f"{base_url}/storage/v1/object/authenticated/{BUCKET_NAME}/{key}"
+
+    headers = _get_headers()
+
+    try:
+        req = urllib.request.Request(url, headers=headers, method="GET")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = resp.read()
             if local_path:
                 try:
                     os.makedirs(os.path.dirname(local_path), exist_ok=True)
@@ -85,26 +94,55 @@ def get_file_bytes(user_id: str, filename: str, local_path: Optional[str] = None
                 except Exception:
                     pass
             return data
-        except Exception as exc:
-            print(f"[Warning] Error downloading from Cloudflare R2 ({key}): {exc}")
+    except urllib.error.HTTPError as exc:
+        # Fallback to public object URL in case bucket is public
+        try:
+            pub_url = f"{base_url}/storage/v1/object/public/{BUCKET_NAME}/{key}"
+            pub_req = urllib.request.Request(pub_url, headers=headers, method="GET")
+            with urllib.request.urlopen(pub_req, timeout=15) as resp:
+                data = resp.read()
+                if local_path:
+                    try:
+                        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+                        with open(local_path, "wb") as f:
+                            f.write(data)
+                    except Exception:
+                        pass
+                return data
+        except Exception:
+            pass
+        print(f"[Warning] Supabase Storage download failed ({exc.code}) for {key}")
+    except Exception as exc:
+        print(f"[Warning] Supabase Storage download exception: {exc}")
 
     return None
 
+
 def delete_file(user_id: str, filename: str, local_path: Optional[str] = None) -> bool:
-    """Deletes file from local cache and Cloudflare R2."""
+    """Deletes file from local cache and Supabase Storage."""
     if local_path and os.path.exists(local_path):
         try:
             os.remove(local_path)
         except Exception:
             pass
 
-    client = get_s3_client()
-    if client and R2_BUCKET_NAME:
-        try:
-            key = get_storage_key(user_id, filename)
-            client.delete_object(Bucket=R2_BUCKET_NAME, Key=key)
-            print(f"[Storage] Deleted {key} from Cloudflare R2")
+    if not is_storage_configured():
+        return True
+
+    base_url = SUPABASE_URL.rstrip("/")
+    key = get_storage_key(user_id, filename)
+    url = f"{base_url}/storage/v1/object/{BUCKET_NAME}"
+
+    headers = _get_headers()
+    headers["Content-Type"] = "application/json"
+    body = json.dumps({"prefixes": [key]}).encode("utf-8")
+
+    try:
+        req = urllib.request.Request(url, data=body, headers=headers, method="DELETE")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            print(f"[Supabase Storage] Deleted {key} from bucket '{BUCKET_NAME}'")
             return True
-        except Exception as exc:
-            print(f"[Warning] Error deleting from Cloudflare R2: {exc}")
+    except Exception as exc:
+        print(f"[Warning] Supabase Storage delete failed for {key}: {exc}")
+
     return True

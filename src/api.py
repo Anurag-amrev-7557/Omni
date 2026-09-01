@@ -24,7 +24,7 @@ try:
     from src.pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
     from src.auth import require_user, set_current_user, get_current_user
     from src.state_db import init_state_db, upsert_document, save_upload_job, get_upload_job, delete_document_record
-    from src.storage import save_file, get_file_bytes, delete_file, is_r2_configured
+    from src.storage import save_file, get_file_bytes, delete_file
 except ImportError:
     from db import init_db, clear_collection, get_collection_stats, delete_file_from_collection, get_qdrant_client
     from ingest import ingest_file
@@ -33,7 +33,7 @@ except ImportError:
     from pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
     from auth import require_user, set_current_user, get_current_user
     from state_db import init_state_db, upsert_document, save_upload_job, get_upload_job, delete_document_record
-    from storage import save_file, get_file_bytes, delete_file, is_r2_configured
+    from storage import save_file, get_file_bytes, delete_file
 
 def get_uploads_dir() -> str:
     candidate = os.getenv("UPLOADS_DIR")
