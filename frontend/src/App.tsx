@@ -12,7 +12,7 @@ import { ProjectsView } from './components/projects/ProjectsView';
 import { Toast } from './components/common/Toast';
 import { useDocuments } from './hooks/useDocuments';
 import { useSpeech } from './hooks/useSpeech';
-import { api } from './services/api';
+import { api, API_BASE } from './services/api';
 import { ChatSession, ChatMessage } from './types/chat';
 import { ProjectItem, INITIAL_PROJECTS } from './types/project';
 
@@ -211,7 +211,7 @@ export default function App() {
     setMessages(prev => [...prev, userMsg, tempAssistantMsg]);
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/api/chat/stream`, {
+      const response = await fetch(`${API_BASE}/api/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: currentSessionId, prompt: actualPrompt })
