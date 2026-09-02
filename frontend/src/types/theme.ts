@@ -13,13 +13,10 @@ export type ThemeId =
 export type OrbStyle = 
   | 'vortex' 
   | 'vortex-pure' 
+  | 'aurora'
   | 'bands' 
   | 'geodesic' 
-  | 'pill' 
-  | 'pulse'
-  | 'synapse'
-  | 'gyroscope'
-  | 'hypercube';
+  | 'gyroscope';
 
 export interface OrbConfig {
   id: OrbStyle;
@@ -31,57 +28,39 @@ export interface OrbConfig {
 export const ORB_PRESETS: Record<OrbStyle, OrbConfig> = {
   vortex: {
     id: 'vortex',
-    name: '3D Celestial Vortex',
+    name: '3D Celestial Nebula',
     badge: 'Chromatic',
-    description: 'Dual-sheath logarithmic spiral streamlines with differential acceleration and subtle accent tinting',
+    description: 'Dual-spiral logarithmic particle streams with organic micro-turbulence and luminous accent blooming',
+  },
+  aurora: {
+    id: 'aurora',
+    name: 'Liquid Aurora Ribbon',
+    badge: 'Harmonic',
+    description: 'Smooth flowing 3D harmonic energy wave with fluid gradient ribbon and luminous organic resonance',
   },
   'vortex-pure': {
     id: 'vortex-pure',
-    name: 'Monochrome Vortex',
+    name: 'Monochrome Stardust',
     badge: 'Minimal',
-    description: 'Pure monochrome logarithmic vortex streamlines with delicate micro-trails and stardust',
+    description: 'Pure monochrome kinetic vortex streamlines with subtle micro-trails and smooth depth fading',
   },
   bands: {
     id: 'bands',
-    name: 'Counter-Rotating Strata',
+    name: 'Planetary Strata',
     badge: 'Kinetic',
-    description: 'Layered horizontal latitude rows from top to bottom moving in alternating opposite directions',
+    description: 'Layered horizontal latitude rows moving in counter-rotating orbital harmony',
   },
   geodesic: {
     id: 'geodesic',
-    name: '3D Geodesic Fibonacci',
+    name: 'Fibonacci Golden Sphere',
     badge: 'Lattice',
-    description: 'Structured point-cloud sphere with high-contrast exponential depth scaling',
-  },
-  synapse: {
-    id: 'synapse',
-    name: 'Neural Synapse Network',
-    badge: 'Synaptic',
-    description: 'Dynamic neural network nodes with firing electrical impulses and interconnecting synaptic dendrite paths',
+    description: 'Golden-ratio spherical lattice with gentle organic breathing and exponential depth perspective',
   },
   gyroscope: {
     id: 'gyroscope',
-    name: 'Quantum Gyroscope Rings',
+    name: 'Quantum Orbital Rings',
     badge: 'Orbital',
-    description: 'Tri-axial precessing electron rings with glowing relativistic tracer nodes and core focal point',
-  },
-  hypercube: {
-    id: 'hypercube',
-    name: '4D Hypercube Tesseract',
-    badge: 'Isometric',
-    description: 'Four-dimensional hypercube vertices projecting into 3D isometric space with pulsating geometric laser links',
-  },
-  pill: {
-    id: 'pill',
-    name: 'Minimalist Capsule Pill',
-    badge: 'Capsule',
-    description: 'Frosted rounded pill pairing the 3D rotating orb with a monospace status badge',
-  },
-  pulse: {
-    id: 'pulse',
-    name: 'Quantum Core Halo',
-    badge: 'Ambient',
-    description: 'Volumetric breathing particle halo with subtle diffuse inner luminescence',
+    description: 'Ultra-thin precessing celestial orbital rings with soft glowing comet tracers and focal energy star',
   },
 };
 
