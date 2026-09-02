@@ -32,32 +32,33 @@ def invoke_groq_with_fallback(prompt: str) -> str:
 
 def generate_chat_title(query: str) -> str:
     """Generate a clean, succinct, 2 to 4 word chat title using a lightweight fast model."""
-    cleaned = query.strip()
+    cleaned = re.sub(r'\[Focus explicitly on referenced Knowledge Vault documents:.*?\]\s*', '', query, flags=re.DOTALL).strip()
     if not cleaned:
         return "New Chat"
     
     prompt = (
-        "You are an expert at creating concise, elegant conversation titles.\n"
-        "Generate a brief 2 to 4 word title capturing the essence of the user's inquiry. "
-        "Do NOT use quotes, punctuation, markdown formatting, or preamble. Return ONLY the title text.\n\n"
-        f"User Query: {cleaned[:300]}\n"
+        "You are a succinct topic classifier. Generate a brief 2 to 3 word title summarizing the user query.\n"
+        "Do NOT output quotes, punctuation, or thinking steps. Output ONLY the 2-3 word title.\n\n"
+        f"Query: {cleaned[:200]}\n"
         "Title:"
     )
-    for model_name in ["openai/gpt-oss-20b", "qwen/qwen3.6-27b", "openai/gpt-oss-120b"]:
+    for model_name in ["qwen/qwen3.8-27b", "openai/gpt-oss-120b", "qwen/qwen3.6-27b"]:
         try:
-            llm = ChatGroq(model=model_name, temperature=0.3, max_tokens=15)
+            llm = ChatGroq(model=model_name, temperature=0.2, max_tokens=60)
             res = llm.invoke(prompt)
-            title = res.content.strip().strip('"\'`').strip()
-            # Clean any leftover newlines or prefixes
-            title = re.sub(r'^(Title:\s*|"|\')', '', title, flags=re.IGNORECASE).strip()
+            raw = res.content
+            raw = re.sub(r'<think>[\s\S]*?</think>', '', raw).strip()
+            title = raw.strip('\"\'` \n\r').strip()
+            title = re.sub(r'^(Title:\s*|\*\*Title:\*\*\s*)', '', title, flags=re.IGNORECASE).strip()
+            title = title.split('\n')[0].strip()
             if title and len(title) < 40 and not title.lower().startswith("here is"):
                 return title
         except Exception:
             continue
         
     # Fallback to clean word truncation
-    words = cleaned.split()[:4]
-    return " ".join(words).capitalize()
+    words = cleaned.split()[:3]
+    return " ".join(words).title()
 
 
 PRONOUN_TRIGGERS = {
