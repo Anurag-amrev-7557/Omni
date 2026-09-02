@@ -105,14 +105,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex bg-[var(--bg-dark)] overflow-hidden fade-in select-none">
+    <div className="fixed inset-0 z-[100] flex bg-[#141413] overflow-hidden fade-in select-none">
       {/* LEFT COLUMN: BRAND & AUTH FORM */}
-      <div className="flex-1 flex flex-col justify-between p-3 sm:p-5 md:p-7 lg:p-8 overflow-y-auto">
+      <div className="flex-1 flex flex-col justify-between p-4 sm:p-6 md:p-8 lg:p-10 overflow-y-auto">
         {/* Top Header Row */}
         <div className="flex items-center justify-between w-full">
           {/* Brand Logo with Warm Sunburst Mark */}
           <div className="flex items-center gap-2.5">
-            <span className="font-serif text-3xl font-medium tracking-tight text-[var(--text-main)]">
+            <div className="w-6 h-6 rounded-full bg-[#e07a5f]/15 border border-[#e07a5f]/30 flex items-center justify-center text-[#e07a5f] shadow-sm">
+              <Sparkles size={14} />
+            </div>
+            <span className="font-serif text-2xl font-bold tracking-tight text-[#f4f3ef]">
               Omni
             </span>
           </div>
@@ -121,7 +124,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           {onClose && (
             <button
               onClick={onClose}
-              className="p-2 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
+              className="p-2 rounded-xl text-[#7a7771] hover:text-[#f4f3ef] hover:bg-[#222120] transition-colors cursor-pointer"
               title="Return to Omni"
             >
               <X size={18} />
@@ -133,32 +136,32 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         <div className="my-auto py-6 w-full flex flex-col items-center justify-center">
           <div className="w-full max-w-xl flex flex-col items-center text-center">
             {/* Editorial Headline */}
-            <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl font-light text-[var(--text-main)] mb-3 tracking-tight text-center whitespace-nowrap">
+            <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl font-light text-[#f4f3ef] mb-3 tracking-tight text-center whitespace-nowrap">
               Question what’s next
             </h1>
-            <p className="text-[17px] font-light text-[var(--text-muted)] mb-8 text-center leading-relaxed">
+            <p className="font-serif text-[18px] text-[#b8b5ad] mb-8 text-center leading-relaxed">
               Your thinking partner for big ambitions
             </p>
 
             {/* Soft Wall Alert if Query Limit Triggered */}
             {reasonMessage && (
-              <div className="w-full max-w-md mb-6 p-3.5 rounded-2xl bg-[var(--accent-subtle)] border border-[var(--accent-primary)]/30 text-xs text-[var(--text-main)] flex items-start gap-2.5 text-left">
-                <Sparkles size={15} className="text-[var(--accent-primary)] flex-shrink-0 mt-0.5" />
+              <div className="w-full max-w-[420px] mb-6 p-3.5 rounded-2xl bg-[#e07a5f]/10 border border-[#e07a5f]/30 text-xs text-[#f4f3ef] flex items-start gap-2.5 text-left">
+                <Sparkles size={15} className="text-[#e07a5f] flex-shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-semibold text-[var(--accent-primary)]">Guest Limit Reached: </span>
+                  <span className="font-semibold text-[#e07a5f]">Guest Limit Reached: </span>
                   <span>{reasonMessage}</span>
                 </div>
               </div>
             )}
 
-            {/* Clean Rounded Auth Card */}
-            <div className="w-full max-w-md p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-2xl text-left">
+            {/* Clean Rounded Auth Card (Exact Claude Palette) */}
+            <div className="w-full max-w-[420px] p-6 sm:p-7 rounded-[28px] bg-[#1f1e1d] border border-[#2c2b29] shadow-2xl text-left">
               {/* Google OAuth Button */}
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={isLoading}
-                className="w-full h-11 px-4 rounded-xl bg-[var(--bg-input)] hover:bg-[var(--bg-hover)] border border-[var(--border-input)] text-sm font-medium text-[var(--text-main)] flex items-center justify-center gap-3 transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer shadow-xs disabled:opacity-50"
+                className="w-full h-[46px] px-4 rounded-xl bg-[#2e2d2b] hover:bg-[#383734] text-[14px] font-medium text-[#f4f3ef] flex items-center justify-center gap-3 transition-all cursor-pointer shadow-xs disabled:opacity-50"
               >
                 <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
                   <path
@@ -181,77 +184,80 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 <span>Continue with Google</span>
               </button>
 
-            {/* Subtle OR Divider */}
-            <div className="relative my-4 text-center">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-[var(--border-color)]" />
-              </div>
-              <span className="relative px-3 bg-[var(--bg-card)] text-[11px] font-semibold text-[var(--text-dark)] uppercase tracking-wider">
-                OR
-              </span>
-            </div>
+              {/* Apple OAuth Button */}
+              <button
+                type="button"
+                onClick={() => showToast("Apple sign-in is currently in preview")}
+                className="w-full h-[46px] mt-2.5 px-4 rounded-xl bg-[#2e2d2b] hover:bg-[#383734] text-[14px] font-medium text-[#f4f3ef] flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-xs"
+              >
+                <span className="text-[17px] leading-none mb-0.5"></span>
+                <span>Continue with Apple</span>
+              </button>
 
-            {/* Email Form */}
-            <form onSubmit={handleEmailAuth} className="space-y-3">
-              <div>
-                <div className="relative">
+              {/* Subtle OR Divider */}
+              <div className="relative my-4 text-center">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-[#2c2b29]" />
+                </div>
+                <span className="relative px-3 bg-[#1f1e1d] text-[11px] font-medium text-[#7a7771] uppercase tracking-wider">
+                  OR
+                </span>
+              </div>
+
+              {/* Email Form */}
+              <form onSubmit={handleEmailAuth} className="space-y-3">
+                <div>
                   <input
                     type="email"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email"
-                    className="w-full h-11 px-3.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border-input)] text-sm text-[var(--text-main)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-subtle)] transition-all font-sans"
+                    className="w-full h-[46px] px-3.5 rounded-xl bg-[#1c1b1a] border border-[#33322f] text-[14px] text-[#f4f3ef] placeholder-[#7a7771] focus:outline-none focus:border-[#605d56] transition-all font-sans"
                   />
-                  <Mail size={15} className="absolute right-3.5 top-3.5 text-[var(--text-muted)]" />
                 </div>
-              </div>
 
-              {authMethod === 'password' && (
-                <div className="fade-in">
-                  <div className="relative">
+                {authMethod === 'password' && (
+                  <div className="fade-in">
                     <input
                       type="password"
                       required
                       minLength={6}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder={isSignUp ? 'Create a secure password (6+ chars)' : 'Enter your password'}
-                      className="w-full h-11 px-3.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border-input)] text-sm text-[var(--text-main)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-subtle)] transition-all font-sans"
+                      placeholder={isSignUp ? 'Create password (6+ chars)' : 'Enter password'}
+                      className="w-full h-[46px] px-3.5 rounded-xl bg-[#1c1b1a] border border-[#33322f] text-[14px] text-[#f4f3ef] placeholder-[#7a7771] focus:outline-none focus:border-[#605d56] transition-all font-sans"
                     />
-                    <Lock size={15} className="absolute right-3.5 top-3.5 text-[var(--text-muted)]" />
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Error or Success Alert */}
-              {errorMessage && (
-                <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2 fade-in">
-                  <AlertCircle size={14} className="flex-shrink-0" />
-                  <span className="truncate">{errorMessage}</span>
-                </div>
-              )}
+                {/* Error or Success Alert */}
+                {errorMessage && (
+                  <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2 fade-in">
+                    <AlertCircle size={14} className="flex-shrink-0" />
+                    <span className="truncate">{errorMessage}</span>
+                  </div>
+                )}
 
-              {successMessage && (
-                <div className="p-2.5 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 text-xs flex items-center gap-2 fade-in">
-                  <CheckCircle2 size={14} className="flex-shrink-0" />
-                  <span>{successMessage}</span>
-                </div>
-              )}
+                {successMessage && (
+                  <div className="p-2.5 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 text-xs flex items-center gap-2 fade-in">
+                    <CheckCircle2 size={14} className="flex-shrink-0" />
+                    <span>{successMessage}</span>
+                  </div>
+                )}
 
-              {/* Primary Submit Button */}
-              <button
-                type="submit"
-                disabled={isLoading || !email.trim()}
-                className="w-full h-11 rounded-xl bg-[var(--text-main)] hover:opacity-90 text-[var(--bg-dark)] font-semibold text-sm flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer shadow-md disabled:opacity-50"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    <span>Connecting...</span>
-                  </>
-                ) : (
-                  <>
+                {/* Primary Submit Button (Solid White with Dark Text) */}
+                <button
+                  type="submit"
+                  disabled={isLoading || !email.trim()}
+                  className="w-full h-[46px] rounded-xl bg-[#ffffff] hover:bg-[#ece8e1] text-[#141413] font-medium text-[14px] flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md disabled:opacity-50"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin text-[#141413]" />
+                      <span>Connecting...</span>
+                    </>
+                  ) : (
                     <span>
                       {authMethod === 'otp'
                         ? 'Continue with email'
@@ -259,60 +265,58 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                         ? 'Create account'
                         : 'Sign in with password'}
                     </span>
-                    <ArrowRight size={15} />
-                  </>
+                  )}
+                </button>
+              </form>
+
+              {/* Switch Auth Method Subtext */}
+              <div className="mt-4 pt-3 border-t border-[#2c2b29] flex items-center justify-between text-xs text-[#7a7771]">
+                {authMethod === 'otp' ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMethod('password');
+                      setErrorMessage(null);
+                    }}
+                    className="hover:text-[#f4f3ef] hover:underline cursor-pointer transition-colors"
+                  >
+                    Use password instead
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMethod('otp');
+                      setErrorMessage(null);
+                    }}
+                    className="hover:text-[#f4f3ef] hover:underline cursor-pointer transition-colors"
+                  >
+                    Send passwordless magic link
+                  </button>
                 )}
-              </button>
-            </form>
 
-            {/* Switch Auth Method Subtext */}
-            <div className="mt-4 pt-3 border-t border-[var(--border-color)]/60 flex items-center justify-between text-xs text-[var(--text-muted)]">
-              {authMethod === 'otp' ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMethod('password');
-                    setErrorMessage(null);
-                  }}
-                  className="hover:text-[var(--text-main)] hover:underline cursor-pointer transition-colors"
-                >
-                  Use password instead
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMethod('otp');
-                    setErrorMessage(null);
-                  }}
-                  className="hover:text-[var(--text-main)] hover:underline cursor-pointer transition-colors"
-                >
-                  Send passwordless magic link
-                </button>
-              )}
-
-              {authMethod === 'password' && (
-                <button
-                  type="button"
-                  onClick={() => setIsSignUp(!isSignUp)}
-                  className="text-[var(--accent-primary)] hover:underline font-medium cursor-pointer"
-                >
-                  {isSignUp ? 'Already have account? Sign in' : 'Need account? Sign up'}
-                </button>
-              )}
+                {authMethod === 'password' && (
+                  <button
+                    type="button"
+                    onClick={() => setIsSignUp(!isSignUp)}
+                    className="text-[#e07a5f] hover:underline font-medium cursor-pointer"
+                  >
+                    {isSignUp ? 'Already have account? Sign in' : 'Need account? Sign up'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
         {/* Bottom Download Pill */}
-        <div className="flex justify-center pb-2">
+        <div className="flex justify-center pb-3">
           <button 
             type="button"
             onClick={() => showToast("Omni Desktop App is currently in Early Access")}
-            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer shadow-xs"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-medium bg-[#2e2d2b] hover:bg-[#383734] text-[#f4f3ef] transition-all cursor-pointer shadow-xs"
           >
-            <span className="text-sm"></span>
+            <span className="text-[15px] leading-none mb-0.5"></span>
             <span>Download desktop app</span>
           </button>
         </div>
@@ -320,7 +324,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
       {/* RIGHT COLUMN: CINEMATIC EDITORIAL WORKSPACE ASSET */}
       <div className="hidden lg:block lg:w-1/2 p-6 h-full">
-        <div className="w-full h-full rounded-3xl border border-[var(--border-color)] overflow-hidden shadow-2xl relative bg-[var(--bg-card)] group">
+        <div className="w-full h-full rounded-3xl border border-[#2c2b29] overflow-hidden shadow-2xl relative bg-[#1f1e1d] group">
           <img
             src="/auth-hero.jpg"
             alt="Omni Research & Thinking Workspace"
