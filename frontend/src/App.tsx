@@ -9,6 +9,7 @@ import { SearchModal } from './components/modals/SearchModal';
 import { ShareModal } from './components/modals/ShareModal';
 import { ProjectsModal } from './components/modals/ProjectsModal';
 import { ProjectsView } from './components/projects/ProjectsView';
+import { AuthPage } from './components/auth/AuthPage';
 import { Toast } from './components/common/Toast';
 import { useDocuments } from './hooks/useDocuments';
 import { useSpeech } from './hooks/useSpeech';
@@ -18,9 +19,28 @@ import { ChatSession, ChatMessage } from './types/chat';
 import { ProjectItem, INITIAL_PROJECTS } from './types/project';
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState<unknown | null>(null);
+  const [authOpen, setAuthOpen] = useState<boolean>(false);
+  const [authReason, setAuthReason] = useState<string | undefined>(undefined);
+  const [guestQueryCount, setGuestQueryCount] = useState<number>(() => {
+    return parseInt(localStorage.getItem('omni_guest_queries') || '0', 10);
+  });
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
+
   useEffect(() => {
     setAuthTokenProvider(async () => (await supabase.auth.getSession()).data.session?.access_token ?? null);
+    supabase.auth.getUser().then(({ data }) => setCurrentUser(data.user ?? null));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user ?? null;
+      setCurrentUser(user);
+      if (user) {
+        setAuthOpen(false);
+        setAuthReason(undefined);
+      }
+    });
+    return () => listener.subscription.unsubscribe();
   }, []);
+
   // Navigation & Layout State
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'chats' | 'projects' | 'vault' | 'chats_list'>('chats');
@@ -253,6 +273,19 @@ export default function App() {
     if (!text.trim() && attachedFiles.length === 0) return;
     if (isStreaming || !currentSessionId) return;
 
+    // Check Guest Query Limit (Max 2 free queries before requesting auth)
+    if (!currentUser) {
+      if (guestQueryCount >= 2) {
+        setPendingPrompt(text);
+        setAuthReason("You've completed your 2 free guest trial questions! Sign in with Google or Email in 5 seconds to continue chatting without limits.");
+        setAuthOpen(true);
+        return;
+      }
+      const nextCount = guestQueryCount + 1;
+      setGuestQueryCount(nextCount);
+      localStorage.setItem('omni_guest_queries', nextCount.toString());
+    }
+
     if (attachedFiles.length > 0) {
       await uploadFiles(attachedFiles);
       setAttachedFiles([]);
@@ -437,6 +470,10 @@ export default function App() {
           activeSessionTitle={activeTitle}
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenShare={() => setShareOpen(true)}
+          onOpenAuth={() => {
+            setAuthReason(undefined);
+            setAuthOpen(true);
+          }}
           onExportChat={handleExportChat}
           hasMessages={messages.length > 0 && (activeTab === 'chats' || activeTab === 'chats_list')}
         />
@@ -598,6 +635,22 @@ export default function App() {
         isOpen={projectsOpen}
         onClose={() => setProjectsOpen(false)}
         showToast={showToast}
+      />
+
+      {/* Claude-Style Split Screen Authentication Modal */}
+      <AuthPage
+        isOpen={authOpen}
+        onClose={() => setAuthOpen(false)}
+        reasonMessage={authReason}
+        showToast={showToast}
+        onSuccess={() => {
+          setAuthOpen(false);
+          if (pendingPrompt) {
+            const p = pendingPrompt;
+            setPendingPrompt(null);
+            setTimeout(() => handleSendPrompt(p), 150);
+          }
+        }}
       />
     </div>
   );

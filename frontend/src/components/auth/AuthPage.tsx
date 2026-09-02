@@ -1,0 +1,345 @@
+import React, { useState } from 'react';
+import { supabase } from '../../lib/supabase';
+import { Loader2, Sparkles, X, Mail, Lock, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
+
+interface AuthPageProps {
+  isOpen: boolean;
+  onClose?: () => void;
+  onSuccess?: () => void;
+  reasonMessage?: string;
+  showToast: (msg: string) => void;
+}
+
+export const AuthPage: React.FC<AuthPageProps> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  reasonMessage,
+  showToast,
+}) => {
+  const [authMethod, setAuthMethod] = useState<'otp' | 'password'>('otp');
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  if (!isOpen) return null;
+
+  // Google OAuth Login
+  const handleGoogleSignIn = async () => {
+    try {
+      setIsLoading(true);
+      setErrorMessage(null);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+        },
+      });
+      if (error) throw error;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Google sign-in failed.';
+      setErrorMessage(msg);
+      showToast(msg);
+      setIsLoading(false);
+    }
+  };
+
+  // Email OTP / Magic Link or Password Authentication
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+
+    setIsLoading(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      if (authMethod === 'otp') {
+        // Passwordless Magic Link / OTP
+        const { error } = await supabase.auth.signInWithOtp({
+          email: email.trim(),
+          options: {
+            emailRedirectTo: window.location.origin,
+          },
+        });
+        if (error) throw error;
+        setSuccessMessage(`Check your inbox at ${email.trim()} for your magic sign-in link.`);
+        showToast("Magic sign-in link dispatched!");
+      } else {
+        // Password Sign In / Sign Up
+        if (isSignUp) {
+          const { error, data } = await supabase.auth.signUp({
+            email: email.trim(),
+            password,
+          });
+          if (error) throw error;
+          if (data.session) {
+            showToast("Account created and signed in!");
+            onSuccess?.();
+            onClose?.();
+          } else {
+            setSuccessMessage("Confirmation email sent. Please verify your email.");
+            showToast("Confirmation email sent.");
+          }
+        } else {
+          const { error } = await supabase.auth.signInWithPassword({
+            email: email.trim(),
+            password,
+          });
+          if (error) throw error;
+          showToast("Successfully signed in!");
+          onSuccess?.();
+          onClose?.();
+        }
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Authentication failed. Please check credentials.';
+      setErrorMessage(msg);
+      showToast(msg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex bg-[var(--bg-dark)] overflow-hidden fade-in select-none">
+      {/* LEFT COLUMN: BRAND & AUTH FORM */}
+      <div className="flex-1 flex flex-col justify-between p-6 sm:p-10 md:p-14 lg:p-16 overflow-y-auto max-w-2xl mx-auto lg:max-w-none">
+        {/* Top Header Row */}
+        <div className="flex items-center justify-between w-full">
+          {/* Brand Logo with Warm Sunburst Mark */}
+          <div className="flex items-center gap-2.5">
+            <div className="w-6 h-6 rounded-full bg-[var(--accent-primary)]/15 border border-[var(--accent-primary)]/30 flex items-center justify-center text-[var(--accent-primary)] shadow-sm">
+              <Sparkles size={14} />
+            </div>
+            <span className="font-serif text-2xl font-bold tracking-tight text-[var(--text-main)]">
+              Omni
+            </span>
+          </div>
+
+          {/* Dismiss Button (if guest can return) */}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
+              title="Return to Omni"
+            >
+              <X size={18} />
+            </button>
+          )}
+        </div>
+
+        {/* Center Auth Hero & Form */}
+        <div className="my-auto py-10 max-w-md w-full mx-auto">
+          {/* Editorial Headline */}
+          <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-normal text-[var(--text-main)] mb-2.5 tracking-tight text-center sm:text-left">
+            Question what’s next
+          </h1>
+          <p className="text-[14.5px] text-[var(--text-muted)] mb-8 text-center sm:text-left leading-relaxed">
+            Your thinking partner for big ambitions & grounded research
+          </p>
+
+          {/* Soft Wall Alert if Query Limit Triggered */}
+          {reasonMessage && (
+            <div className="mb-6 p-3.5 rounded-2xl bg-[var(--accent-subtle)] border border-[var(--accent-primary)]/30 text-xs text-[var(--text-main)] flex items-start gap-2.5">
+              <Sparkles size={15} className="text-[var(--accent-primary)] flex-shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold text-[var(--accent-primary)]">Guest Limit Reached: </span>
+                <span>{reasonMessage}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Clean Rounded Auth Card */}
+          <div className="p-6 rounded-3xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-2xl">
+            {/* Google OAuth Button */}
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={isLoading}
+              className="w-full h-11 px-4 rounded-xl bg-[var(--bg-input)] hover:bg-[var(--bg-hover)] border border-[var(--border-input)] text-sm font-medium text-[var(--text-main)] flex items-center justify-center gap-3 transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer shadow-xs disabled:opacity-50"
+            >
+              <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                />
+              </svg>
+              <span>Continue with Google</span>
+            </button>
+
+            {/* Subtle OR Divider */}
+            <div className="relative my-4 text-center">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-[var(--border-color)]" />
+              </div>
+              <span className="relative px-3 bg-[var(--bg-card)] text-[11px] font-semibold text-[var(--text-dark)] uppercase tracking-wider">
+                OR
+              </span>
+            </div>
+
+            {/* Email Form */}
+            <form onSubmit={handleEmailAuth} className="space-y-3">
+              <div>
+                <div className="relative">
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    className="w-full h-11 px-3.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border-input)] text-sm text-[var(--text-main)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-subtle)] transition-all font-sans"
+                  />
+                  <Mail size={15} className="absolute right-3.5 top-3.5 text-[var(--text-muted)]" />
+                </div>
+              </div>
+
+              {authMethod === 'password' && (
+                <div className="fade-in">
+                  <div className="relative">
+                    <input
+                      type="password"
+                      required
+                      minLength={6}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={isSignUp ? 'Create a secure password (6+ chars)' : 'Enter your password'}
+                      className="w-full h-11 px-3.5 rounded-xl bg-[var(--bg-input)] border border-[var(--border-input)] text-sm text-[var(--text-main)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-subtle)] transition-all font-sans"
+                    />
+                    <Lock size={15} className="absolute right-3.5 top-3.5 text-[var(--text-muted)]" />
+                  </div>
+                </div>
+              )}
+
+              {/* Error or Success Alert */}
+              {errorMessage && (
+                <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2 fade-in">
+                  <AlertCircle size={14} className="flex-shrink-0" />
+                  <span className="truncate">{errorMessage}</span>
+                </div>
+              )}
+
+              {successMessage && (
+                <div className="p-2.5 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 text-xs flex items-center gap-2 fade-in">
+                  <CheckCircle2 size={14} className="flex-shrink-0" />
+                  <span>{successMessage}</span>
+                </div>
+              )}
+
+              {/* Primary Submit Button */}
+              <button
+                type="submit"
+                disabled={isLoading || !email.trim()}
+                className="w-full h-11 rounded-xl bg-[var(--text-main)] hover:opacity-90 text-[var(--bg-dark)] font-semibold text-sm flex items-center justify-center gap-2 transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer shadow-md disabled:opacity-50"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Connecting...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>
+                      {authMethod === 'otp'
+                        ? 'Continue with email'
+                        : isSignUp
+                        ? 'Create account'
+                        : 'Sign in with password'}
+                    </span>
+                    <ArrowRight size={15} />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Switch Auth Method Subtext */}
+            <div className="mt-4 pt-3 border-t border-[var(--border-color)]/60 flex items-center justify-between text-xs text-[var(--text-muted)]">
+              {authMethod === 'otp' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMethod('password');
+                    setErrorMessage(null);
+                  }}
+                  className="hover:text-[var(--text-main)] hover:underline cursor-pointer transition-colors"
+                >
+                  Use password instead
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMethod('otp');
+                    setErrorMessage(null);
+                  }}
+                  className="hover:text-[var(--text-main)] hover:underline cursor-pointer transition-colors"
+                >
+                  Send passwordless magic link
+                </button>
+              )}
+
+              {authMethod === 'password' && (
+                <button
+                  type="button"
+                  onClick={() => setIsSignUp(!isSignUp)}
+                  className="text-[var(--accent-primary)] hover:underline font-medium cursor-pointer"
+                >
+                  {isSignUp ? 'Already have account? Sign in' : 'Need account? Sign up'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Download Pill */}
+        <div className="flex justify-center sm:justify-start">
+          <button 
+            type="button"
+            onClick={() => showToast("Omni Desktop App is currently in Early Access")}
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer shadow-xs"
+          >
+            <span className="text-sm"></span>
+            <span>Download desktop app</span>
+          </button>
+        </div>
+      </div>
+
+      {/* RIGHT COLUMN: CINEMATIC EDITORIAL WORKSPACE ASSET */}
+      <div className="hidden lg:block lg:w-1/2 p-6 h-full">
+        <div className="w-full h-full rounded-3xl border border-[var(--border-color)] overflow-hidden shadow-2xl relative bg-[var(--bg-card)] group">
+          <img
+            src="/auth-hero.jpg"
+            alt="Omni Research & Thinking Workspace"
+            className="w-full h-full object-cover rounded-3xl transition-transform duration-700 group-hover:scale-[1.02]"
+          />
+          {/* Subtle Ambient Vignette Overlay */}
+          <div className="absolute inset-0 rounded-3xl bg-gradient-to-t from-black/50 via-transparent to-black/20 pointer-events-none" />
+          
+          <div className="absolute bottom-8 left-8 right-8 text-white p-6 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10">
+            <p className="font-serif text-lg font-normal leading-snug">
+              &ldquo;Connecting ideas across all your research papers, notes, and datasets in one unified intelligence vault.&rdquo;
+            </p>
+            <p className="text-xs text-white/70 mt-2 font-mono">
+              Omni Multi-Document RAG Engine
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

@@ -9,6 +9,7 @@ interface TopHeaderProps {
   activeSessionTitle: string;
   onOpenSettings: () => void;
   onOpenShare: () => void;
+  onOpenAuth?: () => void;
   onExportChat?: () => void;
   hasMessages?: boolean;
 }
@@ -19,6 +20,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   activeSessionTitle,
   onOpenSettings,
   onOpenShare,
+  onOpenAuth = () => {},
   onExportChat,
   hasMessages = false,
 }) => {
@@ -50,7 +52,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
       {/* Right Action Icons & Theme Quick Switcher */}
       <div className="flex items-center gap-2">
-        <AuthControls />
+        <AuthControls onOpenAuth={onOpenAuth} />
 
         {/* Theme Quick Switcher Dropdown */}
         <div className="relative">
