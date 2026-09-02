@@ -136,134 +136,133 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Navigation Section */}
           <div className="p-3 flex flex-col gap-1 border-b border-[var(--border-color)]">
             <button 
-              className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-all text-left cursor-pointer active:scale-[0.99]"
+              className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-all text-left cursor-pointer"
               onClick={() => handleMobileTabSelect(onNewChat)}
             >
-              <Plus size={17} className="text-[var(--accent-primary)] flex-shrink-0" />
-              <span>New chat</span>
-            </button>
+            <Plus size={17} className="text-[var(--accent-primary)]" />
+            <span>New chat</span>
+          </button>
 
-            <button 
-              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
-                activeTab === 'chats' || activeTab === 'chats_list' 
-                  ? 'bg-[var(--bg-card)] text-[var(--text-main)] font-semibold border border-[var(--border-color)]/70 shadow-2xs' 
-                  : 'text-[var(--text-sidebar-item)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
-              }`}
-              onClick={() => handleMobileTabSelect(() => onSelectTab('chats'))}
-            >
-              <MessageSquare size={17} className={activeTab === 'chats' ? 'text-[var(--accent-primary)]' : 'opacity-80'} />
-              <span>Chats</span>
-            </button>
+          <button 
+            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
+              activeTab === 'chats' || activeTab === 'chats_list' 
+                ? 'bg-[var(--bg-card)] text-[var(--text-main)] shadow-sm' 
+                : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
+            }`}
+            onClick={() => handleMobileTabSelect(() => onSelectTab('chats'))}
+          >
+            <MessageSquare size={17} />
+            <span>Chats</span>
+          </button>
 
-            <button 
-              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
-                activeTab === 'projects' 
-                  ? 'bg-[var(--bg-card)] text-[var(--text-main)] font-semibold border border-[var(--border-color)]/70 shadow-2xs' 
-                  : 'text-[var(--text-sidebar-item)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
-              }`}
-              onClick={() => handleMobileTabSelect(() => onSelectTab('projects'))}
-            >
-              <Folder size={17} className={activeTab === 'projects' ? 'text-[var(--accent-primary)]' : 'opacity-80'} />
-              <span>Projects</span>
-            </button>
+          <button 
+            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
+              activeTab === 'projects' 
+                ? 'bg-[var(--bg-card)] text-[var(--text-main)] shadow-sm' 
+                : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
+            }`}
+            onClick={() => handleMobileTabSelect(() => onSelectTab('projects'))}
+          >
+            <Folder size={17} className={activeTab === 'projects' ? 'text-[var(--accent-primary)]' : ''} />
+            <span>Projects</span>
+          </button>
 
-            <button 
-              className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
-                activeTab === 'vault' 
-                  ? 'bg-[var(--bg-card)] text-[var(--text-main)] font-semibold border border-[var(--border-color)]/70 shadow-2xs' 
-                  : 'text-[var(--text-sidebar-item)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
-              }`}
-              onClick={() => handleMobileTabSelect(() => onSelectTab('vault'))}
-              title={`${documentsCount} document(s) · ${totalChunksCount} indexed chunk(s)`}
-            >
-              <div className="flex items-center gap-3">
-                <Database size={17} className={activeTab === 'vault' ? 'text-[var(--accent-primary)]' : 'opacity-80'} />
-                <span>Knowledge Vault</span>
-              </div>
-              {isStatsLoading ? (
-                <Skeleton className="w-5 h-4 rounded-full" />
-              ) : documentsCount > 0 ? (
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-primary)] font-mono font-bold border border-[var(--accent-primary)]/25">
-                  {documentsCount}
-                </span>
-              ) : null}
-            </button>
-          </div>
+          <button 
+            className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
+              activeTab === 'vault' 
+                ? 'bg-[var(--bg-card)] text-[var(--text-main)] shadow-sm' 
+                : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
+            }`}
+            onClick={() => handleMobileTabSelect(() => onSelectTab('vault'))}
+            title={`${documentsCount} document(s) · ${totalChunksCount} indexed chunk(s)`}
+          >
+            <div className="flex items-center gap-3">
+              <Database size={17} className="text-[var(--accent-primary)]" />
+              <span>Knowledge Vault</span>
+            </div>
+            {isStatsLoading ? (
+              <Skeleton className="w-5 h-4 rounded-full" />
+            ) : documentsCount > 0 ? (
+              <span className="text-[11.5px] px-2 py-0.5 rounded-full bg-[var(--bg-input)] text-[var(--text-main)] font-mono font-medium border border-[var(--border-color)]">
+                {documentsCount}
+              </span>
+            ) : null}
+          </button>
+        </div>
 
-          {/* Recents Thread List Header */}
-          <div className="px-4 pt-4 pb-2 flex items-center justify-between text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider select-none">
-            <span>Recents</span>
-          </div>
+        {/* Recents Thread List */}
+        <div className="px-4 pt-4 pb-1.5 flex items-center justify-between text-xs font-semibold text-[var(--text-dark)] uppercase tracking-wider">
+          <span>Recents</span>
+        </div>
 
-          {/* Recents Thread List Body */}
-          <div className="px-2.5 overflow-y-auto max-h-[calc(100vh-340px)] flex flex-col gap-1">
-            {isLoadingSessions ? (
-              <div className="flex flex-col gap-1 px-1 py-1">
-                {[75, 55, 85, 60, 70].map((w, idx) => (
-                  <div key={idx} className="flex items-center px-3.5 py-2.5 rounded-xl">
-                    <Skeleton className="h-3.5 rounded-md" style={{ width: `${w}%` }} />
+        <div className="px-2.5 overflow-y-auto max-h-[calc(100vh-340px)] flex flex-col gap-1">
+          {isLoadingSessions ? (
+            <div className="flex flex-col gap-1 px-1 py-1">
+              {[75, 55, 85, 60, 70].map((w, idx) => (
+                <div key={idx} className="flex items-center px-3.5 py-2.5 rounded-xl">
+                  <Skeleton className="h-3.5 rounded-md" style={{ width: `${w}%` }} />
+                </div>
+              ))}
+            </div>
+          ) : sessions.length === 0 ? (
+            <div className="px-4 py-5 text-sm text-[var(--text-dark)] text-center">
+              No previous chats
+            </div>
+          ) : (
+            sessions.map(s => {
+              const isActive = currentSessionId === s.session_id && activeTab === 'chats';
+              return (
+                <div
+                  key={s.session_id}
+                  className={`group relative flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[13.5px] cursor-pointer transition-colors ${
+                    isActive 
+                      ? 'bg-[var(--bg-card)] text-[var(--text-main)] font-medium' 
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
+                  }`}
+                  onClick={() => {
+                    handleMobileTabSelect(() => {
+                      onSelectSession(s.session_id);
+                      onSelectTab('chats');
+                    });
+                  }}
+                >
+                  <div className="flex items-center gap-2 truncate flex-1 pr-6">
+                    <span className="truncate">{cleanSessionTitle(s.title)}</span>
+                    {streamingSessionIds?.has(s.session_id) && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-primary)] animate-pulse flex-shrink-0" title="Generating..." />
+                    )}
                   </div>
-                ))}
-              </div>
-            ) : sessions.length === 0 ? (
-              <div className="px-4 py-6 text-xs text-[var(--text-muted)] text-center font-medium">
-                No previous conversations
-              </div>
-            ) : (
-              sessions.map(s => {
-                const isActive = currentSessionId === s.session_id && activeTab === 'chats';
-                return (
-                  <div
-                    key={s.session_id}
-                    className={`group relative flex items-center justify-between py-2 rounded-xl text-[13.5px] cursor-pointer transition-all ${
-                      isActive 
-                        ? 'bg-[var(--bg-card)] text-[var(--text-main)] font-semibold border-l-2 border-[var(--accent-primary)] shadow-2xs pl-3 pr-3.5' 
-                        : 'text-[var(--text-sidebar-item)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] pl-3.5 pr-3.5'
+
+                  {/* Clean Subtle More Button - Visible on mobile touch screens and on hover on desktop */}
+                  <button
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer ${
+                      activeMenuSessionId === s.session_id
+                        ? 'opacity-100 bg-[var(--bg-hover)] text-[var(--text-main)]'
+                        : 'opacity-80 sm:opacity-0 sm:group-hover:opacity-100'
                     }`}
-                    onClick={() => {
-                      handleMobileTabSelect(() => {
-                        onSelectSession(s.session_id);
-                        onSelectTab('chats');
-                      });
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (activeMenuSessionId === s.session_id) {
+                        setActiveMenuSessionId(null);
+                        setMenuCoords(null);
+                      } else {
+                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                        setActiveMenuSessionId(s.session_id);
+                        const menuWidth = 160;
+                        const left = Math.min(Math.max(8, rect.right - menuWidth), window.innerWidth - menuWidth - 8);
+                        const top = Math.min(rect.bottom + 4, window.innerHeight - 70);
+                        setMenuCoords({ top, left });
+                      }
                     }}
+                    title="Chat options"
                   >
-                    <div className="flex items-center gap-2 truncate flex-1 pr-6">
-                      <span className="truncate">{cleanSessionTitle(s.title)}</span>
-                      {streamingSessionIds?.has(s.session_id) && (
-                        <span className="w-2 h-2 rounded-full bg-[var(--accent-primary)] animate-pulse shadow-[0_0_8px_rgba(224,122,95,0.6)] flex-shrink-0" title="Generating response..." />
-                      )}
-                    </div>
-
-                    {/* Clean Subtle More Options Button */}
-                    <button
-                      className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer ${
-                        activeMenuSessionId === s.session_id
-                          ? 'opacity-100 bg-[var(--bg-hover)] text-[var(--text-main)]'
-                          : 'opacity-80 sm:opacity-0 sm:group-hover:opacity-100'
-                      }`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (activeMenuSessionId === s.session_id) {
-                          setActiveMenuSessionId(null);
-                          setMenuCoords(null);
-                        } else {
-                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                          setActiveMenuSessionId(s.session_id);
-                          const menuWidth = 160;
-                          const left = Math.min(Math.max(8, rect.right - menuWidth), window.innerWidth - menuWidth - 8);
-                          const top = Math.min(rect.bottom + 4, window.innerHeight - 70);
-                          setMenuCoords({ top, left });
-                        }
-                      }}
-                      title="Chat options"
-                    >
-                      <MoreVertical size={14} />
-                    </button>
-                  </div>
-                );
-              })
-            )}
-          </div>
+                    <MoreVertical size={15} />
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
 
         {/* Unclipped Fixed Dropdown Popover with Outside Click Dismiss */}
         {activeMenuSessionId && menuCoords && (

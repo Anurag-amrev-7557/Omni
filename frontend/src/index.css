@@ -746,6 +746,71 @@ html, body {
   margin: 0.85rem 0;
 }
 
+/* Response Table Styling (Pure Dark & Light Mode Token Harmony) */
+.omni-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--border-color) !important;
+  background: var(--bg-card);
+}
+
+.omni-prose thead {
+  background: var(--bg-sidebar);
+}
+
+.omni-prose th {
+  padding: 0.65rem 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color) !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  text-align: left;
+}
+
+.omni-prose td {
+  padding: 0.65rem 0.85rem;
+  font-size: 0.82rem;
+  color: var(--text-main);
+  border-bottom: 1px solid var(--border-color) !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+}
+
+.omni-prose tr:last-child td {
+  border-bottom: none !important;
+}
+
+.omni-prose tr:hover td {
+  background: var(--bg-hover);
+}
+
+.omni-prose button {
+  background: transparent;
+  border: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.omni-prose kbd {
+  font-family: var(--font-code);
+  font-size: 0.75rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.35rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+}
+
 /* Animations */
 @keyframes spinSlow {
   from { transform: rotate(0deg); }

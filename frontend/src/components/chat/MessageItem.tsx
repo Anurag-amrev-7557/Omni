@@ -339,7 +339,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                         href={targetCit.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center px-1.5 py-0.2 mx-0.5 text-[11px] font-mono font-bold rounded-md bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white transition-all cursor-pointer shadow-2xs border border-blue-500/30 select-none align-baseline no-underline"
+                        className="inline-flex items-center justify-center px-1.5 py-0.2 mx-0.5 text-[11px] font-mono font-bold rounded-md bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white transition-all cursor-pointer border border-blue-500/25 select-none align-baseline no-underline"
                         title={`Open external web source: ${targetCit.url}`}
                       >
                         {citeId}
@@ -359,7 +359,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                           page: pageNum
                         });
                       }}
-                      className="inline-flex items-center justify-center px-1.5 py-0.2 mx-0.5 text-[11px] font-mono font-bold rounded-md bg-[var(--accent-subtle)] text-[var(--accent-primary)] hover:bg-[var(--accent-primary)] hover:text-white transition-all cursor-pointer shadow-2xs border border-[var(--accent-primary)]/30 hover:scale-105 active:scale-95 select-none align-baseline"
+                      className="inline-flex items-center justify-center px-1.5 py-0.2 mx-0.5 text-[11px] font-mono font-bold rounded-md bg-[var(--accent-subtle)] text-[var(--accent-primary)] hover:bg-[var(--accent-primary)] hover:text-white transition-all cursor-pointer border border-[var(--accent-primary)]/25 hover:scale-105 active:scale-95 select-none align-baseline"
                       title={`Preview source [${citeId}] in ${fileName}${pageNum ? ` (Page ${pageNum})` : ''}`}
                     >
                       {citeId}
@@ -374,7 +374,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                       href={href} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center px-1.5 py-0.2 mx-0.5 rounded-md bg-[var(--accent-subtle)] text-[var(--accent-primary)] font-medium text-[11px] hover:underline cursor-pointer border border-[var(--accent-primary)]/30 no-underline shadow-2xs leading-tight"
+                      className="inline-flex items-center justify-center px-1.5 py-0.2 mx-0.5 rounded-md bg-[var(--accent-subtle)] text-[var(--accent-primary)] font-medium text-[11px] hover:underline cursor-pointer border border-[var(--accent-primary)]/25 no-underline leading-tight"
                       title={`Open source citation ${childStr}`}
                     >
                       {children}
@@ -394,8 +394,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 );
               },
               table: ({ children }) => (
-                <div className="overflow-x-auto my-3.5 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] shadow-xs">
-                  <table className="min-w-full divide-y divide-[var(--border-color)] text-xs text-left">
+                <div className="overflow-x-auto my-3.5 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)]">
+                  <table className="min-w-full text-xs text-left border-collapse">
                     {children}
                   </table>
                 </div>
@@ -406,17 +406,17 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 </thead>
               ),
               th: ({ children }) => (
-                <th className="px-3.5 py-2.5 font-semibold text-[var(--text-main)] border-b border-[var(--border-color)] whitespace-nowrap">
+                <th className="px-3.5 py-2.5 font-semibold text-[var(--text-main)] border-b border-[var(--border-color)] whitespace-nowrap bg-[var(--bg-sidebar)]">
                   {children}
                 </th>
               ),
               td: ({ children }) => (
-                <td className="px-3.5 py-2.5 text-[var(--text-main)] border-b border-[var(--border-color)]/40 leading-relaxed align-top">
+                <td className="px-3.5 py-2.5 text-[var(--text-main)] border-b border-[var(--border-color)]/30 leading-relaxed align-top">
                   {children}
                 </td>
               ),
               tr: ({ children }) => (
-                <tr className="hover:bg-[var(--bg-hover)]/40 transition-colors last:border-b-0">
+                <tr className="hover:bg-[var(--bg-hover)] transition-colors border-b border-[var(--border-color)]/30 last:border-b-0">
                   {children}
                 </tr>
               ),
