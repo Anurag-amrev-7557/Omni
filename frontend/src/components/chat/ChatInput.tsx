@@ -280,7 +280,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
       {/* Morphing Input Card with CSS Grid Auto-Sizing (z-20 sits in front of the sliding tray) */}
       <div 
-        className={`relative z-20 rounded-2xl border border-[var(--border-input)] bg-[var(--bg-input)] shadow-lg transition-all duration-150 ease-out focus-within:border-[var(--accent-primary)]/80 focus-within:ring-2 focus-within:ring-[var(--accent-primary)]/25 ${
+        className={`relative z-20 rounded-2xl border border-[var(--border-input)] bg-[var(--bg-input)] shadow-lg transition-[padding,min-height] duration-200 ease-out focus-within:border-[var(--accent-primary)]/80 focus-within:ring-2 focus-within:ring-[var(--accent-primary)]/25 ${
           isMultiLine ? 'px-4 pt-3 pb-3' : 'px-3.5 py-3 min-h-[52px]'
         }`}
       >
@@ -294,58 +294,66 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         />
 
         {/* REFERENCED VAULT DOCUMENTS & ATTACHED FILES CHIP CAROUSEL */}
-        {(referencedVaultDocs.length > 0 || attachedFiles.length > 0) && (
-          <div className="relative group/carousel w-full mb-0.5 transition-all duration-150 ease-out">
-            {/* Left Scroll Navigation Button */}
-            {canScrollLeft && (
-              <button
-                type="button"
-                onClick={() => scrollCarousel('left')}
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-30 w-8 h-8 rounded-full bg-[var(--bg-card)]/95 backdrop-blur-md border border-[var(--border-color)] text-[var(--text-main)] shadow-lg flex items-center justify-center hover:bg-[var(--bg-hover)] hover:scale-105 active:scale-95 transition-all cursor-pointer"
-                title="Scroll left"
+        <div 
+          className={`grid transition-[grid-template-rows,opacity,margin] duration-200 ease-out ${
+            (referencedVaultDocs.length > 0 || attachedFiles.length > 0)
+              ? 'grid-rows-[1fr] opacity-100 mb-1'
+              : 'grid-rows-[0fr] opacity-0 mb-0 pointer-events-none'
+          }`}
+        >
+          <div className="overflow-hidden">
+            <div className="relative group/carousel w-full">
+              {/* Left Scroll Navigation Button */}
+              {canScrollLeft && (
+                <button
+                  type="button"
+                  onClick={() => scrollCarousel('left')}
+                  className="absolute left-0 top-1/2 -translate-y-1/2 z-30 w-8 h-8 rounded-full bg-[var(--bg-card)]/95 backdrop-blur-md border border-[var(--border-color)] text-[var(--text-main)] shadow-lg flex items-center justify-center hover:bg-[var(--bg-hover)] hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                  title="Scroll left"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+              )}
+
+              {/* In-Place Horizontal Track with Adequate Padding to Avoid Shadow/Button Clipping */}
+              <div 
+                ref={carouselRef}
+                className="flex items-center gap-3.5 overflow-x-auto no-scrollbar scroll-smooth pt-2 pb-3.5 px-2 -mx-1"
               >
-                <ChevronLeft size={16} />
-              </button>
-            )}
+                {/* Vault @ Mentions Document Square Blocks */}
+                {referencedVaultDocs.map((filename) => (
+                  <DocumentSquareTile 
+                    key={filename}
+                    filename={filename}
+                    onRemove={() => onRemoveReferencedDoc?.(filename)}
+                  />
+                ))}
 
-            {/* In-Place Horizontal Track with Adequate Padding to Avoid Shadow/Button Clipping */}
-            <div 
-              ref={carouselRef}
-              className="flex items-center gap-3.5 overflow-x-auto no-scrollbar scroll-smooth pt-2 pb-3.5 px-2 -mx-1"
-            >
-              {/* Vault @ Mentions Document Square Blocks */}
-              {referencedVaultDocs.map((filename) => (
-                <DocumentSquareTile 
-                  key={filename}
-                  filename={filename}
-                  onRemove={() => onRemoveReferencedDoc?.(filename)}
-                />
-              ))}
+                {/* Attached Local Files Document Square Blocks */}
+                {attachedFiles.map((file) => (
+                  <DocumentSquareTile 
+                    key={`${file.name}-${file.size}-${file.lastModified}`}
+                    filename={file.name}
+                    fileObject={file}
+                    onRemove={() => onRemoveAttachedFile(file)}
+                  />
+                ))}
+              </div>
 
-              {/* Attached Local Files Document Square Blocks */}
-              {attachedFiles.map((file) => (
-                <DocumentSquareTile 
-                  key={`${file.name}-${file.size}-${file.lastModified}`}
-                  filename={file.name}
-                  fileObject={file}
-                  onRemove={() => onRemoveAttachedFile(file)}
-                />
-              ))}
+              {/* Right Scroll Navigation Button */}
+              {canScrollRight && (
+                <button
+                  type="button"
+                  onClick={() => scrollCarousel('right')}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 z-30 w-8 h-8 rounded-full bg-[var(--bg-card)]/95 backdrop-blur-md border border-[var(--border-color)] text-[var(--text-main)] shadow-lg flex items-center justify-center hover:bg-[var(--bg-hover)] hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                  title="Scroll right"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              )}
             </div>
-
-            {/* Right Scroll Navigation Button */}
-            {canScrollRight && (
-              <button
-                type="button"
-                onClick={() => scrollCarousel('right')}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-30 w-8 h-8 rounded-full bg-[var(--bg-card)]/95 backdrop-blur-md border border-[var(--border-color)] text-[var(--text-main)] shadow-lg flex items-center justify-center hover:bg-[var(--bg-hover)] hover:scale-105 active:scale-95 transition-all cursor-pointer"
-                title="Scroll right"
-              >
-                <ChevronRight size={16} />
-              </button>
-            )}
           </div>
-        )}
+        </div>
 
         {/* PLUS ACTION DROPDOWN DOCKED JUST ABOVE LEFT EDGE OF INPUT SECTION */}
         {plusMenuOpen && (
@@ -457,52 +465,60 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         </div>
 
         {/* MULTI-LINE MODE BOTTOM TOOLBAR */}
-        {isMultiLine && (
-          <div className="flex items-center justify-between pt-2.5 mt-1.5">
-          {/* Plus Icon on Bottom-Left */}
-          <div>
-            <button
-              className="flex items-center justify-center w-7 h-7 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
-              onClick={() => {
-                if (plusMenuOpen) {
-                  closePlusMenu();
-                } else {
-                  setIsPlusClosing(false);
-                  setPlusMenuOpen(true);
-                }
-              }}
-              title="Add content or reference"
-            >
-              <Plus size={19} />
-            </button>
-          </div>
+        <div 
+          className={`grid transition-[grid-template-rows,opacity,padding,margin] duration-200 ease-out ${
+            isMultiLine 
+              ? 'grid-rows-[1fr] opacity-100 pt-2.5 mt-1.5' 
+              : 'grid-rows-[0fr] opacity-0 pt-0 mt-0 pointer-events-none'
+          }`}
+        >
+          <div className="overflow-hidden">
+            <div className="flex items-center justify-between">
+              {/* Plus Icon on Bottom-Left */}
+              <div>
+                <button
+                  className="flex items-center justify-center w-7 h-7 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
+                  onClick={() => {
+                    if (plusMenuOpen) {
+                      closePlusMenu();
+                    } else {
+                      setIsPlusClosing(false);
+                      setPlusMenuOpen(true);
+                    }
+                  }}
+                  title="Add content or reference"
+                >
+                  <Plus size={19} />
+                </button>
+              </div>
 
-          {/* Right Action Icons on Bottom-Right */}
-          <div className="flex items-center gap-1.5">
-            <button 
-              className="flex items-center gap-0.5 px-2 py-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors"
-              onClick={onStartVoice}
-              title="Voice Dictation"
-            >
-              <Mic size={17} />
-              <ChevronDown size={12} className="text-[var(--text-dark)]" />
-            </button>
+              {/* Right Action Icons on Bottom-Right */}
+              <div className="flex items-center gap-1.5">
+                <button 
+                  className="flex items-center gap-0.5 px-2 py-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors"
+                  onClick={onStartVoice}
+                  title="Voice Dictation"
+                >
+                  <Mic size={17} />
+                  <ChevronDown size={12} className="text-[var(--text-dark)]" />
+                </button>
 
-            <button 
-              className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
-                hasContent && !isStreaming
-                  ? 'bg-[var(--accent-primary)] text-[var(--accent-contrast-text,#ffffff)] shadow-md hover:bg-[var(--accent-hover)] hover:scale-105 active:scale-95 cursor-pointer'
-                  : 'text-[var(--text-dark)] hover:text-[var(--text-muted)] cursor-pointer'
-              }`}
-              onClick={onSend}
-              disabled={!hasContent || isStreaming}
-              title="Send Message (Enter)"
-            >
-              {hasContent ? <ArrowUp size={15} /> : <CornerDownLeft size={16} />}
-            </button>
+                <button 
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
+                    hasContent && !isStreaming
+                      ? 'bg-[var(--accent-primary)] text-[var(--accent-contrast-text,#ffffff)] shadow-md hover:bg-[var(--accent-hover)] hover:scale-105 active:scale-95 cursor-pointer'
+                      : 'text-[var(--text-dark)] hover:text-[var(--text-muted)] cursor-pointer'
+                  }`}
+                  onClick={onSend}
+                  disabled={!hasContent || isStreaming}
+                  title="Send Message (Enter)"
+                >
+                  {hasContent ? <ArrowUp size={15} /> : <CornerDownLeft size={16} />}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-        )}
       </div>
 
       {/* Footer Disclaimer & Model Selector Row */}

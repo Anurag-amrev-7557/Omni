@@ -18,7 +18,6 @@ export const DocumentSquareTile: React.FC<DocumentSquareTileProps> = ({
   size = 'md',
 }) => {
   const [imgError, setImgError] = useState(false);
-  const [isExiting, setIsExiting] = useState(false);
   const ext = filename.split('.').pop()?.toLowerCase() || 'txt';
   const isPdf = ext === 'pdf';
 
@@ -38,29 +37,17 @@ export const DocumentSquareTile: React.FC<DocumentSquareTileProps> = ({
 
   const handleDismiss = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isExiting) return;
-    setIsExiting(true);
-    setTimeout(() => {
-      onRemove?.();
-    }, 140);
+    onRemove?.();
   };
 
   return (
     <div 
       className="relative group select-none flex-shrink-0 origin-center"
-      style={{ 
-        width: isExiting ? 0 : widthPx, 
-        maxWidth: isExiting ? 0 : widthPx,
-        marginRight: isExiting ? -14 : 0,
-        opacity: isExiting ? 0 : 1,
-        transform: isExiting ? 'scale(0.85)' : 'scale(1)',
-        pointerEvents: isExiting ? 'none' : 'auto',
-        transition: 'width 140ms cubic-bezier(0.16, 1, 0.3, 1), max-width 140ms cubic-bezier(0.16, 1, 0.3, 1), margin-right 140ms cubic-bezier(0.16, 1, 0.3, 1), opacity 130ms ease-out, transform 140ms cubic-bezier(0.16, 1, 0.3, 1)'
-      }}
+      style={{ width: widthPx, maxWidth: widthPx }}
     >
       {/* Borderless Portrait Document Sheet Card */}
       <div 
-        className={`${tileDim} rounded-2xl bg-white shadow-md hover:shadow-xl cursor-pointer overflow-hidden relative flex flex-col justify-start origin-center ${!isExiting ? 'pop-in' : ''}`}
+        className={`${tileDim} rounded-2xl bg-white shadow-md hover:shadow-xl cursor-pointer overflow-hidden relative flex flex-col justify-start origin-center pop-in`}
         onClick={onClick}
         title={filename}
       >
