@@ -8,31 +8,31 @@
    COMPREHENSIVE DESIGN TOKENS (LIGHT & DARK PAIRS)
 ========================================================= */
 
-/* 1. OBSIDIAN CHARCOAL (DEFAULT DARK) */
+/* 1. OBSIDIAN CHARCOAL (DEFAULT DARK - LINEAR / RAYCAST GRADE) */
 :root,
 [data-theme="dark"] {
-  --bg-dark: #0e0e11;
-  --bg-sidebar: #09090b;
-  --bg-card: #151518;
-  --bg-input: #1a1a1f;
-  --bg-user-bubble: #1d1d23;
-  --bg-modal: #131316;
+  --bg-dark: #08090b;
+  --bg-sidebar: #050507;
+  --bg-card: #121316;
+  --bg-input: #101114;
+  --bg-user-bubble: #18191e;
+  --bg-modal: #121316;
   --bg-hover: rgba(255, 255, 255, 0.05);
   --backdrop-color: rgba(0, 0, 0, 0.75);
 
   --border-color: rgba(255, 255, 255, 0.08);
   --border-input: rgba(255, 255, 255, 0.12);
-  --border-hover: rgba(255, 255, 255, 0.20);
+  --border-hover: rgba(255, 255, 255, 0.22);
 
   --accent-primary: #e07a5f;
   --accent-hover: #ea8d75;
   --accent-subtle: rgba(224, 122, 95, 0.14);
   --accent-contrast-text: #ffffff;
 
-  --text-main: #f5f5f7;
-  --text-sidebar-item: #d6d6dc;
-  --text-muted: #9fa2aa;
-  --text-dark: #6e717c;
+  --text-main: #f7f8f8;
+  --text-sidebar-item: #d0d6e0;
+  --text-muted: #8a8f98;
+  --text-dark: #5c6068;
 
   --status-active-bg: rgba(16, 185, 129, 0.12);
   --status-active-text: #34d399;
@@ -77,27 +77,27 @@
 
 /* 2. WARM CREAM PARCHMENT (LIGHT) */
 [data-theme="light"] {
-  --bg-dark: #fbfaf5;
+  --bg-dark: #fbfaf6;
   --bg-sidebar: #f3efe6;
-  --bg-card: #f7f3eb;
-  --bg-input: #f2ebe0;
-  --bg-user-bubble: #ede4d4;
-  --bg-modal: #fcfbfa;
+  --bg-card: #ffffff;
+  --bg-input: #f2ece1;
+  --bg-user-bubble: #eee6d8;
+  --bg-modal: #ffffff;
   --bg-hover: rgba(50, 45, 38, 0.06);
   --backdrop-color: rgba(40, 35, 30, 0.4);
 
-  --border-color: #e2dbce;
-  --border-input: #d4ccbd;
-  --border-hover: #c2b7a4;
+  --border-color: rgba(0, 0, 0, 0.08);
+  --border-input: rgba(0, 0, 0, 0.12);
+  --border-hover: rgba(0, 0, 0, 0.22);
 
   --accent-primary: #da7756;
   --accent-hover: #c45d3c;
   --accent-subtle: rgba(218, 119, 86, 0.12);
   --accent-contrast-text: #ffffff;
 
-  --text-main: #22201d;
-  --text-sidebar-item: #3c3933;
-  --text-muted: #706c64;
+  --text-main: #1a1917;
+  --text-sidebar-item: #383531;
+  --text-muted: #6b665c;
   --text-dark: #9e9a90;
 
   --status-active-bg: rgba(5, 150, 105, 0.1);
@@ -142,15 +142,15 @@
   --bg-dark: #f5f7f2;
   --bg-sidebar: #e9eee4;
   --bg-card: #ffffff;
-  --bg-input: #e6ede0;
-  --bg-user-bubble: #e0e9d9;
+  --bg-input: #e4ece0;
+  --bg-user-bubble: #dde6d7;
   --bg-modal: #ffffff;
-  --bg-hover: rgba(27, 50, 35, 0.06);
-  --backdrop-color: rgba(27, 50, 35, 0.4);
+  --bg-hover: rgba(27, 50, 35, 0.05);
+  --backdrop-color: rgba(27, 50, 35, 0.35);
 
-  --border-color: #d7e0cf;
-  --border-input: #c7d4be;
-  --border-hover: #b4c4aa;
+  --border-color: rgba(0, 0, 0, 0.08);
+  --border-input: rgba(0, 0, 0, 0.12);
+  --border-hover: rgba(0, 0, 0, 0.22);
 
   --accent-primary: #588157;
   --accent-hover: #3a5a40;
@@ -158,41 +158,41 @@
   --accent-contrast-text: #ffffff;
 
   --text-main: #1b3223;
-  --text-sidebar-item: #284431;
-  --text-muted: #53735d;
-  --text-dark: #7b9b84;
+  --text-sidebar-item: #2d4536;
+  --text-muted: #577060;
+  --text-dark: #829a8b;
 
   --status-active-bg: rgba(88, 129, 87, 0.12);
-  --status-active-text: #3a5a40;
-  --status-active-border: rgba(88, 129, 87, 0.28);
+  --status-active-text: #588157;
+  --status-active-border: rgba(88, 129, 87, 0.25);
 
   --kpi-corpus-bg: rgba(88, 129, 87, 0.12);
   --kpi-corpus-text: #588157;
-  --kpi-corpus-border: rgba(88, 129, 87, 0.28);
+  --kpi-corpus-border: rgba(88, 129, 87, 0.25);
 
-  --kpi-vector-bg: rgba(43, 108, 176, 0.1);
-  --kpi-vector-text: #2b6cb0;
-  --kpi-vector-border: rgba(43, 108, 176, 0.25);
+  --kpi-vector-bg: rgba(2, 132, 199, 0.1);
+  --kpi-vector-text: #0284c7;
+  --kpi-vector-border: rgba(2, 132, 199, 0.25);
 
   --kpi-engine-bg: rgba(88, 129, 87, 0.12);
-  --kpi-engine-text: #3a5a40;
-  --kpi-engine-border: rgba(88, 129, 87, 0.28);
+  --kpi-engine-text: #588157;
+  --kpi-engine-border: rgba(88, 129, 87, 0.25);
 
-  --kpi-health-bg: rgba(124, 58, 237, 0.1);
-  --kpi-health-text: #7c3aed;
-  --kpi-health-border: rgba(124, 58, 237, 0.25);
+  --kpi-health-bg: rgba(147, 51, 234, 0.1);
+  --kpi-health-text: #9333ea;
+  --kpi-health-border: rgba(147, 51, 234, 0.25);
 
   --badge-pdf-bg: rgba(220, 38, 38, 0.1);
   --badge-pdf-text: #dc2626;
   --badge-pdf-border: rgba(220, 38, 38, 0.25);
 
-  --badge-md-bg: rgba(43, 108, 176, 0.1);
-  --badge-md-text: #2b6cb0;
-  --badge-md-border: rgba(43, 108, 176, 0.25);
+  --badge-md-bg: rgba(2, 132, 199, 0.1);
+  --badge-md-text: #0284c7;
+  --badge-md-border: rgba(2, 132, 199, 0.25);
 
   --badge-txt-bg: rgba(88, 129, 87, 0.12);
-  --badge-txt-text: #3a5a40;
-  --badge-txt-border: rgba(88, 129, 87, 0.28);
+  --badge-txt-text: #588157;
+  --badge-txt-border: rgba(88, 129, 87, 0.25);
 
   --danger-bg: rgba(220, 38, 38, 0.1);
   --danger-text: #dc2626;
@@ -201,32 +201,32 @@
 
 /* 4. MATCHA FOREST (DARK) */
 [data-theme="matcha-dark"] {
-  --bg-dark: #14221a;
-  --bg-sidebar: #0e1a14;
-  --bg-card: #1c3026;
-  --bg-input: #253e31;
-  --bg-user-bubble: #284436;
-  --bg-modal: #15261d;
-  --bg-hover: rgba(230, 244, 234, 0.07);
-  --backdrop-color: rgba(14, 26, 20, 0.8);
+  --bg-dark: #09110d;
+  --bg-sidebar: #050b08;
+  --bg-card: #101c15;
+  --bg-input: #0e1813;
+  --bg-user-bubble: #15241b;
+  --bg-modal: #101c15;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --backdrop-color: rgba(0, 0, 0, 0.75);
 
-  --border-color: #2b493a;
-  --border-input: #385d4b;
-  --border-hover: #4d7a64;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-input: rgba(255, 255, 255, 0.12);
+  --border-hover: rgba(255, 255, 255, 0.22);
 
   --accent-primary: #84cc16;
   --accent-hover: #a3e635;
-  --accent-subtle: rgba(132, 204, 22, 0.16);
-  --accent-contrast-text: #0e1a14;
+  --accent-subtle: rgba(132, 204, 22, 0.14);
+  --accent-contrast-text: #050b08;
 
-  --text-main: #e6f4ea;
-  --text-sidebar-item: #cce7d3;
-  --text-muted: #95c0a1;
-  --text-dark: #679273;
+  --text-main: #f0faf2;
+  --text-sidebar-item: #cde4d3;
+  --text-muted: #8cb395;
+  --text-dark: #5c7e63;
 
-  --status-active-bg: rgba(132, 204, 22, 0.16);
+  --status-active-bg: rgba(132, 204, 22, 0.14);
   --status-active-text: #a3e635;
-  --status-active-border: rgba(132, 204, 22, 0.3);
+  --status-active-border: rgba(132, 204, 22, 0.28);
 
   --kpi-corpus-bg: rgba(132, 204, 22, 0.14);
   --kpi-corpus-text: #a3e635;
@@ -244,21 +244,21 @@
   --kpi-health-text: #d8b4fe;
   --kpi-health-border: rgba(192, 132, 252, 0.28);
 
-  --badge-pdf-bg: rgba(248, 113, 113, 0.15);
+  --badge-pdf-bg: rgba(248, 113, 113, 0.14);
   --badge-pdf-text: #fca5a5;
-  --badge-pdf-border: rgba(248, 113, 113, 0.3);
+  --badge-pdf-border: rgba(248, 113, 113, 0.28);
 
-  --badge-md-bg: rgba(56, 189, 248, 0.15);
+  --badge-md-bg: rgba(56, 189, 248, 0.14);
   --badge-md-text: #7dd3fc;
-  --badge-md-border: rgba(56, 189, 248, 0.3);
+  --badge-md-border: rgba(56, 189, 248, 0.28);
 
-  --badge-txt-bg: rgba(132, 204, 22, 0.15);
+  --badge-txt-bg: rgba(132, 204, 22, 0.14);
   --badge-txt-text: #a3e635;
-  --badge-txt-border: rgba(132, 204, 22, 0.3);
+  --badge-txt-border: rgba(132, 204, 22, 0.28);
 
-  --danger-bg: rgba(248, 113, 113, 0.15);
+  --danger-bg: rgba(248, 113, 113, 0.14);
   --danger-text: #fca5a5;
-  --danger-border: rgba(248, 113, 113, 0.3);
+  --danger-border: rgba(248, 113, 113, 0.28);
 }
 
 /* 5. TUSCAN TERRACOTTA (LIGHT) */
@@ -272,9 +272,9 @@
   --bg-hover: rgba(52, 31, 23, 0.06);
   --backdrop-color: rgba(52, 31, 23, 0.4);
 
-  --border-color: #ebd6c7;
-  --border-input: #dec3b0;
-  --border-hover: #cfa891;
+  --border-color: rgba(0, 0, 0, 0.08);
+  --border-input: rgba(0, 0, 0, 0.12);
+  --border-hover: rgba(0, 0, 0, 0.22);
 
   --accent-primary: #c85a32;
   --accent-hover: #b04620;
@@ -325,32 +325,32 @@
 
 /* 6. EMBER TERRACOTTA (DARK) */
 [data-theme="terracotta-dark"] {
-  --bg-dark: #211714;
-  --bg-sidebar: #1a110e;
-  --bg-card: #2c1f1b;
-  --bg-input: #382722;
-  --bg-user-bubble: #3d2b25;
-  --bg-modal: #221815;
-  --bg-hover: rgba(247, 238, 231, 0.07);
-  --backdrop-color: rgba(26, 17, 14, 0.8);
+  --bg-dark: #120c0a;
+  --bg-sidebar: #0a0605;
+  --bg-card: #1c1310;
+  --bg-input: #17100d;
+  --bg-user-bubble: #241915;
+  --bg-modal: #1c1310;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --backdrop-color: rgba(0, 0, 0, 0.75);
 
-  --border-color: #422f29;
-  --border-input: #543c34;
-  --border-hover: #6e4e44;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-input: rgba(255, 255, 255, 0.12);
+  --border-hover: rgba(255, 255, 255, 0.22);
 
   --accent-primary: #e07a5f;
   --accent-hover: #ea9179;
-  --accent-subtle: rgba(224, 122, 95, 0.16);
-  --accent-contrast-text: #1a110e;
+  --accent-subtle: rgba(224, 122, 95, 0.14);
+  --accent-contrast-text: #0a0605;
 
-  --text-main: #f7eee7;
-  --text-sidebar-item: #ead8ce;
-  --text-muted: #bfa497;
-  --text-dark: #917568;
+  --text-main: #faf2ee;
+  --text-sidebar-item: #e5d4cb;
+  --text-muted: #b5978b;
+  --text-dark: #7a6359;
 
-  --status-active-bg: rgba(224, 122, 95, 0.16);
+  --status-active-bg: rgba(224, 122, 95, 0.14);
   --status-active-text: #e07a5f;
-  --status-active-border: rgba(224, 122, 95, 0.3);
+  --status-active-border: rgba(224, 122, 95, 0.28);
 
   --kpi-corpus-bg: rgba(224, 122, 95, 0.14);
   --kpi-corpus-text: #e07a5f;
@@ -368,21 +368,21 @@
   --kpi-health-text: #d8b4fe;
   --kpi-health-border: rgba(192, 132, 252, 0.28);
 
-  --badge-pdf-bg: rgba(248, 113, 113, 0.15);
+  --badge-pdf-bg: rgba(248, 113, 113, 0.14);
   --badge-pdf-text: #fca5a5;
-  --badge-pdf-border: rgba(248, 113, 113, 0.3);
+  --badge-pdf-border: rgba(248, 113, 113, 0.28);
 
-  --badge-md-bg: rgba(245, 158, 11, 0.15);
+  --badge-md-bg: rgba(245, 158, 11, 0.14);
   --badge-md-text: #fbbf24;
-  --badge-md-border: rgba(245, 158, 11, 0.3);
+  --badge-md-border: rgba(245, 158, 11, 0.28);
 
-  --badge-txt-bg: rgba(224, 122, 95, 0.15);
+  --badge-txt-bg: rgba(224, 122, 95, 0.14);
   --badge-txt-text: #e07a5f;
-  --badge-txt-border: rgba(224, 122, 95, 0.3);
+  --badge-txt-border: rgba(224, 122, 95, 0.28);
 
-  --danger-bg: rgba(248, 113, 113, 0.15);
+  --danger-bg: rgba(248, 113, 113, 0.14);
   --danger-text: #fca5a5;
-  --danger-border: rgba(248, 113, 113, 0.3);
+  --danger-border: rgba(248, 113, 113, 0.28);
 }
 
 /* 7. NORDIC CASHMERE (LIGHT) */
@@ -396,9 +396,9 @@
   --bg-hover: rgba(30, 41, 59, 0.05);
   --backdrop-color: rgba(30, 41, 59, 0.35);
 
-  --border-color: #dbe0e6;
-  --border-input: #cbcfd7;
-  --border-hover: #b8bdc8;
+  --border-color: rgba(0, 0, 0, 0.08);
+  --border-input: rgba(0, 0, 0, 0.12);
+  --border-hover: rgba(0, 0, 0, 0.22);
 
   --accent-primary: #0f766e;
   --accent-hover: #115e59;
@@ -449,32 +449,32 @@
 
 /* 8. NORDIC FJORD (DARK) */
 [data-theme="nordic-dark"] {
-  --bg-dark: #0f172a;
-  --bg-sidebar: #090d19;
-  --bg-card: #182236;
-  --bg-input: #202e47;
-  --bg-user-bubble: #253654;
-  --bg-modal: #111a2e;
-  --bg-hover: rgba(241, 245, 249, 0.07);
-  --backdrop-color: rgba(9, 13, 25, 0.8);
+  --bg-dark: #080d1a;
+  --bg-sidebar: #04070e;
+  --bg-card: #101828;
+  --bg-input: #0c1322;
+  --bg-user-bubble: #162035;
+  --bg-modal: #101828;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --backdrop-color: rgba(0, 0, 0, 0.75);
 
-  --border-color: #273956;
-  --border-input: #344c70;
-  --border-hover: #486591;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-input: rgba(255, 255, 255, 0.12);
+  --border-hover: rgba(255, 255, 255, 0.22);
 
   --accent-primary: #2dd4bf;
   --accent-hover: #5eead4;
-  --accent-subtle: rgba(45, 212, 191, 0.16);
-  --accent-contrast-text: #090d19;
+  --accent-subtle: rgba(45, 212, 191, 0.14);
+  --accent-contrast-text: #04070e;
 
-  --text-main: #f1f5f9;
-  --text-sidebar-item: #dbe4ee;
-  --text-muted: #94a3b8;
-  --text-dark: #64748b;
+  --text-main: #f0f6fc;
+  --text-sidebar-item: #cbd9ea;
+  --text-muted: #8ba2bf;
+  --text-dark: #586e88;
 
-  --status-active-bg: rgba(45, 212, 191, 0.15);
+  --status-active-bg: rgba(45, 212, 191, 0.14);
   --status-active-text: #2dd4bf;
-  --status-active-border: rgba(45, 212, 191, 0.3);
+  --status-active-border: rgba(45, 212, 191, 0.28);
 
   --kpi-corpus-bg: rgba(45, 212, 191, 0.14);
   --kpi-corpus-text: #2dd4bf;
@@ -492,21 +492,21 @@
   --kpi-health-text: #c7d2fe;
   --kpi-health-border: rgba(165, 180, 252, 0.28);
 
-  --badge-pdf-bg: rgba(248, 113, 113, 0.15);
+  --badge-pdf-bg: rgba(248, 113, 113, 0.14);
   --badge-pdf-text: #fca5a5;
-  --badge-pdf-border: rgba(248, 113, 113, 0.3);
+  --badge-pdf-border: rgba(248, 113, 113, 0.28);
 
-  --badge-md-bg: rgba(56, 189, 248, 0.15);
+  --badge-md-bg: rgba(56, 189, 248, 0.14);
   --badge-md-text: #7dd3fc;
-  --badge-md-border: rgba(56, 189, 248, 0.3);
+  --badge-md-border: rgba(56, 189, 248, 0.28);
 
-  --badge-txt-bg: rgba(45, 212, 191, 0.15);
+  --badge-txt-bg: rgba(45, 212, 191, 0.14);
   --badge-txt-text: #2dd4bf;
-  --badge-txt-border: rgba(45, 212, 191, 0.3);
+  --badge-txt-border: rgba(45, 212, 191, 0.28);
 
-  --danger-bg: rgba(248, 113, 113, 0.15);
+  --danger-bg: rgba(248, 113, 113, 0.14);
   --danger-text: #fca5a5;
-  --danger-border: rgba(248, 113, 113, 0.3);
+  --danger-border: rgba(248, 113, 113, 0.28);
 }
 
 /* 9. VINTAGE SEPIA & AMBER (LIGHT) */
@@ -520,9 +520,9 @@
   --bg-hover: rgba(56, 42, 29, 0.06);
   --backdrop-color: rgba(56, 42, 29, 0.4);
 
-  --border-color: #dfd1b8;
-  --border-input: #d1c0a2;
-  --border-hover: #bfa986;
+  --border-color: rgba(0, 0, 0, 0.08);
+  --border-input: rgba(0, 0, 0, 0.12);
+  --border-hover: rgba(0, 0, 0, 0.22);
 
   --accent-primary: #d97706;
   --accent-hover: #b45309;
@@ -573,32 +573,32 @@
 
 /* 10. DARK ROAST AMBER (DARK) */
 [data-theme="amber-dark"] {
-  --bg-dark: #1b140e;
-  --bg-sidebar: #140e0a;
-  --bg-card: #251b14;
-  --bg-input: #31231a;
-  --bg-user-bubble: #37281e;
-  --bg-modal: #1c140f;
-  --bg-hover: rgba(249, 241, 232, 0.07);
-  --backdrop-color: rgba(20, 14, 10, 0.8);
+  --bg-dark: #100b07;
+  --bg-sidebar: #080503;
+  --bg-card: #1a120b;
+  --bg-input: #150f09;
+  --bg-user-bubble: #22180e;
+  --bg-modal: #1a120b;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --backdrop-color: rgba(0, 0, 0, 0.75);
 
-  --border-color: #3b2b20;
-  --border-input: #4d382a;
-  --border-hover: #674b39;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-input: rgba(255, 255, 255, 0.12);
+  --border-hover: rgba(255, 255, 255, 0.22);
 
   --accent-primary: #f59e0b;
   --accent-hover: #fbbf24;
-  --accent-subtle: rgba(245, 158, 11, 0.16);
-  --accent-contrast-text: #140e0a;
+  --accent-subtle: rgba(245, 158, 11, 0.14);
+  --accent-contrast-text: #080503;
 
-  --text-main: #f9f1e8;
-  --text-sidebar-item: #ecdccb;
-  --text-muted: #b99e87;
-  --text-dark: #8c725d;
+  --text-main: #faf4ed;
+  --text-sidebar-item: #e4d7ca;
+  --text-muted: #b39a82;
+  --text-dark: #766352;
 
-  --status-active-bg: rgba(245, 158, 11, 0.15);
+  --status-active-bg: rgba(245, 158, 11, 0.14);
   --status-active-text: #f59e0b;
-  --status-active-border: rgba(245, 158, 11, 0.3);
+  --status-active-border: rgba(245, 158, 11, 0.28);
 
   --kpi-corpus-bg: rgba(245, 158, 11, 0.14);
   --kpi-corpus-text: #f59e0b;
@@ -616,21 +616,21 @@
   --kpi-health-text: #d8b4fe;
   --kpi-health-border: rgba(192, 132, 252, 0.28);
 
-  --badge-pdf-bg: rgba(248, 113, 113, 0.15);
+  --badge-pdf-bg: rgba(248, 113, 113, 0.14);
   --badge-pdf-text: #fca5a5;
-  --badge-pdf-border: rgba(248, 113, 113, 0.3);
+  --badge-pdf-border: rgba(248, 113, 113, 0.28);
 
-  --badge-md-bg: rgba(234, 88, 12, 0.15);
+  --badge-md-bg: rgba(234, 88, 12, 0.14);
   --badge-md-text: #fb923c;
-  --badge-md-border: rgba(234, 88, 12, 0.3);
+  --badge-md-border: rgba(234, 88, 12, 0.28);
 
-  --badge-txt-bg: rgba(245, 158, 11, 0.15);
+  --badge-txt-bg: rgba(245, 158, 11, 0.14);
   --badge-txt-text: #f59e0b;
-  --badge-txt-border: rgba(245, 158, 11, 0.3);
+  --badge-txt-border: rgba(245, 158, 11, 0.28);
 
-  --danger-bg: rgba(248, 113, 113, 0.15);
+  --danger-bg: rgba(248, 113, 113, 0.14);
   --danger-text: #fca5a5;
-  --danger-border: rgba(248, 113, 113, 0.3);
+  --danger-border: rgba(248, 113, 113, 0.28);
 }
 
 * {
