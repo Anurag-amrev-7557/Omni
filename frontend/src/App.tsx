@@ -165,6 +165,12 @@ export default function App() {
     }
   }, [currentSessionId, messages]);
 
+  // Keep currentSessionId in ref so session reloads don't re-trigger on chat clicks
+  const currentSessionIdRef = useRef(currentSessionId);
+  useEffect(() => {
+    currentSessionIdRef.current = currentSessionId;
+  }, [currentSessionId]);
+
   // Fetch Sessions (Initial mount displays skeleton; subsequent refreshes sync silently in background)
   const loadSessions = useCallback(async (isInitial = false) => {
     try {
@@ -173,7 +179,7 @@ export default function App() {
       }
       const sess = await api.getSessions();
       setSessions(sess);
-      if (sess.length > 0 && !currentSessionId) {
+      if (sess.length > 0 && !currentSessionIdRef.current) {
         handleSelectSession(sess[0].session_id);
       }
     } catch (e) {
@@ -183,14 +189,16 @@ export default function App() {
         setIsSessionsLoading(false);
       }
     }
-  }, [currentSessionId, handleSelectSession]);
+  }, [handleSelectSession]);
 
+  // Initial cold mount load only (strictly runs once!)
   useEffect(() => {
     loadSessions(true);
-  }, [loadSessions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Create New Thread (Instant 0ms UI switch with optimistic state)
-  const handleNewChat = () => {
+  const handleNewChat = useCallback(() => {
     const tempId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `sess-${Date.now()}`;
     setCurrentSessionId(tempId);
     setMessages([]);
@@ -208,34 +216,37 @@ export default function App() {
 
     // Non-blocking background sync
     api.createSession('New Chat').catch(() => {});
-  };
+  }, [showToast]);
 
   // Delete Thread (Instant 0ms Optimistic UI + Seamless Shift to Recent Top Chat)
-  const handleDeleteSession = (sessionId: string) => {
+  const handleDeleteSession = useCallback((sessionId: string) => {
     // 1. Clear from in-memory cache
     messageCacheRef.current.delete(sessionId);
 
     // 2. Instantly remove from local sidebar state
-    const remaining = sessions.filter(s => s.session_id !== sessionId);
-    setSessions(remaining);
+    setSessions(prev => {
+      const remaining = prev.filter(s => s.session_id !== sessionId);
+
+      // 3. If deleting the currently active chat, shift instantly to the top recent chat
+      if (currentSessionIdRef.current === sessionId) {
+        if (remaining.length > 0) {
+          handleSelectSession(remaining[0].session_id);
+        } else {
+          handleNewChat();
+        }
+      }
+      return remaining;
+    });
+
     showToast("Thread deleted");
 
-    // 3. If deleting the currently active chat, shift instantly to the top recent chat
-    if (currentSessionId === sessionId) {
-      if (remaining.length > 0) {
-        handleSelectSession(remaining[0].session_id);
-      } else {
-        handleNewChat();
-      }
-    }
-
-    // 4. Asynchronous non-blocking server delete with automatic rollback
+    // 4. Asynchronous non-blocking background delete
     api.deleteSession(sessionId).catch((e) => {
       console.error("Error deleting session on server:", e);
       showToast("Could not delete session from server");
-      loadSessions();
+      loadSessions(false);
     });
-  };
+  }, [handleSelectSession, handleNewChat, showToast, loadSessions]);
 
   // Inspect document in sidecar reader
   const handleInspectDoc = (doc: { filename: string; content?: string }) => {
