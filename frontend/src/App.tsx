@@ -173,13 +173,23 @@ export default function App() {
     }
   }, [handleSelectSession]);
 
-  // Auto-sync entire workspace (Vault documents, stats, chat history) on login/logout
-  const isInitialAuthRef = useRef(true);
+  // Auto-sync entire workspace ONLY when user ID actually changes (Login vs Logout vs User Switch)
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
-    if (isInitialAuthRef.current) {
-      isInitialAuthRef.current = false;
+    const currentId = (currentUser as any)?.id ?? (currentUser ? 'authenticated' : null);
+
+    // Ignore tab-focus events and Supabase token refresh events for the SAME user session
+    if (prevUserIdRef.current === currentId) {
       return;
     }
+
+    const isFirstTime = prevUserIdRef.current === undefined;
+    prevUserIdRef.current = currentId;
+
+    if (isFirstTime) {
+      return;
+    }
+
     // Clear local message cache to avoid cross-user state leaks
     messageCacheRef.current.clear();
     setMessages([]);
