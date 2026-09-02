@@ -127,8 +127,22 @@ def rank_with_cross_encoder(query: str, candidate_docs: list[dict], top_n: int =
         return candidate_docs[:top_n]
 
 
+try:
+    from src.cache import get_cached_retrieval, set_cached_retrieval, get_cached_embedding, set_cached_embedding
+except ImportError:
+    from cache import get_cached_retrieval, set_cached_retrieval, get_cached_embedding, set_cached_embedding
+
+
 def hybrid_search(query: str, k: int = 5) -> list[dict]:
-    """Executes dense vector search and BM25 hybrid reciprocal rank fusion."""
+    """Executes dense vector search and BM25 hybrid reciprocal rank fusion with Tier 2 HyperCache."""
+    user_id = get_current_user()
+    
+    # 0. Check Tier 2 Retrieval Cache
+    cached_docs = get_cached_retrieval(user_id, query, k)
+    if cached_docs is not None:
+        print(f"[HyperCache] Retrieval cache HIT for query: '{query}'")
+        return cached_docs
+
     client = get_qdrant_client()
     embeddings_model = get_embeddings()
 
@@ -178,4 +192,6 @@ def hybrid_search(query: str, k: int = 5) -> list[dict]:
             seen_parents.add(parent_text)
             final_docs.append(doc)
 
+    # 5. Populate Tier 2 Retrieval Cache
+    set_cached_retrieval(user_id, query, k, final_docs)
     return final_docs

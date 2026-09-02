@@ -26,6 +26,14 @@ try:
     from src.state_db import init_state_db, upsert_document, save_upload_job, get_upload_job, delete_document_record, save_feedback
     from src.storage import save_file, get_file_bytes, delete_file
     from src.audio import transcribe_audio
+    from src.retrieve import get_embeddings
+    from src.cache import (
+        get_exact_cached_response,
+        set_exact_cached_response,
+        find_semantic_cached_response,
+        add_semantic_cached_response,
+        invalidate_user_cache,
+    )
 except ImportError:
     from db import init_db, clear_collection, get_collection_stats, delete_file_from_collection, get_qdrant_client
     from ingest import ingest_file
@@ -36,6 +44,14 @@ except ImportError:
     from state_db import init_state_db, upsert_document, save_upload_job, get_upload_job, delete_document_record, save_feedback
     from storage import save_file, get_file_bytes, delete_file
     from audio import transcribe_audio
+    from retrieve import get_embeddings
+    from cache import (
+        get_exact_cached_response,
+        set_exact_cached_response,
+        find_semantic_cached_response,
+        add_semantic_cached_response,
+        invalidate_user_cache,
+    )
 
 def get_uploads_dir() -> str:
     candidate = os.getenv("UPLOADS_DIR")
@@ -609,6 +625,7 @@ def delete_document(filename: str):
     except Exception as exc:
         print(f"[Warning] Could not delete document record from DB: {exc}")
 
+    invalidate_user_cache(get_current_user())
     return {"success": True, "filename": filename}
 
 @app.get("/api/download/{filename}")
@@ -639,6 +656,7 @@ def reindex_document(filename: str):
     try:
         delete_file_from_collection(filename)
         ingest_file(file_path, user_id)
+        invalidate_user_cache(user_id)
         return {"success": True, "filename": filename}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error re-indexing {filename}: {e}")
@@ -805,6 +823,36 @@ def stream_chat(data: dict):
             if ai_title:
                 yield f"data: {json.dumps({'type': 'title', 'title': ai_title, 'session_id': session_id})}\n\n"
 
+            # 1. Tier 3 & Tier 4 HyperCache Check (Bypasses LLM inference if query is answered)
+            cached_hit = get_exact_cached_response(user_id, prompt, messages, web_search)
+            q_vec = None
+            if not cached_hit and not web_search:
+                try:
+                    embed_model = get_embeddings()
+                    q_vec = embed_model.embed_query(prompt)
+                    cached_hit = find_semantic_cached_response(user_id, q_vec, web_search)
+                except Exception:
+                    q_vec = None
+
+            if cached_hit:
+                hit_label = "Exact Match" if cached_hit.get("hit_type") == "exact" else f"Semantic Match ({int(cached_hit.get('similarity', 1.0) * 100)}%)"
+                yield f"data: {json.dumps({'type': 'thought', 'step': f'⚡ Omni HyperCache Hit [{hit_label}] • 0ms instant recall', 'status': 'completed'})}\n\n"
+                if cached_hit.get("contexts"):
+                    yield f"data: {json.dumps({'type': 'contexts', 'contexts': cached_hit['contexts']})}\n\n"
+                
+                cached_text = cached_hit["full_text"]
+                # Stream out cached response in ultra-fast smooth chunks (~10ms)
+                words = cached_text.split(" ")
+                chunk_size = 4
+                for i in range(0, len(words), chunk_size):
+                    token_chunk = (" " if i > 0 else "") + " ".join(words[i:i+chunk_size])
+                    yield f"data: {json.dumps({'type': 'token', 'token': token_chunk})}\n\n"
+                    time.sleep(0.01)
+                    
+                add_message(session_id, "assistant", cached_text, cached_hit.get("contexts"))
+                yield f"data: {json.dumps({'type': 'done', 'full_text': cached_text})}\n\n"
+                return
+
             if web_search:
                 yield f"data: {json.dumps({'type': 'thought', 'step': 'Searching live web intelligence & global knowledge...', 'status': 'in_progress'})}\n\n"
             else:
@@ -833,6 +881,18 @@ def stream_chat(data: dict):
                 yield f"data: {json.dumps({'type': 'token', 'token': token})}\n\n"
                 
             add_message(session_id, "assistant", full_text, retrieved_contexts)
+            
+            # Populate Tier 3 Exact Cache and Tier 4 Semantic Cache for subsequent 0ms hits
+            set_exact_cached_response(user_id, prompt, messages, web_search, full_text, retrieved_contexts)
+            if not web_search:
+                try:
+                    if q_vec is None:
+                        embed_model = get_embeddings()
+                        q_vec = embed_model.embed_query(prompt)
+                    add_semantic_cached_response(user_id, prompt, q_vec, full_text, retrieved_contexts)
+                except Exception as cache_err:
+                    print(f"[Warning] Failed to populate semantic cache: {cache_err}")
+
             yield f"data: {json.dumps({'type': 'done', 'full_text': full_text})}\n\n"
         except Exception as e:
             err_msg = f"\n\n⚠️ *Backend Stream Error: {str(e)}*"
