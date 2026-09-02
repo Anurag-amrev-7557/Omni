@@ -358,6 +358,10 @@ export default function App() {
 
             try {
               const parsed = JSON.parse(dataStr);
+              if (parsed.type === 'title' && parsed.title) {
+                const newTitle = parsed.title;
+                setSessions(prev => prev.map(s => s.session_id === currentSessionId ? { ...s, title: newTitle } : s));
+              }
               if (parsed.type === 'thought' && parsed.step) {
                 thoughtContent = parsed.step;
               }

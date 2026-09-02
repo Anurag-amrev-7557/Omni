@@ -28,6 +28,10 @@ def get_all_sessions() -> list[dict]:
         cur.execute("SELECT session_id::text, title, created_at FROM chat_sessions WHERE user_id=%s ORDER BY created_at DESC", (get_current_user(),))
         return [dict(row) for row in cur.fetchall()]
 
+def update_session_title(session_id: str, title: str):
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE chat_sessions SET title=%s WHERE session_id=%s AND user_id=%s", (title, session_id, get_current_user()))
+
 def add_message(session_id: str, role: str, content: str, contexts: list[dict] | None = None):
     with connection() as conn, conn.cursor() as cur:
         cur.execute("SELECT 1 FROM chat_sessions WHERE session_id=%s AND user_id=%s", (session_id, get_current_user()))

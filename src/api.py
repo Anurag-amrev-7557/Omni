@@ -19,8 +19,8 @@ if ROOT_DIR not in sys.path:
 try:
     from src.db import init_db, clear_collection, get_collection_stats, delete_file_from_collection, get_qdrant_client
     from src.ingest import ingest_file
-    from src.generate import answer_query_stream, answer_query_stream_with_prompt, prepare_context_and_prompt
-    from src.chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session
+    from src.generate import answer_query_stream, answer_query_stream_with_prompt, prepare_context_and_prompt, generate_chat_title
+    from src.chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session, update_session_title
     from src.pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
     from src.auth import require_user, set_current_user, get_current_user
     from src.state_db import init_state_db, upsert_document, save_upload_job, get_upload_job, delete_document_record, save_feedback
@@ -29,8 +29,8 @@ try:
 except ImportError:
     from db import init_db, clear_collection, get_collection_stats, delete_file_from_collection, get_qdrant_client
     from ingest import ingest_file
-    from generate import answer_query_stream, answer_query_stream_with_prompt, prepare_context_and_prompt
-    from chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session
+    from generate import answer_query_stream, answer_query_stream_with_prompt, prepare_context_and_prompt, generate_chat_title
+    from chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session, update_session_title
     from pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
     from auth import require_user, set_current_user, get_current_user
     from state_db import init_state_db, upsert_document, save_upload_job, get_upload_job, delete_document_record, save_feedback
@@ -786,11 +786,21 @@ def stream_chat(data: dict):
         
     user_id = get_current_user()
     messages = get_session_messages(session_id)
+    is_first_message = len(messages) == 0
     add_message(session_id, "user", prompt)
     
     def sse_event_generator():
         set_current_user(user_id)
         try:
+            # Generate AI session title for new chats using lightweight fast model
+            if is_first_message:
+                try:
+                    ai_title = generate_chat_title(prompt)
+                    update_session_title(session_id, ai_title)
+                    yield f"data: {json.dumps({'type': 'title', 'title': ai_title, 'session_id': session_id})}\n\n"
+                except Exception as e:
+                    print(f"[Warning] Failed to generate AI title: {e}")
+
             if web_search:
                 yield f"data: {json.dumps({'type': 'thought', 'step': 'Searching live web intelligence & global knowledge...', 'status': 'in_progress'})}\n\n"
             else:

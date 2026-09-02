@@ -30,6 +30,36 @@ def invoke_groq_with_fallback(prompt: str) -> str:
     return ""
 
 
+def generate_chat_title(query: str) -> str:
+    """Generate a clean, succinct, 2 to 4 word chat title using a lightweight fast model."""
+    cleaned = query.strip()
+    if not cleaned:
+        return "New Chat"
+    
+    prompt = (
+        "You are an expert at creating concise, elegant conversation titles.\n"
+        "Generate a brief 2 to 4 word title capturing the essence of the user's inquiry. "
+        "Do NOT use quotes, punctuation, markdown formatting, or preamble. Return ONLY the title text.\n\n"
+        f"User Query: {cleaned[:300]}\n"
+        "Title:"
+    )
+    for model_name in ["openai/gpt-oss-20b", "qwen/qwen3.6-27b", "openai/gpt-oss-120b"]:
+        try:
+            llm = ChatGroq(model=model_name, temperature=0.3, max_tokens=15)
+            res = llm.invoke(prompt)
+            title = res.content.strip().strip('"\'`').strip()
+            # Clean any leftover newlines or prefixes
+            title = re.sub(r'^(Title:\s*|"|\')', '', title, flags=re.IGNORECASE).strip()
+            if title and len(title) < 40 and not title.lower().startswith("here is"):
+                return title
+        except Exception:
+            continue
+        
+    # Fallback to clean word truncation
+    words = cleaned.split()[:4]
+    return " ".join(words).capitalize()
+
+
 PRONOUN_TRIGGERS = {
     "it", "its", "they", "them", "their", "this", "that", "these", "those",
     "he", "him", "his", "she", "her", "hers", "what about", "how about",
