@@ -103,7 +103,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       return { bodyText: raw, parsedCitations: [] };
     }
 
-    const body = raw.slice(0, match.index).trim();
+    const body = raw.slice(0, match.index).replace(/(?:\r?\n\s*[-*_—]{3,}\s*)+$/g, '').trim();
     const refsRaw = raw.slice(match.index + match[0].length).trim();
 
     const lines = refsRaw.split(/\r?\n+/).map(l => l.trim()).filter(Boolean);
@@ -320,9 +320,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         </div>
       )}
 
-      {/* COLLAPSIBLE GROUNDED REFERENCES & SOURCES - Appears only when full response has completed */}
-      {!(isLastAssistant && isStreaming) && parsedCitations.length > 0 && (
-        <div className="mt-4 border border-[var(--border-color)] rounded-2xl bg-[var(--bg-card)] p-3 shadow-xs fade-in">
+      {/* COLLAPSIBLE GROUNDED REFERENCES & SOURCES - Appears as soon as citations are extracted */}
+      {parsedCitations.length > 0 && (
+        <div className="mt-2.5 border border-[var(--border-color)] rounded-2xl bg-[var(--bg-card)] p-3 shadow-xs fade-in">
           <div 
             className="flex items-center justify-between cursor-pointer text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] select-none transition-colors"
             onClick={() => setReferencesOpen(!referencesOpen)}
@@ -340,7 +340,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           </div>
 
           {referencesOpen && (
-            <div className="mt-3 flex flex-col gap-2 pt-2.5 border-t border-[var(--border-color)]">
+            <div className="mt-2.5 flex flex-col gap-2 pt-2.5 border-t border-[var(--border-color)]">
               {parsedCitations.map((cit) => (
                 <div 
                   key={cit.id}
@@ -406,9 +406,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         </div>
       )}
 
-      {/* RETRIEVED GROUNDING CONTEXT SOURCES - Appears only when full response has completed */}
+      {/* RETRIEVED GROUNDING CONTEXT SOURCES */}
       {!(isLastAssistant && isStreaming) && message.contexts && message.contexts.length > 0 && (
-        <div className="mt-3 border border-[var(--border-color)] rounded-2xl bg-[var(--bg-card)] p-3 shadow-xs fade-in">
+        <div className="mt-2.5 border border-[var(--border-color)] rounded-2xl bg-[var(--bg-card)] p-3 shadow-xs fade-in">
           <div 
             className="flex items-center justify-between cursor-pointer text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] select-none transition-colors"
             onClick={() => setSourcesOpen(!sourcesOpen)}

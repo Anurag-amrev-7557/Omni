@@ -375,6 +375,8 @@ export default function App() {
         }
       }
 
+      setIsStreaming(false);
+
       // Ensure assistant message has content if stream finished empty
       if (!targetContent.trim()) {
         setMessages(prev => {
