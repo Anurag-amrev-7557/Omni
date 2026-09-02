@@ -117,12 +117,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
 
-  // Synchronously compute isMultiLine for instant (0ms) height collapse when docs/files are removed
+  // Pure deterministic isMultiLine check: instantly collapses with zero lag when attachments are cleared
   const isMultiLine = Boolean(
     inputPrompt.includes('\n') || 
+    inputPrompt.length > 60 ||
     attachedFiles.length > 0 || 
-    referencedVaultDocs.length > 0 || 
-    (ghostRef.current && ghostRef.current.clientHeight > 30)
+    referencedVaultDocs.length > 0
   );
 
   // Filter vault documents based on @ query
@@ -280,7 +280,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
       {/* Morphing Input Card with CSS Grid Auto-Sizing (z-20 sits in front of the sliding tray) */}
       <div 
-        className={`relative z-20 rounded-2xl border border-[var(--border-input)] bg-[var(--bg-input)] shadow-lg transition-all duration-200 ease-out focus-within:border-[var(--accent-primary)]/80 focus-within:ring-2 focus-within:ring-[var(--accent-primary)]/25 ${
+        className={`relative z-20 rounded-2xl border border-[var(--border-input)] bg-[var(--bg-input)] shadow-lg focus-within:border-[var(--accent-primary)]/80 focus-within:ring-2 focus-within:ring-[var(--accent-primary)]/25 ${
           isMultiLine ? 'px-4 pt-3 pb-3' : 'px-3.5 py-3 min-h-[52px]'
         }`}
       >
@@ -295,7 +295,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
         {/* REFERENCED VAULT DOCUMENTS & ATTACHED FILES CHIP CAROUSEL */}
         {(referencedVaultDocs.length > 0 || attachedFiles.length > 0) && (
-          <div className="relative group/carousel w-full mb-0.5 transition-all duration-200">
+          <div className="relative group/carousel w-full mb-0.5">
             {/* Left Scroll Navigation Button */}
             {canScrollLeft && (
               <button
@@ -457,13 +457,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         </div>
 
         {/* MULTI-LINE MODE BOTTOM TOOLBAR */}
-        <div 
-          className={`flex items-center justify-between transition-all duration-200 ease-out ${
-            isMultiLine 
-              ? 'opacity-100 max-h-12 pt-2.5 mt-1.5' 
-              : 'opacity-0 max-h-0 overflow-hidden pointer-events-none'
-          }`}
-        >
+        {isMultiLine && (
+          <div className="flex items-center justify-between pt-2.5 mt-1.5">
           {/* Plus Icon on Bottom-Left */}
           <div>
             <button
@@ -507,6 +502,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             </button>
           </div>
         </div>
+        )}
       </div>
 
       {/* Footer Disclaimer & Model Selector Row */}
