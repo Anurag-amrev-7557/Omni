@@ -804,6 +804,16 @@ html, body {
   opacity: 0.8;
 }
 
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px #1c1b1a inset !important;
+  -webkit-text-fill-color: #f4f3ef !important;
+  caret-color: #f4f3ef !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
 .dropdown-popover-top,
 .dropdown-popover {
   animation: slideDownIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
