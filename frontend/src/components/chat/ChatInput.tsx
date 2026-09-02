@@ -229,15 +229,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             onClick={closeMentionMenu} 
           />
           <div className="absolute bottom-full mb-2 left-2 sm:left-4 z-10 w-full max-w-[calc(100vw-32px)] sm:max-w-[380px] overflow-hidden pointer-events-none p-0.5">
-            <div className={`${isMentionClosing ? 'pure-slide-down' : 'pure-slide-up'} pointer-events-auto w-full max-h-72 overflow-y-auto p-1.5 bg-[#181716] border border-[#2c2b29] rounded-2xl shadow-[0_20px_48px_rgba(0,0,0,0.5)] select-none backdrop-blur-xl`}>
+            <div className={`${isMentionClosing ? 'pure-slide-down' : 'pure-slide-up'} pointer-events-auto w-full max-h-72 overflow-y-auto p-1.5 bg-[var(--bg-modal)]/95 border border-[var(--border-color)] rounded-2xl shadow-[0_20px_48px_rgba(0,0,0,0.28)] select-none backdrop-blur-xl`}>
               {/* Header Label */}
-              <div className="flex items-center justify-between px-3 pt-2 pb-1.5 text-[11px] font-medium text-[#8e8c85] select-none">
+              <div className="flex items-center justify-between px-3 pt-2 pb-1.5 text-[11px] font-medium text-[var(--text-muted)] select-none">
                 <span className="flex items-center gap-1.5">
-                  <FileText size={13} className="text-[#8e8c85]" />
+                  <FileText size={13} className="text-[var(--text-muted)]" />
                   <span>Vault documents</span>
-                  {mentionQuery && <span className="text-[#b8b5ad] font-normal">&ldquo;{mentionQuery}&rdquo;</span>}
+                  {mentionQuery && <span className="text-[var(--text-main)] font-normal">&ldquo;{mentionQuery}&rdquo;</span>}
                 </span>
-                <span className="text-[10.5px] font-mono text-[#8e8c85]">Tab / ↵</span>
+                <span className="text-[10.5px] font-mono text-[var(--text-muted)]">Tab / ↵</span>
               </div>
 
               {/* Document List */}
@@ -249,25 +249,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                       key={doc.filename}
                       className={`flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer transition-colors duration-100 ${
                         isSelected
-                          ? 'bg-[#282725] text-[#f4f3ef]'
-                          : 'hover:bg-[#201f1e] text-[#b8b5ad]'
+                          ? 'bg-[var(--bg-hover)] text-[var(--text-main)] font-medium shadow-xs'
+                          : 'hover:bg-[var(--bg-hover)]/60 text-[var(--text-muted)] hover:text-[var(--text-main)]'
                       }`}
                       onClick={() => handleSelectMentionDoc(doc)}
                       onMouseEnter={() => setMentionIndex(idx)}
                     >
                       <div className="flex items-center gap-3 truncate pr-2">
-                        <div className="w-7 h-7 rounded-lg bg-[#222120] border border-[#2e2d2b] flex items-center justify-center text-[#9c9992] flex-shrink-0">
+                        <div className="w-7 h-7 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-center text-[var(--text-muted)] flex-shrink-0">
                           <FileText size={13.5} />
                         </div>
                         <div className="truncate">
-                          <div className="font-medium text-[13.5px] text-[#f4f3ef] truncate leading-tight">{doc.filename}</div>
-                          <div className="text-[11.5px] text-[#9c9992] font-normal mt-0.5">
+                          <div className="font-medium text-[13.5px] text-[var(--text-main)] truncate leading-tight">{doc.filename}</div>
+                          <div className="text-[11.5px] text-[var(--text-muted)] font-normal mt-0.5">
                             {doc.pages} {doc.pages === 1 ? 'page' : 'pages'} · {doc.size_mb} MB
                           </div>
                         </div>
                       </div>
                       {isSelected && (
-                        <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-md bg-[#222120] border border-[#2e2d2b] text-[#9c9992] flex-shrink-0">
+                        <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-md bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-muted)] flex-shrink-0">
                           ↵
                         </span>
                       )}
