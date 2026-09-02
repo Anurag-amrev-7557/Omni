@@ -106,12 +106,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionIndex, setMentionIndex] = useState(0);
 
-  const closeMentionMenu = useCallback(() => {
+  const closeMentionMenu = useCallback((immediate = false) => {
+    if (immediate) {
+      setMentionMenuOpen(false);
+      setIsMentionClosing(false);
+      return;
+    }
     setIsMentionClosing(true);
     setTimeout(() => {
       setMentionMenuOpen(false);
       setIsMentionClosing(false);
-    }, 200);
+    }, 150);
   }, []);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -154,31 +159,35 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     if (mentionMenuOpen && !isMentionClosing) {
-      closeMentionMenu();
+      closeMentionMenu(false);
     }
   };
 
-  // Insert Selected Mention
+  // Insert Selected Mention with instant dismiss and precise caret restoration
   const handleSelectMentionDoc = useCallback((doc: DocumentItem) => {
-    if (!textareaRef.current) return;
-    
-    const cursorPos = textareaRef.current.selectionStart || 0;
+    const el = textareaRef.current;
+    const cursorPos = el?.selectionStart || 0;
     const textBeforeCursor = inputPrompt.slice(0, cursorPos);
     const textAfterCursor = inputPrompt.slice(cursorPos);
     const lastAtIndex = textBeforeCursor.lastIndexOf('@');
 
+    let newCursorPos = cursorPos;
     if (lastAtIndex !== -1) {
       const newText = textBeforeCursor.slice(0, lastAtIndex) + textAfterCursor;
       setInputPrompt(newText);
+      newCursorPos = lastAtIndex;
     }
 
     onAddReferencedDoc?.(doc.filename);
-    closeMentionMenu();
+    closeMentionMenu(true);
     showToast(`Referenced @${doc.filename}`);
 
-    setTimeout(() => {
-      textareaRef.current?.focus();
-    }, 50);
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    });
   }, [inputPrompt, onAddReferencedDoc, setInputPrompt, showToast, closeMentionMenu]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
