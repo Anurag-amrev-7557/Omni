@@ -792,14 +792,21 @@ def stream_chat(data: dict):
         set_current_user(user_id)
         try:
             if web_search:
-                yield f"data: {json.dumps({'type': 'thought', 'step': 'Performing deep web research & scanning Knowledge Vault...', 'status': 'in_progress'})}\n\n"
+                yield f"data: {json.dumps({'type': 'thought', 'step': 'Searching live web intelligence & global knowledge...', 'status': 'in_progress'})}\n\n"
             else:
-                yield f"data: {json.dumps({'type': 'thought', 'step': 'Scanning Knowledge Vault for relevant context...', 'status': 'in_progress'})}\n\n"
+                yield f"data: {json.dumps({'type': 'thought', 'step': 'Scanning Knowledge Vault vector indices...', 'status': 'in_progress'})}\n\n"
 
             # Prepare context and prompt once, then reuse for both frontend and LLM
             prompt_str, retrieved_contexts = prepare_context_and_prompt(prompt, messages, web_search=web_search)
             
             yield f"data: {json.dumps({'type': 'contexts', 'contexts': retrieved_contexts})}\n\n"
+
+            if web_search:
+                yield f"data: {json.dumps({'type': 'thought', 'step': f'Synthesizing {len(retrieved_contexts)} verified sources & drafting grounded answer...', 'status': 'in_progress'})}\n\n"
+            elif retrieved_contexts:
+                yield f"data: {json.dumps({'type': 'thought', 'step': f'Reranked {len(retrieved_contexts)} relevant document excerpts. Formulating response...', 'status': 'in_progress'})}\n\n"
+            else:
+                yield f"data: {json.dumps({'type': 'thought', 'step': 'Reasoning and composing response...', 'status': 'in_progress'})}\n\n"
             
             if not prompt_str:
                 prompt_str = f"You are Omni, a helpful AI assistant. Please answer this prompt: {prompt}"
