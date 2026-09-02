@@ -116,7 +116,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
-  const [isMultiLine, setIsMultiLine] = useState(false);
+
+  // Synchronously compute isMultiLine for instant (0ms) height collapse when docs/files are removed
+  const isMultiLine = Boolean(
+    inputPrompt.includes('\n') || 
+    attachedFiles.length > 0 || 
+    referencedVaultDocs.length > 0 || 
+    (ghostRef.current && ghostRef.current.clientHeight > 30)
+  );
 
   // Filter vault documents based on @ query
   const matchingDocs = useMemo(() => {
@@ -125,15 +132,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       d.filename.toLowerCase().includes(mentionQuery.toLowerCase())
     ).slice(0, 6);
   }, [vaultDocuments, mentionQuery]);
-
-  // Monitor ghost mirror height to detect multi-line transitions fluidly
-  useEffect(() => {
-    if (ghostRef.current) {
-      const h = ghostRef.current.clientHeight;
-      const multi = h > 30 || inputPrompt.includes('\n') || attachedFiles.length > 0 || referencedVaultDocs.length > 0;
-      setIsMultiLine(multi);
-    }
-  }, [inputPrompt, attachedFiles, referencedVaultDocs]);
 
   // Handle Text Change & @ Trigger
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
