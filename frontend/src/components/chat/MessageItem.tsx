@@ -320,11 +320,17 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                 if (href && href.startsWith('#cite-')) {
                   const citeId = href.replace('#cite-', '');
                   const idx = parseInt(citeId, 10);
-                  const targetCit = parsedCitations.find(c => c.id === citeId) || 
-                                    (message.contexts && message.contexts[idx - 1]);
-                  const fileName = targetCit?.filename || (targetCit as any)?.source || 'Document';
+                  let targetCit = parsedCitations.find(c => c.id === citeId) || 
+                                  (message.contexts && message.contexts[idx - 1]);
+                  
+                  // If exact numeric index is out of bounds, map to primary cited context so inspection ALWAYS opens the source
+                  if (!targetCit) {
+                    targetCit = parsedCitations[0] || (message.contexts && message.contexts[0]);
+                  }
+
+                  const fileName = targetCit?.filename || (targetCit as any)?.source || (message.contexts && message.contexts[0]?.filename) || 'Cited Source';
                   const pageNum = targetCit?.page ? (typeof targetCit.page === 'number' ? targetCit.page : parseInt(String(targetCit.page), 10)) : undefined;
-                  const quoteText = targetCit?.quote || (targetCit as any)?.parent_content || (targetCit as any)?.content;
+                  const quoteText = targetCit?.quote || (targetCit as any)?.parent_content || (targetCit as any)?.content || (message.contexts && (message.contexts[0]?.parent_content || message.contexts[0]?.content));
                   const isWeb = targetCit?.url || (targetCit as any)?.source_type === 'web';
 
                   if (isWeb && targetCit?.url) {

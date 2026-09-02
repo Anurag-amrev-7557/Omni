@@ -50,13 +50,27 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
         .catch(() => setTotalPages(1));
     }
 
-    setIsLoading(true);
+    if (doc.content && doc.content.length > 20 && doc.content !== "Document text indexed in Knowledge Vault.") {
+      setContent(doc.content);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
+
     api.getFileContent(doc.filename)
       .then(data => {
-        setContent(data.content || doc.content || "Content unavailable.");
+        if (data?.content && data.content !== "Document text indexed in Knowledge Vault.") {
+          setContent(data.content);
+        } else if (doc.content) {
+          setContent(doc.content);
+        }
       })
       .catch(() => {
-        setContent(doc.content || "Content unavailable.");
+        if (doc.content) {
+          setContent(doc.content);
+        } else {
+          setContent("Content preview unavailable.");
+        }
       })
       .finally(() => setIsLoading(false));
   }, [doc]);
