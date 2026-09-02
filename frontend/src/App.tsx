@@ -173,6 +173,34 @@ export default function App() {
     }
   }, [handleSelectSession]);
 
+  // Auto-sync entire workspace (Vault documents, stats, chat history) on login/logout
+  const isInitialAuthRef = useRef(true);
+  useEffect(() => {
+    if (isInitialAuthRef.current) {
+      isInitialAuthRef.current = false;
+      return;
+    }
+    // Clear local message cache to avoid cross-user state leaks
+    messageCacheRef.current.clear();
+    setMessages([]);
+    setCurrentSessionId(null);
+    currentSessionIdRef.current = null;
+
+    // Refresh user-scoped Knowledge Vault documents & stats
+    refreshVault();
+
+    // Refresh user-scoped chat threads
+    loadSessions(true);
+
+    if (currentUser) {
+      const name = (currentUser as any)?.user_metadata?.full_name || (currentUser as any)?.email?.split('@')[0] || 'User';
+      showToast(`Welcome back, ${name}! Syncing workspace...`);
+    } else {
+      showToast("Signed out. Switched to guest workspace.");
+    }
+  }, [currentUser, refreshVault, loadSessions, showToast]);
+
+  // Initial cold mount load
   useEffect(() => {
     loadSessions(true);
   }, [loadSessions]);
