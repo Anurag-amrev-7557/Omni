@@ -228,41 +228,49 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             className="fixed inset-0 z-0" 
             onClick={closeMentionMenu} 
           />
-          <div className="absolute bottom-full mb-1 left-2 sm:left-8 z-10 w-full max-w-[calc(100vw-32px)] sm:max-w-sm overflow-hidden pointer-events-none p-0.5">
-            <div className={`${isMentionClosing ? 'pure-slide-down' : 'pure-slide-up'} pointer-events-auto w-full max-h-72 overflow-y-auto p-1.5 bg-[var(--bg-modal)] border border-[var(--border-color)] rounded-2xl text-xs`}>
-              <div className="flex items-center justify-between px-3 py-1.5 text-[10.5px] font-bold text-[var(--text-dark)] uppercase tracking-wider select-none border-b border-[var(--border-color)]/40 mb-1">
-                <span className="flex items-center gap-1.5 text-[var(--text-main)]">
-                  <AtSign size={13} className="text-[var(--accent-primary)]" />
-                  <span>Reference Files</span>
-                  {mentionQuery && <span className="lowercase font-mono text-[var(--text-muted)] font-normal">&ldquo;{mentionQuery}&rdquo;</span>}
+          <div className="absolute bottom-full mb-1.5 left-2 sm:left-4 z-10 w-full max-w-[calc(100vw-32px)] sm:max-w-[360px] overflow-hidden pointer-events-none p-0.5">
+            <div className={`${isMentionClosing ? 'pure-slide-down' : 'pure-slide-up'} pointer-events-auto w-full max-h-72 overflow-y-auto p-1.5 bg-[#181716] border border-[#2c2b29] rounded-2xl shadow-[0_20px_48px_rgba(0,0,0,0.5)] text-xs select-none backdrop-blur-xl`}>
+              {/* Header Label (Clean & borderless) */}
+              <div className="flex items-center justify-between px-2.5 pt-1.5 pb-1 text-[11px] font-medium text-[#7a7771] select-none">
+                <span className="flex items-center gap-1.5 text-[#b8b5ad]">
+                  <FileText size={12} className="text-[#7a7771]" />
+                  <span>Vault documents</span>
+                  {mentionQuery && <span className="text-[#7a7771] font-normal">matching &ldquo;{mentionQuery}&rdquo;</span>}
                 </span>
-                <span className="font-mono text-[10px] text-[var(--text-dark)]">Tab / ↵</span>
+                <span className="text-[10px] font-mono text-[#52504b]">Tab / ↵</span>
               </div>
 
-              <div className="flex flex-col gap-0.5">
+              {/* Document List */}
+              <div className="flex flex-col gap-0.5 mt-0.5">
                 {matchingDocs.map((doc, idx) => {
                   const isSelected = mentionIndex === idx;
                   return (
                     <div
                       key={doc.filename}
-                      className={`flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer transition-all duration-150 ${
+                      className={`flex items-center justify-between px-2.5 py-1.5 rounded-xl cursor-pointer transition-colors duration-100 ${
                         isSelected
-                          ? 'bg-[var(--accent-subtle)] shadow-xs ring-1 ring-[var(--accent-primary)]/40 font-medium'
-                          : 'hover:bg-[var(--bg-hover)]'
+                          ? 'bg-[#282725] text-[#f4f3ef]'
+                          : 'hover:bg-[#201f1e] text-[#b8b5ad]'
                       }`}
                       onClick={() => handleSelectMentionDoc(doc)}
                       onMouseEnter={() => setMentionIndex(idx)}
                     >
                       <div className="flex items-center gap-2.5 truncate pr-2">
-                        <FormatBadge filename={doc.filename} size="sm" />
+                        <div className="w-6 h-6 rounded-lg bg-[#222120] border border-[#2e2d2b] flex items-center justify-center text-[#7a7771] flex-shrink-0">
+                          <FileText size={12.5} />
+                        </div>
                         <div className="truncate">
-                          <div className="font-semibold text-[13px] text-[var(--text-main)] truncate">{doc.filename}</div>
-                          <div className="text-[10.5px] text-[var(--text-muted)] font-mono">
-                            {doc.pages} pages · {doc.size_mb} MB
+                          <div className="font-normal text-[13px] text-[#f4f3ef] truncate leading-tight">{doc.filename}</div>
+                          <div className="text-[11px] text-[#7a7771] font-sans mt-0.5">
+                            {doc.pages} {doc.pages === 1 ? 'page' : 'pages'} · {doc.size_mb} MB
                           </div>
                         </div>
                       </div>
-                      {isSelected && <Check size={14} className="text-[var(--accent-primary)] flex-shrink-0" />}
+                      {isSelected && (
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-[#1c1b1a] text-[#7a7771] flex-shrink-0">
+                          ↵
+                        </span>
+                      )}
                     </div>
                   );
                 })}
