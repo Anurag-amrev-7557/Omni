@@ -233,7 +233,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <>
           <div 
             className="fixed inset-0 z-0" 
-            onClick={closeMentionMenu} 
+            onClick={() => closeMentionMenu()} 
           />
           <div className="absolute bottom-full mb-2 left-2 sm:left-4 z-30 w-full max-w-[calc(100vw-32px)] sm:max-w-[380px] pointer-events-none">
             <div className={`${isMentionClosing ? 'dropdown-popover-closing' : 'dropdown-popover-bottom'} pointer-events-auto w-full max-h-72 overflow-y-auto p-1.5 bg-[var(--bg-modal)]/95 border border-[var(--border-color)] rounded-2xl shadow-[0_16px_48px_rgba(0,0,0,0.22)] select-none backdrop-blur-xl`}>

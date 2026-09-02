@@ -205,6 +205,12 @@ export default function App() {
     api.deleteSession(sessionId).catch(() => loadSessions(false));
   }, [handleSelectSession, handleNewChat, loadSessions]);
 
+  // Inspect document in sidecar reader
+  const handleInspectDoc = (doc: { filename: string; content?: string }) => {
+    setSidecarDoc(doc);
+    setSidecarOpen(true);
+  };
+
   // Project Management Handlers
   const handleCreateProject = (name: string, description: string, color: string) => {
     const newProject: ProjectItem = {
@@ -212,9 +218,9 @@ export default function App() {
       name,
       description,
       color,
-      documentsCount: 0,
-      conversationsCount: 0,
-      createdAt: new Date().toISOString()
+      documentCount: 0,
+      chatCount: 0,
+      createdAt: new Date().toISOString().split('T')[0]
     };
     const updated = [newProject, ...projects];
     setProjects(updated);
@@ -223,7 +229,7 @@ export default function App() {
   };
 
   const handleSelectProject = (project: ProjectItem) => {
-    setActiveProject(project);
+    setActiveProjectId(project.id);
     localStorage.setItem('omni_active_project', project.id);
     showToast(`Switched to project: ${project.name}`);
   };
@@ -233,8 +239,8 @@ export default function App() {
     setProjects(updated);
     localStorage.setItem('omni_projects', JSON.stringify(updated));
     showToast("Project deleted");
-    if (activeProject?.id === id) {
-      setActiveProject(null);
+    if (activeProjectId === id) {
+      setActiveProjectId('default-vault');
       localStorage.setItem('omni_active_project', 'default-vault');
     }
   };
