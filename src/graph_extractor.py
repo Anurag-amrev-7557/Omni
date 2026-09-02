@@ -75,10 +75,33 @@ def extract_entities_and_relations(
             continue
 
     if not extracted_json or not isinstance(extracted_json, dict):
-        return {"entities": [], "relations": []}
+        extracted_json = {"entities": [], "relations": []}
 
     entities = extracted_json.get("entities", [])
     relations = extracted_json.get("relations", [])
+
+    # Heuristic Rule-Based Fallback if LLM extraction returned 0 entities
+    if not entities:
+        candidates = list(dict.fromkeys(re.findall(r'\b[A-Z][A-Za-z0-9_-]{2,}(?:\s+[A-Z][A-Za-z0-9_-]{2,})*\b', text)))
+        stopwords = {"This", "That", "There", "Here", "With", "From", "Your", "Please", "Document", "Section", "Table", "Figure", "After", "Before", "When", "Where", "Which", "About", "Total", "Amount", "Invoice", "Number", "Date", "Page"}
+        filtered = [c for c in candidates if c not in stopwords and len(c) > 2][:12]
+        
+        for name in filtered:
+            entities.append({
+                "name": name,
+                "type": "Technology" if any(term in name.lower() for term in ["db", "key", "token", "auth", "api", "pdf", "sql", "rag", "qdrant", "zone", "headphone"]) else "Concept",
+                "description": f"Extracted from {filename} (page {page})",
+                "aliases": []
+            })
+            
+        for i in range(len(entities) - 1):
+            relations.append({
+                "source": entities[i]["name"],
+                "target": entities[i+1]["name"],
+                "type": "ASSOCIATED_WITH",
+                "description": f"Co-occurs in {filename}",
+                "weight": 1.0
+            })
 
     # Disambiguation & Database Ingestion
     name_to_id: dict[str, str] = {}

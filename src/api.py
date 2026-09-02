@@ -919,6 +919,7 @@ def stream_chat(data: dict):
 @app.get("/api/graph")
 def get_graph(user_id: str = Depends(require_user)):
     """Fetch the complete Knowledge Graph (nodes, edges, communities, metrics) for the user."""
+    set_current_user(user_id)
     try:
         from src.graph_db import get_user_graph
         graph_data = get_user_graph()
@@ -1027,6 +1028,7 @@ def build_graph(
 @app.get("/api/graph/communities")
 def get_graph_communities(user_id: str = Depends(require_user)):
     """Fetch hierarchical community summaries and macro-insights."""
+    set_current_user(user_id)
     try:
         from src.graph_db import get_user_graph
         graph_data = get_user_graph()
