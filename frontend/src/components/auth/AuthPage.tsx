@@ -140,14 +140,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               Your thinking partner for big ambitions
             </p>
 
-            {/* Soft Wall Alert if Query Limit Triggered */}
+            {/* Minimalist Pill Banner if Query Limit Triggered */}
             {reasonMessage && (
-              <div className="w-full max-w-[420px] mb-6 p-3.5 rounded-2xl bg-[#e07a5f]/10 border border-[#e07a5f]/30 text-xs text-[#f4f3ef] flex items-start gap-2.5 text-left">
-                <Sparkles size={15} className="text-[#e07a5f] flex-shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-semibold text-[#e07a5f]">Guest Limit Reached: </span>
-                  <span>{reasonMessage}</span>
-                </div>
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#1f1e1d] border border-[#2c2b29] text-[12.5px] text-[#b8b5ad] mb-6 shadow-xs fade-in select-none">
+                <span className="w-2 h-2 rounded-full bg-[#e07a5f] animate-pulse flex-shrink-0" />
+                <span>Free trial complete · Sign in to continue chatting</span>
               </div>
             )}
 
