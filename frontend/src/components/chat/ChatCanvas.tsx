@@ -58,16 +58,38 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
   onStartVoice,
   showToast,
 }) => {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
+
+  const handleScroll = () => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    userScrolledUpRef.current = distanceToBottom > 80;
+  };
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!userScrolledUpRef.current) {
+      const el = scrollContainerRef.current;
+      if (el) {
+        if (isStreaming) {
+          el.scrollTop = el.scrollHeight;
+        } else {
+          bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+      }
+    }
   }, [messages, isStreaming]);
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[var(--bg-dark)]">
       {/* Scrollable Message Feed */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 pt-6 pb-6 scroll-smooth">
+      <div 
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto px-4 sm:px-6 pt-6 pb-6"
+      >
         <div className="max-w-4xl mx-auto w-full">
           {/* Subtle Conversation Skeleton Loader during Thread Fetch */}
           {isMessagesLoading && messages.length === 0 && (

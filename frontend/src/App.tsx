@@ -165,10 +165,12 @@ export default function App() {
     }
   }, [currentSessionId, messages]);
 
-  // Fetch Sessions
-  const loadSessions = useCallback(async () => {
+  // Fetch Sessions (Initial mount displays skeleton; subsequent refreshes sync silently in background)
+  const loadSessions = useCallback(async (isInitial = false) => {
     try {
-      setIsSessionsLoading(true);
+      if (isInitial) {
+        setIsSessionsLoading(true);
+      }
       const sess = await api.getSessions();
       setSessions(sess);
       if (sess.length > 0 && !currentSessionId) {
@@ -177,12 +179,14 @@ export default function App() {
     } catch (e) {
       console.error("Error loading sessions:", e);
     } finally {
-      setIsSessionsLoading(false);
+      if (isInitial) {
+        setIsSessionsLoading(false);
+      }
     }
   }, [currentSessionId, handleSelectSession]);
 
   useEffect(() => {
-    loadSessions();
+    loadSessions(true);
   }, [loadSessions]);
 
   // Create New Thread (Instant 0ms UI switch with optimistic state)

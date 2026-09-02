@@ -206,15 +206,14 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   // 2. ASSISTANT MESSAGE RENDER
   return (
     <div className="w-full flex flex-col my-5 fade-in">
-      {/* Thinking / Streaming Orb Loader - Clean inline text next to orb with zero border/accent box */}
       {isLastAssistant && isStreaming && !bodyText.trim() ? (
         <div className="flex items-center gap-3 py-3 fade-in select-none">
           <OrbitingOrbLoader size="sm" />
-          <div className="flex items-center gap-2">
-            {message.thought?.toLowerCase().includes('web') && (
-              <Globe size={14} className="text-[var(--accent-primary)] animate-[spin_8s_linear_infinite]" />
-            )}
-            <span className="text-[13.5px] text-[var(--text-muted)] font-normal transition-all duration-300">
+          <div className="overflow-hidden h-6 flex items-center">
+            <span 
+              key={message.thought || 'thinking'} 
+              className="lottery-text-change text-[13.5px] text-[var(--text-muted)] font-normal inline-block"
+            >
               {message.thought || "Synthesizing insights..."}
             </span>
           </div>
