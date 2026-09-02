@@ -103,13 +103,13 @@ def ingest_file(file_path: str, user_id: str | None = None, progress_callback = 
     
     print(f"[DEBUG] Extracted {len(pages)} pages from {filename}")
     if progress_callback:
-        progress_callback(35, "Generating contextual summary...")
+        progress_callback(30, "Generating contextual summary...")
     summary = generate_summary(pages)
     print(f"[DEBUG] Generated summary: {summary[:100]}...")
     
     # 1. PARENT CHUNKING (1500 chars)
     if progress_callback:
-        progress_callback(55, "Chunking document blocks...")
+        progress_callback(45, "Chunking document blocks...")
     parent_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
     parent_docs = parent_splitter.split_documents(pages)
     
@@ -142,7 +142,7 @@ def ingest_file(file_path: str, user_id: str | None = None, progress_callback = 
             child_count += 1
         
     if progress_callback:
-        progress_callback(75, "Generating vector embeddings...")
+        progress_callback(60, "Generating vector embeddings...")
     embeddings_model = get_embeddings()
     client = get_qdrant_client()
     
@@ -167,24 +167,26 @@ def ingest_file(file_path: str, user_id: str | None = None, progress_callback = 
     )
     
     if progress_callback:
-        progress_callback(90, "Writing vectors to Qdrant...")
+        progress_callback(75, "Writing vectors to Qdrant...")
     vector_store.add_documents(child_documents)
     print(f"[DEBUG] Ingested {filename} into Qdrant: {len(parent_docs)} parent blocks, {len(child_documents)} child vectors.")
     print(f"[DEBUG] Collection name used: {COLLECTION_NAME}")
 
     # 3. KNOWLEDGE GRAPH EXTRACTION & COMMUNITY DETECTION
     try:
-        if progress_callback:
-            progress_callback(95, "Building Knowledge Graph entities & relations...")
         from src.graph_extractor import extract_entities_and_relations
         from src.graph_clustering import run_community_detection_and_summaries
         
-        # Process more parent chunks for better coverage (up to 12 chunks)
-        chunks_to_process = min(12, len(parent_docs))
+        # Process up to 4 salient parent chunks for rapid yet comprehensive graph coverage
+        chunks_to_process = min(4, len(parent_docs))
         entities_extracted = 0
         relations_extracted = 0
         
-        for parent in parent_docs[:chunks_to_process]:
+        for idx, parent in enumerate(parent_docs[:chunks_to_process]):
+            chunk_pct = int(78 + (idx / max(1, chunks_to_process)) * 16)
+            if progress_callback:
+                progress_callback(chunk_pct, f"Extracting Knowledge Graph ({idx + 1}/{chunks_to_process})...")
+                
             result = extract_entities_and_relations(
                 text=parent.page_content,
                 filename=filename,
@@ -196,8 +198,9 @@ def ingest_file(file_path: str, user_id: str | None = None, progress_callback = 
         print(f"[Ingest] Extracted {entities_extracted} entities and {relations_extracted} relations from {filename}")
         
         # Only run community detection if this is a significant addition
-        # (more than 5 entities or 5 relations) to avoid expensive clustering on small updates
-        if entities_extracted > 5 or relations_extracted > 5:
+        if entities_extracted > 2 or relations_extracted > 2:
+            if progress_callback:
+                progress_callback(96, "Detecting community clusters & themes...")
             run_community_detection_and_summaries()
             print(f"[Ingest] Updated community clusters after processing {filename}")
         else:

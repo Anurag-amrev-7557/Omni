@@ -260,25 +260,40 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
             }}
           />
 
-          {/* Upload Progress Section */}
+          {/* Minimalist Premium Ingestion Status Card */}
           {uploadingDocs.length > 0 && (
-            <div className="space-y-2 mb-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-main)]">
-                <Loader2 size={16} className="animate-spin text-blue-500" />
-                <span>Processing {uploadingDocs.length} file(s)...</span>
+            <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] overflow-hidden shadow-2xs mb-4 select-none animate-in fade-in slide-in-from-top-2 duration-200">
+              {/* Card Sub-Header */}
+              <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--bg-sidebar)] border-b border-[var(--border-color)] text-xs">
+                <div className="flex items-center gap-2 font-medium text-[var(--text-main)]">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--accent-primary)] opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--accent-primary)]" />
+                  </span>
+                  <span className="font-semibold">
+                    Ingesting {uploadingDocs.length} {uploadingDocs.length === 1 ? 'Document' : 'Documents'}
+                  </span>
+                  <span className="text-[var(--text-muted)] text-[11.5px] hidden sm:inline">
+                    · Hierarchical chunking & Graph RAG
+                  </span>
+                </div>
               </div>
-              {uploadingDocs.map(doc => (
-                <UploadProgressItem
-                  key={doc.filename}
-                  filename={doc.filename}
-                  status={doc.status || 'uploading'}
-                  progress={doc.progress || 0}
-                  stage={doc.stage}
-                  error={doc.error}
-                  onCancel={onCancelUpload ? () => onCancelUpload(doc.upload_id, doc.filename) : undefined}
-                  onRetry={() => onReindex(doc.filename)}
-                />
-              ))}
+
+              {/* Ingestion Items List */}
+              <div className="divide-y divide-[var(--border-color)]/60">
+                {uploadingDocs.map(doc => (
+                  <UploadProgressItem
+                    key={doc.filename}
+                    filename={doc.filename}
+                    status={doc.status || 'uploading'}
+                    progress={doc.progress || 0}
+                    stage={doc.stage}
+                    error={doc.error}
+                    onCancel={onCancelUpload ? () => onCancelUpload(doc.upload_id, doc.filename) : undefined}
+                    onRetry={() => onReindex(doc.filename)}
+                  />
+                ))}
+              </div>
             </div>
           )}
 

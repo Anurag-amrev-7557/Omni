@@ -32,7 +32,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   const activeThemeObj = themesList.find(t => t.id === theme);
 
   return (
-    <header className="h-14 min-h-[52px] w-full px-4 sm:px-6 flex items-center justify-between border-b border-[var(--border-color)] bg-[var(--bg-dark)] select-none z-10">
+    <header className="relative h-14 min-h-[52px] w-full px-4 sm:px-6 flex items-center justify-between border-b border-[var(--border-color)] bg-[var(--bg-dark)] select-none z-30">
       {/* Left Title & Sidebar Toggle */}
       <div className="flex items-center gap-2.5">
         {sidebarCollapsed && (

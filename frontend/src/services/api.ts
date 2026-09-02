@@ -264,8 +264,8 @@ export const api = {
     return res.json();
   },
 
-  async buildGraph(): Promise<{ status: string; message: string }> {
-    const res = await apiFetch('/api/graph/build', {
+  async buildGraph(forceRebuild = true): Promise<{ status: string; message: string }> {
+    const res = await apiFetch(`/api/graph/build?force_rebuild=${forceRebuild ? 'true' : 'false'}`, {
       method: 'POST',
     });
     if (!res.ok) {

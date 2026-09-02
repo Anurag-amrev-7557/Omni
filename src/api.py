@@ -395,6 +395,28 @@ def list_documents():
     print(f"[DEBUG] Returning {len(available_files)} available files")
     return {"documents": available_files}
 
+def get_active_vault_filenames(user_id: str) -> list[str]:
+    """Returns the set of active vault filenames for the user."""
+    set_current_user(user_id)
+    stats = get_collection_stats()
+    uploads_dir = user_upload_dir()
+    files_on_disk = set()
+    if os.path.exists(uploads_dir):
+        files_on_disk = {
+            fname for fname in os.listdir(uploads_dir)
+            if os.path.isfile(os.path.join(uploads_dir, fname))
+        }
+    db_docs = set()
+    try:
+        from src.state_db import list_user_documents
+        records = list_user_documents(user_id)
+        db_docs = {r["filename"] for r in records if r.get("filename")}
+    except Exception:
+        pass
+    
+    active_files = sorted(set(stats.get("files", [])) | files_on_disk | db_docs)
+    return active_files
+
 MAX_FILE_SIZE_BYTES = 35 * 1024 * 1024  # 35 MB
 MAX_FILES_PER_BATCH = 10
 ALLOWED_EXTENSIONS = {".pdf", ".txt", ".md"}
@@ -882,22 +904,20 @@ def stream_chat(data: dict):
     messages = get_session_messages(session_id)
     is_first_message = len(messages) == 0
     
-    ai_title = None
+    initial_title = None
     if is_first_message:
-        try:
-            clean_query = re.sub(r'\[Focus explicitly on referenced Knowledge Vault documents:.*?\]\s*', '', prompt, flags=re.DOTALL).strip()
-            ai_title = generate_chat_title(clean_query or prompt)
-        except Exception as e:
-            print(f"[Warning] Failed to generate AI title: {e}")
+        clean_query = re.sub(r'\[Focus explicitly on referenced Knowledge Vault documents:.*?\]\s*', '', prompt, flags=re.DOTALL).strip()
+        words = (clean_query or prompt).split()[:3]
+        initial_title = " ".join(words).title() if words else "New Chat"
 
-    add_message(session_id, "user", prompt, session_title=ai_title)
+    add_message(session_id, "user", prompt, session_title=initial_title)
     
     def sse_event_generator():
         set_current_user(user_id)
         try:
-            # Broadcast AI session title immediately on stream initialization
-            if ai_title:
-                yield f"data: {json.dumps({'type': 'title', 'title': ai_title, 'session_id': session_id})}\n\n"
+            # Broadcast initial session title immediately with zero wait time
+            if initial_title:
+                yield f"data: {json.dumps({'type': 'title', 'title': initial_title, 'session_id': session_id})}\n\n"
 
             # 1. Tier 3 & Tier 4 HyperCache Check (Bypasses LLM inference if query is answered)
             cached_hit = get_exact_cached_response(user_id, prompt, messages, web_search)
@@ -984,11 +1004,12 @@ def stream_chat(data: dict):
 
 @app.get("/api/graph")
 def get_graph(user_id: str = Depends(require_user)):
-    """Fetch the complete Knowledge Graph (nodes, edges, communities, metrics) for the user."""
+    """Fetch the complete Knowledge Graph (nodes, edges, communities, metrics) for the user, strictly synced with active vault documents."""
     set_current_user(user_id)
     try:
         from src.graph_db import get_user_graph
-        graph_data = get_user_graph()
+        active_files = get_active_vault_filenames(user_id)
+        graph_data = get_user_graph(active_filenames=active_files)
         return graph_data
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to fetch knowledge graph: {exc}")
@@ -998,23 +1019,42 @@ def get_graph(user_id: str = Depends(require_user)):
 def build_graph(
     background_tasks: BackgroundTasks,
     user_id: str = Depends(require_user),
-    force_rebuild: bool = Query(False, description="Force complete graph rebuild even if graph exists"),
+    force_rebuild: bool = Query(True, description="Force complete graph rebuild even if graph exists"),
 ):
-    """Triggers background knowledge graph construction across all indexed vault documents."""
+    """Triggers background knowledge graph construction across all active vault documents."""
     def graph_worker(uid: str, force: bool):
         set_current_user(uid)
         try:
             from src.graph_extractor import extract_entities_and_relations
             from src.graph_clustering import run_community_detection_and_summaries
-            from src.graph_db import get_user_graph, clear_user_graph
+            from src.graph_db import get_user_graph, clear_user_graph, sync_and_prune_graph
             from src.db import get_qdrant_client
             from src.config import COLLECTION_NAME
             from qdrant_client.models import Filter, FieldCondition, MatchValue
+
+            active_files = get_active_vault_filenames(uid)
+            print(f"[GraphWorker] Active vault files for user {uid}: {active_files}")
 
             # Clear existing graph if force rebuild is requested
             if force:
                 print(f"[GraphWorker] Force rebuild requested - clearing existing graph for user {uid}")
                 clear_user_graph()
+            else:
+                sync_and_prune_graph(uid, active_files)
+
+            if not active_files:
+                print(f"[GraphWorker] No active vault documents for user {uid}. Knowledge graph cleared.")
+                clear_user_graph()
+                return {
+                    "status": "completed",
+                    "user_id": uid,
+                    "blocks_processed": 0,
+                    "entities_extracted": 0,
+                    "relations_extracted": 0,
+                    "final_nodes": 0,
+                    "final_links": 0,
+                    "final_communities": 0,
+                }
 
             client = get_qdrant_client()
             points_list = []
@@ -1061,6 +1101,11 @@ def build_graph(
                 if pt_uid and str(pt_uid) != str(uid):
                     continue
 
+                fname = meta.get("filename") or payload.get("filename") or ""
+                # Strictly process only active vault files
+                if fname and fname not in active_files:
+                    continue
+
                 parent_text = (
                     meta.get("parent_content")
                     or payload.get("parent_content")
@@ -1069,12 +1114,11 @@ def build_graph(
                     or payload.get("text")
                     or ""
                 )
-                fname = meta.get("filename") or payload.get("filename") or "Document"
                 page = meta.get("page") or payload.get("page") or 1
 
                 if parent_text and len(parent_text.strip()) > 30 and parent_text not in seen_parents:
                     seen_parents.add(parent_text)
-                    result = extract_entities_and_relations(parent_text, fname, int(page) if str(page).isdigit() else 1)
+                    result = extract_entities_and_relations(parent_text, fname or "Document", int(page) if str(page).isdigit() else 1)
                     total_entities += len(result.get("entities", []))
                     total_relations += len(result.get("relations", []))
 
@@ -1083,26 +1127,43 @@ def build_graph(
                 uploads_dir = user_upload_dir()
                 if os.path.exists(uploads_dir):
                     for fname in os.listdir(uploads_dir):
+                        if fname not in active_files:
+                            continue
                         fpath = os.path.join(uploads_dir, fname)
                         if os.path.isfile(fpath):
-                            from src.pdf_viewer import extract_pdf_page_text, get_pdf_page_count
-                            total_pages = get_pdf_page_count(fname)
-                            for p in range(1, min(6, total_pages + 1)):
-                                text = extract_pdf_page_text(fname, p)
-                                if text and len(text.strip()) > 30:
-                                    seen_parents.add(text)
-                                    result = extract_entities_and_relations(text, fname, p)
-                                    total_entities += len(result.get("entities", []))
-                                    total_relations += len(result.get("relations", []))
+                            if fname.lower().endswith(".pdf"):
+                                from src.pdf_viewer import extract_pdf_page_text, get_pdf_page_count
+                                total_pages = get_pdf_page_count(fname)
+                                for p in range(1, min(6, total_pages + 1)):
+                                    text = extract_pdf_page_text(fname, p)
+                                    if text and len(text.strip()) > 30 and text not in seen_parents:
+                                        seen_parents.add(text)
+                                        result = extract_entities_and_relations(text, fname, p)
+                                        total_entities += len(result.get("entities", []))
+                                        total_relations += len(result.get("relations", []))
+                            else:
+                                try:
+                                    with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
+                                        text = f.read()
+                                    if text and len(text.strip()) > 30 and text not in seen_parents:
+                                        seen_parents.add(text)
+                                        result = extract_entities_and_relations(text[:3000], fname, 1)
+                                        total_entities += len(result.get("entities", []))
+                                        total_relations += len(result.get("relations", []))
+                                except Exception:
+                                    pass
 
             print(f"[GraphWorker] Extracted {total_entities} entities and {total_relations} relations from {len(seen_parents)} text blocks.")
             
+            # Prune any stale entities/relations and recalculate communities
+            sync_and_prune_graph(uid, active_files)
+
             # Always run community detection for full builds
             run_community_detection_and_summaries()
             print(f"[GraphWorker] Knowledge Graph build completed for user {uid} ({len(seen_parents)} parent blocks processed).")
             
             # Get final graph stats
-            final_graph = get_user_graph()
+            final_graph = get_user_graph(active_filenames=active_files)
             return {
                 "status": "completed",
                 "user_id": uid,

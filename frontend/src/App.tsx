@@ -163,14 +163,15 @@ export default function App() {
     try {
       if (isInitial) setIsSessionsLoading(true);
       const sess = await api.getSessions();
-      setSessions(sess);
-      if (sess.length > 0 && !currentSessionIdRef.current) {
+      setSessions(sess || []);
+      if (sess && sess.length > 0 && !currentSessionIdRef.current) {
         handleSelectSession(sess[0].session_id);
       }
     } catch (e) {
       console.error("Error loading sessions:", e);
+      setSessions([]);
     } finally {
-      if (isInitial) setIsSessionsLoading(false);
+      setIsSessionsLoading(false);
     }
   }, [handleSelectSession]);
 

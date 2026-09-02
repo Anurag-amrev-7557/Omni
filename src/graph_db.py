@@ -59,12 +59,29 @@ def init_graph_db():
                 )
             """)
 
-            # Indexes for fast traversals
+            # Indexes and constraints for fast traversals and link deduplication
             cur.execute("CREATE INDEX IF NOT EXISTS idx_graph_entities_user ON graph_entities(user_id)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_graph_entities_comm ON graph_entities(user_id, community_id)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_graph_rel_source ON graph_relations(user_id, source_entity_id)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_graph_rel_target ON graph_relations(user_id, target_entity_id)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_graph_rel_doc ON graph_relations(user_id, source_doc)")
+
+            # Deduplicate any pre-existing duplicate relations
+            cur.execute("""
+                DELETE FROM graph_relations a USING graph_relations b
+                WHERE a.ctid < b.ctid
+                  AND a.user_id = b.user_id
+                  AND a.source_entity_id = b.source_entity_id
+                  AND a.target_entity_id = b.target_entity_id
+                  AND a.relation_type = b.relation_type;
+            """)
+            try:
+                cur.execute("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_user_relation
+                    ON graph_relations (user_id, source_entity_id, target_entity_id, relation_type)
+                """)
+            except Exception:
+                pass
     except Exception as exc:
         print(f"[GraphDB] Error initializing graph tables: {exc}")
 
@@ -75,10 +92,10 @@ def upsert_entity(
     aliases: list[str] | None = None,
     source_doc: str | None = None,
 ) -> str:
-    """Inserts or merges an entity into graph_entities."""
+    """Inserts or merges an entity into graph_entities with array deduplication."""
     user_id = get_current_user()
-    aliases = aliases or []
-    source_docs = [source_doc] if source_doc else []
+    aliases = [a.strip() for a in (aliases or []) if a and a.strip()]
+    source_docs = [source_doc.strip()] if source_doc and source_doc.strip() else []
     
     with connection() as conn, conn.cursor() as cur:
         cur.execute("""
@@ -90,8 +107,16 @@ def upsert_entity(
             ON CONFLICT (user_id, canonical_name) DO UPDATE SET
                 entity_type = CASE WHEN EXCLUDED.entity_type != 'Concept' THEN EXCLUDED.entity_type ELSE graph_entities.entity_type END,
                 description = CASE WHEN LENGTH(EXCLUDED.description) > LENGTH(graph_entities.description) THEN EXCLUDED.description ELSE graph_entities.description END,
-                aliases = array_cat(graph_entities.aliases, EXCLUDED.aliases),
-                source_docs = array_cat(graph_entities.source_docs, EXCLUDED.source_docs),
+                aliases = (
+                    SELECT COALESCE(array_agg(DISTINCT elem), '{}'::text[])
+                    FROM unnest(array_cat(graph_entities.aliases, EXCLUDED.aliases)) AS elem
+                    WHERE elem IS NOT NULL AND elem != ''
+                ),
+                source_docs = (
+                    SELECT COALESCE(array_agg(DISTINCT elem), '{}'::text[])
+                    FROM unnest(array_cat(graph_entities.source_docs, EXCLUDED.source_docs)) AS elem
+                    WHERE elem IS NOT NULL AND elem != ''
+                ),
                 updated_at = now()
             RETURNING entity_id::text
         """, (
@@ -116,9 +141,10 @@ def add_relation(
     page_num: int = 1,
     snippet: str = "",
 ) -> str:
-    """Adds a directed edge between two entities."""
+    """Adds or merges a directed edge between two entities, eliminating duplicates."""
     user_id = get_current_user()
     rel_id = str(uuid.uuid4())
+    norm_type = relation_type.upper().strip()
     with connection() as conn, conn.cursor() as cur:
         cur.execute("""
             INSERT INTO graph_relations (
@@ -126,18 +152,137 @@ def add_relation(
                 relation_type, weight, description, source_doc, page_num, snippet
             ) VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-            ) RETURNING relation_id::text
+            )
+            ON CONFLICT (user_id, source_entity_id, target_entity_id, relation_type) DO UPDATE SET
+                weight = GREATEST(graph_relations.weight, EXCLUDED.weight),
+                description = CASE WHEN LENGTH(EXCLUDED.description) > LENGTH(graph_relations.description) THEN EXCLUDED.description ELSE graph_relations.description END,
+                source_doc = CASE WHEN EXCLUDED.source_doc != '' THEN EXCLUDED.source_doc ELSE graph_relations.source_doc END,
+                page_num = EXCLUDED.page_num,
+                snippet = CASE WHEN LENGTH(EXCLUDED.snippet) > LENGTH(graph_relations.snippet) THEN EXCLUDED.snippet ELSE graph_relations.snippet END
+            RETURNING relation_id::text
         """, (
             rel_id, user_id, source_entity_id, target_entity_id,
-            relation_type.upper().strip(), weight, description.strip(),
+            norm_type, weight, description.strip(),
             source_doc.strip(), page_num, snippet.strip()
         ))
         row = cur.fetchone()
         return row["relation_id"] if row else rel_id
 
-def get_user_graph() -> dict:
-    """Returns the full knowledge graph (nodes, edges, communities, metrics) for current user."""
+def batch_save_entities_and_relations(
+    entities: list[dict],
+    relations: list[dict],
+    filename: str,
+    page: int = 1,
+    snippet: str = "",
+) -> tuple[dict[str, str], int]:
+    """Atomically upserts a batch of entities and relations using a single connection and transaction."""
     user_id = get_current_user()
+    name_to_id: dict[str, str] = {}
+    relations_saved = 0
+
+    with connection() as conn, conn.cursor() as cur:
+        # 1. Upsert all entities
+        for ent in entities:
+            cname = ent.get("name", "").strip()
+            if not cname:
+                continue
+            etype = ent.get("type", "Concept").strip()
+            desc = ent.get("description", "").strip()
+            aliases = [a.strip() for a in ent.get("aliases", []) if a and a.strip()]
+            source_docs = [filename.strip()] if filename and filename.strip() else []
+
+            cur.execute("""
+                INSERT INTO graph_entities (
+                    entity_id, user_id, canonical_name, entity_type, description, aliases, source_docs, updated_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, now()
+                )
+                ON CONFLICT (user_id, canonical_name) DO UPDATE SET
+                    entity_type = CASE WHEN EXCLUDED.entity_type != 'Concept' THEN EXCLUDED.entity_type ELSE graph_entities.entity_type END,
+                    description = CASE WHEN LENGTH(EXCLUDED.description) > LENGTH(graph_entities.description) THEN EXCLUDED.description ELSE graph_entities.description END,
+                    aliases = (
+                        SELECT COALESCE(array_agg(DISTINCT elem), '{}'::text[])
+                        FROM unnest(array_cat(graph_entities.aliases, EXCLUDED.aliases)) AS elem
+                        WHERE elem IS NOT NULL AND elem != ''
+                    ),
+                    source_docs = (
+                        SELECT COALESCE(array_agg(DISTINCT elem), '{}'::text[])
+                        FROM unnest(array_cat(graph_entities.source_docs, EXCLUDED.source_docs)) AS elem
+                        WHERE elem IS NOT NULL AND elem != ''
+                    ),
+                    updated_at = now()
+                RETURNING entity_id::text
+            """, (
+                str(uuid.uuid4()), user_id, cname, etype, desc, aliases, source_docs
+            ))
+            row = cur.fetchone()
+            if row:
+                ent_id = row["entity_id"]
+                name_to_id[cname.lower()] = ent_id
+                for a in aliases:
+                    name_to_id[a.lower()] = ent_id
+
+        # 2. Upsert all relations
+        for rel in relations:
+            src_name = rel.get("source", "").strip().lower()
+            tgt_name = rel.get("target", "").strip().lower()
+            src_id = name_to_id.get(src_name)
+            tgt_id = name_to_id.get(tgt_name)
+
+            if src_id and tgt_id and src_id != tgt_id:
+                rel_id = str(uuid.uuid4())
+                norm_type = rel.get("type", "RELATES_TO").upper().strip()
+                rel_weight = float(rel.get("weight", 1.0))
+                rel_desc = rel.get("description", "").strip()
+
+                cur.execute("""
+                    INSERT INTO graph_relations (
+                        relation_id, user_id, source_entity_id, target_entity_id,
+                        relation_type, weight, description, source_doc, page_num, snippet
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    )
+                    ON CONFLICT (user_id, source_entity_id, target_entity_id, relation_type) DO UPDATE SET
+                        weight = GREATEST(graph_relations.weight, EXCLUDED.weight),
+                        description = CASE WHEN LENGTH(EXCLUDED.description) > LENGTH(graph_relations.description) THEN EXCLUDED.description ELSE graph_relations.description END,
+                        source_doc = CASE WHEN EXCLUDED.source_doc != '' THEN EXCLUDED.source_doc ELSE graph_relations.source_doc END,
+                        page_num = EXCLUDED.page_num,
+                        snippet = CASE WHEN LENGTH(EXCLUDED.snippet) > LENGTH(graph_relations.snippet) THEN EXCLUDED.snippet ELSE graph_relations.snippet END
+                """, (
+                    rel_id, user_id, src_id, tgt_id,
+                    norm_type, rel_weight, rel_desc,
+                    filename.strip(), page, snippet[:300].strip()
+                ))
+                relations_saved += 1
+
+    try:
+        from src.cache import invalidate_user_cache
+        invalidate_user_cache(user_id)
+    except Exception:
+        pass
+
+    return name_to_id, relations_saved
+
+
+def get_user_graph(active_filenames: list[str] | None = None) -> dict:
+    """Returns the full knowledge graph (nodes, edges, communities, metrics) for current user.
+    If active_filenames is passed, automatically prunes nodes/relations from stale documents.
+    """
+    user_id = get_current_user()
+
+    # Fast-path in-memory cache lookup for sub-millisecond retrieval
+    if active_filenames is None:
+        try:
+            from src.cache import get_cached_user_graph, set_cached_user_graph
+            cached = get_cached_user_graph(user_id)
+            if cached is not None:
+                return cached
+        except Exception:
+            pass
+
+    if active_filenames is not None:
+        sync_and_prune_graph(user_id, active_filenames)
+
     with connection() as conn, conn.cursor() as cur:
         # Fetch entities
         cur.execute("""
@@ -154,7 +299,18 @@ def get_user_graph() -> dict:
                    r.weight, r.description, r.source_doc, r.page_num, r.snippet
             FROM graph_relations r WHERE r.user_id=%s
         """, (user_id,))
-        links = [dict(r) for r in cur.fetchall()]
+        raw_links = [dict(r) for r in cur.fetchall()]
+
+        # Deduplicate links (merge multiple duplicate relations into single clean edge)
+        links = []
+        seen_link_keys = set()
+        for l in raw_links:
+            # Normalize pair so bidirectional or duplicate entries are unified
+            s, t, rel_t = str(l["source"]), str(l["target"]), str(l.get("type", "")).upper()
+            link_key = (min(s, t), max(s, t), rel_t)
+            if link_key not in seen_link_keys:
+                seen_link_keys.add(link_key)
+                links.append(l)
 
         # Fetch communities
         cur.execute("""
@@ -163,7 +319,12 @@ def get_user_graph() -> dict:
         """, (user_id,))
         communities = [dict(r) for r in cur.fetchall()]
 
-        return {
+        # Deduplicate source_docs for safety in client consumption
+        for n in nodes:
+            if n.get("source_docs"):
+                n["source_docs"] = list(dict.fromkeys(n["source_docs"]))
+
+        result = {
             "nodes": nodes,
             "links": links,
             "communities": communities,
@@ -173,6 +334,15 @@ def get_user_graph() -> dict:
                 "total_communities": len(communities),
             }
         }
+
+        # Populate cache
+        try:
+            from src.cache import set_cached_user_graph
+            set_cached_user_graph(user_id, result)
+        except Exception:
+            pass
+
+        return result
 
 def save_community_clusters(clusters: list[dict]):
     """Saves hierarchical community clusters and summaries."""
@@ -218,24 +388,78 @@ def update_entity_metrics(entity_updates: list[dict]):
                 user_id
             ))
 
+def sync_and_prune_graph(user_id: str, active_filenames: list[str]):
+    """Prunes any entities, relations, and communities that do not belong to active vault documents."""
+    active_set = [f.strip() for f in active_filenames if f and f.strip()]
+    with connection() as conn, conn.cursor() as cur:
+        if not active_set:
+            # If no active files in vault, clear entire user graph
+            cur.execute("DELETE FROM graph_relations WHERE user_id=%s", (user_id,))
+            cur.execute("DELETE FROM graph_entities WHERE user_id=%s", (user_id,))
+            cur.execute("DELETE FROM graph_communities WHERE user_id=%s", (user_id,))
+            return
+
+        # 1. Delete relations originating from deleted/inactive documents
+        cur.execute("""
+            DELETE FROM graph_relations
+            WHERE user_id = %s AND NOT (source_doc = ANY(%s))
+        """, (user_id, active_set))
+
+        # 2. Prune inactive document names from graph_entities.source_docs
+        cur.execute("""
+            UPDATE graph_entities
+            SET source_docs = (
+                SELECT COALESCE(array_agg(elem), '{}'::text[])
+                FROM unnest(source_docs) AS elem
+                WHERE elem = ANY(%s)
+            )
+            WHERE user_id = %s
+        """, (active_set, user_id))
+
+        # 3. Delete orphan entities that have no active source docs AND no active relations
+        cur.execute("""
+            DELETE FROM graph_entities
+            WHERE user_id = %s
+            AND (source_docs IS NULL OR cardinality(source_docs) = 0 OR source_docs = '{}'::text[])
+            AND entity_id NOT IN (SELECT source_entity_id FROM graph_relations WHERE user_id = %s)
+            AND entity_id NOT IN (SELECT target_entity_id FROM graph_relations WHERE user_id = %s)
+        """, (user_id, user_id, user_id))
+
+        # 4. If no entities remain, clean up communities
+        cur.execute("SELECT COUNT(*) FROM graph_entities WHERE user_id = %s", (user_id,))
+        ent_count = cur.fetchone()["count"]
+        if ent_count == 0:
+            cur.execute("DELETE FROM graph_communities WHERE user_id = %s", (user_id,))
+
 def delete_document_graph(filename: str):
     """Deletes graph edges and disconnected nodes originating solely from a deleted document."""
     user_id = get_current_user()
+    filename_clean = filename.strip()
     with connection() as conn, conn.cursor() as cur:
-        cur.execute("DELETE FROM graph_relations WHERE user_id=%s AND source_doc=%s", (user_id, filename))
+        # Delete relations for this document
+        cur.execute("DELETE FROM graph_relations WHERE user_id=%s AND source_doc=%s", (user_id, filename_clean))
+        
         # Remove document from source_docs array
         cur.execute("""
             UPDATE graph_entities
             SET source_docs = array_remove(source_docs, %s)
             WHERE user_id=%s AND %s = ANY(source_docs)
-        """, (filename, user_id, filename))
-        # Delete orphan entities that have no remaining source docs and 0 degree
+        """, (filename_clean, user_id, filename_clean))
+        
+        # Delete orphan entities that have no remaining source docs and no remaining relations
         cur.execute("""
             DELETE FROM graph_entities
-            WHERE user_id=%s AND cardinality(source_docs) = 0
+            WHERE user_id=%s
+            AND (source_docs IS NULL OR cardinality(source_docs) = 0 OR source_docs = '{}'::text[])
             AND entity_id NOT IN (SELECT source_entity_id FROM graph_relations WHERE user_id=%s)
             AND entity_id NOT IN (SELECT target_entity_id FROM graph_relations WHERE user_id=%s)
         """, (user_id, user_id, user_id))
+
+        # Check remaining entity count; if 0, clear communities
+        cur.execute("SELECT COUNT(*) FROM graph_entities WHERE user_id=%s", (user_id,))
+        ent_count = cur.fetchone()["count"]
+        if ent_count == 0:
+            cur.execute("DELETE FROM graph_communities WHERE user_id=%s", (user_id,))
 
 def clear_user_graph():
     """Deletes all knowledge graph data for the current user."""

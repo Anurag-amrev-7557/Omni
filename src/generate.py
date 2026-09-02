@@ -145,14 +145,22 @@ def prepare_context_and_prompt(
     sub_queries = decompose_query(standalone_query)
     
     # Always include the user's direct raw query alongside reformulated and decomposed queries
-    search_queries = list(dict.fromkeys([query, standalone_query] + sub_queries))
+    search_queries = [sq for sq in list(dict.fromkeys([query, standalone_query] + sub_queries)) if sq.strip()]
     
     all_contexts = []
-    for sq in search_queries:
-        if not sq.strip():
-            continue
-        contexts = hybrid_search(sq, k=6)
-        all_contexts.extend(contexts)
+    if len(search_queries) <= 1:
+        if search_queries:
+            all_contexts = hybrid_search(search_queries[0], k=6)
+    else:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        with ThreadPoolExecutor(max_workers=min(3, len(search_queries))) as executor:
+            future_to_query = {executor.submit(hybrid_search, sq, 6): sq for sq in search_queries}
+            for future in as_completed(future_to_query):
+                try:
+                    contexts = future.result(timeout=4.0)
+                    all_contexts.extend(contexts)
+                except Exception as exc:
+                    print(f"[Retrieval] Parallel hybrid search error: {exc}")
         
     # Deduplicate vault contexts by parent_content and content while preserving order
     seen = set()

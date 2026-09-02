@@ -136,77 +136,77 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Navigation Section */}
           <div className="p-3 flex flex-col gap-1 border-b border-[var(--border-color)]">
             <button 
-              className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-all text-left cursor-pointer"
+              className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[13.5px] font-medium text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-all text-left cursor-pointer group"
               onClick={() => handleMobileTabSelect(onNewChat)}
             >
-            <Plus size={17} className="text-[var(--accent-primary)]" />
-            <span>New chat</span>
-          </button>
+              <Plus size={17} className="text-[var(--accent-primary)] group-hover:scale-110 transition-transform" />
+              <span>New chat</span>
+            </button>
 
-          <button 
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
-              activeTab === 'chats' || activeTab === 'chats_list' 
-                ? 'bg-[var(--bg-card)] text-[var(--text-main)] shadow-sm' 
-                : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
-            }`}
-            onClick={() => handleMobileTabSelect(() => onSelectTab('chats'))}
-          >
-            <MessageSquare size={17} />
-            <span>Chats</span>
-          </button>
+            <button 
+              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[13.5px] font-medium transition-all text-left cursor-pointer group ${
+                activeTab === 'chats' || activeTab === 'chats_list' 
+                  ? 'bg-[var(--bg-card)] text-[var(--text-main)] font-semibold shadow-xs' 
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
+              }`}
+              onClick={() => handleMobileTabSelect(() => onSelectTab('chats'))}
+            >
+              <MessageSquare size={17} className={activeTab === 'chats' || activeTab === 'chats_list' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text-main)] transition-colors'} />
+              <span>Chats</span>
+            </button>
 
-          <button 
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
-              activeTab === 'projects' 
-                ? 'bg-[var(--bg-card)] text-[var(--text-main)] shadow-sm' 
-                : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
-            }`}
-            onClick={() => handleMobileTabSelect(() => onSelectTab('projects'))}
-          >
-            <Folder size={17} className={activeTab === 'projects' ? 'text-[var(--accent-primary)]' : ''} />
-            <span>Projects</span>
-          </button>
+            <button 
+              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[13.5px] font-medium transition-all text-left cursor-pointer group ${
+                activeTab === 'projects' 
+                  ? 'bg-[var(--bg-card)] text-[var(--text-main)] font-semibold shadow-xs' 
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
+              }`}
+              onClick={() => handleMobileTabSelect(() => onSelectTab('projects'))}
+            >
+              <Folder size={17} className={activeTab === 'projects' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text-main)] transition-colors'} />
+              <span>Projects</span>
+            </button>
 
-          <button 
-            className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
-              activeTab === 'vault' 
-                ? 'bg-[var(--bg-card)] text-[var(--text-main)] shadow-sm' 
-                : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
-            }`}
-            onClick={() => handleMobileTabSelect(() => onSelectTab('vault'))}
-            title={`${documentsCount} document(s) · ${totalChunksCount} indexed chunk(s)`}
-          >
-            <div className="flex items-center gap-3">
-              <Database size={17} className="text-[var(--accent-primary)]" />
-              <span>Knowledge Vault</span>
-            </div>
-            {isStatsLoading ? (
-              <Skeleton className="w-5 h-4 rounded-full" />
-            ) : documentsCount > 0 ? (
-              <span className="text-[11.5px] px-2 py-0.5 rounded-full bg-[var(--bg-input)] text-[var(--text-main)] font-mono font-medium border border-[var(--border-color)]">
-                {documentsCount}
+            <button 
+              className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[13.5px] font-medium transition-all text-left cursor-pointer group ${
+                activeTab === 'vault' 
+                  ? 'bg-[var(--bg-card)] text-[var(--text-main)] font-semibold shadow-xs' 
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
+              }`}
+              onClick={() => handleMobileTabSelect(() => onSelectTab('vault'))}
+              title={`${documentsCount} document(s) · ${totalChunksCount} indexed chunk(s)`}
+            >
+              <div className="flex items-center gap-3">
+                <Database size={17} className={activeTab === 'vault' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text-main)] transition-colors'} />
+                <span>Knowledge Vault</span>
+              </div>
+              {isStatsLoading ? (
+                <Skeleton className="w-5 h-4 rounded-full" />
+              ) : documentsCount > 0 ? (
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-primary)] font-mono font-bold">
+                  {documentsCount}
+                </span>
+              ) : null}
+            </button>
+
+            <button 
+              className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[13.5px] font-medium transition-all text-left cursor-pointer group ${
+                activeTab === 'graph' 
+                  ? 'bg-[var(--bg-card)] text-[var(--text-main)] font-semibold shadow-xs' 
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
+              }`}
+              onClick={() => handleMobileTabSelect(() => onSelectTab('graph'))}
+              title="Interactive 2.5D Knowledge Graph & Community Clusters"
+            >
+              <div className="flex items-center gap-3">
+                <Network size={17} className={activeTab === 'graph' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)] group-hover:text-[var(--text-main)] transition-colors'} />
+                <span>Knowledge Graph</span>
+              </div>
+              <span className="text-[10.5px] px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-primary)] font-mono font-bold">
+                2.5D
               </span>
-            ) : null}
-          </button>
-
-          <button 
-            className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
-              activeTab === 'graph' 
-                ? 'bg-[var(--bg-card)] text-[var(--text-main)] shadow-sm' 
-                : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
-            }`}
-            onClick={() => handleMobileTabSelect(() => onSelectTab('graph'))}
-            title="Interactive 2.5D Knowledge Graph & Community Clusters"
-          >
-            <div className="flex items-center gap-3">
-              <Network size={17} className={activeTab === 'graph' ? 'text-[var(--accent-primary)]' : 'text-purple-500'} />
-              <span>Knowledge Graph</span>
-            </div>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500 font-mono font-semibold">
-              2.5D
-            </span>
-          </button>
-        </div>
+            </button>
+          </div>
 
         {/* Recents Thread List */}
         <div className="px-4 pt-4 pb-1.5 flex items-center justify-between text-xs font-semibold text-[var(--text-dark)] uppercase tracking-wider">

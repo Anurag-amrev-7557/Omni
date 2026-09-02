@@ -108,54 +108,40 @@ def extract_entities_and_relations(
                 "weight": 1.0
             })
 
-    # Disambiguation & Database Ingestion
-    name_to_id: dict[str, str] = {}
-
+    # Disambiguation & Batched Database Ingestion (Atomic Single-Transaction)
+    cleaned_entities = []
     for ent in entities:
         if not isinstance(ent, dict):
             continue
         raw_name = ent.get("name", "")
         if not raw_name:
             continue
-        cname = canonicalize_name(raw_name)
-        etype = ent.get("type", "Concept")
-        desc = ent.get("description", "")
-        aliases = [canonicalize_name(a) for a in ent.get("aliases", []) if a]
-        
-        ent_id = upsert_entity(
-            canonical_name=cname,
-            entity_type=etype,
-            description=desc,
-            aliases=aliases,
-            source_doc=filename,
-        )
-        if ent_id:
-            name_to_id[cname.lower()] = ent_id
-            for alias in aliases:
-                name_to_id[alias.lower()] = ent_id
+        cleaned_entities.append({
+            "name": canonicalize_name(raw_name),
+            "type": ent.get("type", "Concept"),
+            "description": ent.get("description", ""),
+            "aliases": [canonicalize_name(a) for a in ent.get("aliases", []) if a],
+        })
 
+    cleaned_relations = []
     for rel in relations:
         if not isinstance(rel, dict):
             continue
-        src_name = canonicalize_name(rel.get("source", "")).lower()
-        tgt_name = canonicalize_name(rel.get("target", "")).lower()
-        rel_type = rel.get("type", "RELATES_TO")
-        rel_desc = rel.get("description", "")
-        rel_weight = float(rel.get("weight", 1.0))
+        cleaned_relations.append({
+            "source": canonicalize_name(rel.get("source", "")),
+            "target": canonicalize_name(rel.get("target", "")),
+            "type": rel.get("type", "RELATES_TO"),
+            "description": rel.get("description", ""),
+            "weight": float(rel.get("weight", 1.0)),
+        })
 
-        src_id = name_to_id.get(src_name)
-        tgt_id = name_to_id.get(tgt_name)
+    from src.graph_db import batch_save_entities_and_relations
+    name_to_id, saved_count = batch_save_entities_and_relations(
+        entities=cleaned_entities,
+        relations=cleaned_relations,
+        filename=filename,
+        page=page,
+        snippet=text[:300].strip(),
+    )
 
-        if src_id and tgt_id and src_id != tgt_id:
-            add_relation(
-                source_entity_id=src_id,
-                target_entity_id=tgt_id,
-                relation_type=rel_type,
-                weight=rel_weight,
-                description=rel_desc,
-                source_doc=filename,
-                page_num=page,
-                snippet=text[:300].strip(),
-            )
-
-    return {"entities": entities, "relations": relations}
+    return {"entities": cleaned_entities, "relations": cleaned_relations}

@@ -156,14 +156,16 @@ export const useDocuments = (showToast: (msg: string) => void) => {
     try {
       const res = await api.uploadDocuments(
         files, 
-        (uploadPercent) => {
+        (networkPercent) => {
+          // Map network upload (0-100%) to initial pipeline stage (0-15%)
+          const mappedProgress = Math.min(15, Math.max(1, Math.round((networkPercent / 100) * 15)));
           setDocuments(prev => prev.map(doc => {
             if (fileList.some(f => f.name === doc.filename)) {
               return {
                 ...doc,
                 status: 'uploading',
-                progress: uploadPercent,
-                stage: uploadPercent >= 100 ? 'Server processing...' : `Uploading to server (${uploadPercent}%)...`
+                progress: Math.max(doc.progress || 0, mappedProgress),
+                stage: mappedProgress >= 15 ? 'Parsing & analyzing document...' : `Transferring to server (${networkPercent}%)...`
               };
             }
             return doc;
@@ -184,25 +186,32 @@ export const useDocuments = (showToast: (msg: string) => void) => {
           if (fileList.some(f => f.name === doc.filename)) {
             return {
               ...doc,
-              upload_id: res.upload_id
+              upload_id: res.upload_id,
+              progress: Math.max(doc.progress || 0, 15),
+              stage: 'Parsing document blocks...'
             };
           }
           return doc;
         }));
         
-        // 2. Poll server for background vector ingestion progress
+        // 2. Poll server for background vector ingestion progress sequentially
         const pollInterval = 500;
-        const maxPolls = 120;
+        const maxPolls = 150;
         let pollCount = 0;
+        let isPollingActive = true;
 
-        pollerRef.current = window.setInterval(async () => {
+        const pollTick = async () => {
+          if (!isPollingActive) return;
           pollCount++;
+
           try {
             const progress = await api.getUploadProgress(res.upload_id!);
-            
+            if (!isPollingActive) return;
+
             if (progress && progress.status === 'cancelled') {
+              isPollingActive = false;
               if (pollerRef.current) {
-                window.clearInterval(pollerRef.current);
+                window.clearTimeout(pollerRef.current);
                 pollerRef.current = null;
               }
               setIsUploading(false);
@@ -210,17 +219,19 @@ export const useDocuments = (showToast: (msg: string) => void) => {
               await refreshVault();
               return;
             }
-            
+
             if (progress && progress.files && progress.files.length > 0) {
               setDocuments(prev => prev.map(doc => {
                 const fProgress = progress.files.find(f => f.filename === doc.filename);
                 if (fProgress) {
+                  const backendPct = fProgress.progress ?? (fProgress.status === 'completed' ? 100 : 20);
+                  const monotonicProgress = Math.max(doc.progress || 0, backendPct);
                   return {
                     ...doc,
                     upload_id: res.upload_id,
                     status: fProgress.status,
-                    progress: fProgress.progress ?? (fProgress.status === 'completed' ? 100 : 50),
-                    stage: (fProgress as any).stage || (fProgress.status === 'completed' ? 'Completed' : 'Extracting & Indexing...'),
+                    progress: monotonicProgress,
+                    stage: (fProgress as any).stage || (fProgress.status === 'completed' ? 'Completed' : 'Processing document...'),
                     indexed: fProgress.indexed ?? (fProgress.status === 'completed'),
                     error: fProgress.error
                   };
@@ -229,34 +240,63 @@ export const useDocuments = (showToast: (msg: string) => void) => {
               }));
             }
 
-            const allDone = progress.status === 'completed' || 
-              (progress.files && progress.files.length > 0 && progress.files.every(f => f.status === 'completed' || f.status === 'failed' || f.indexed));
+            const allDone = progress && (
+              progress.status === 'completed' || 
+              (progress.files && progress.files.length > 0 && progress.files.every(f => f.status === 'completed' || f.status === 'failed' || f.indexed))
+            );
 
             if (allDone || pollCount >= maxPolls) {
+              isPollingActive = false;
               if (pollerRef.current) {
-                window.clearInterval(pollerRef.current);
+                window.clearTimeout(pollerRef.current);
                 pollerRef.current = null;
               }
+              
+              // Mark finished documents in local state immediately
+              setDocuments(prev => prev.map(doc => {
+                if (fileList.some(f => f.name === doc.filename)) {
+                  return {
+                    ...doc,
+                    status: 'completed',
+                    progress: 100,
+                    stage: 'Completed',
+                    indexed: true
+                  };
+                }
+                return doc;
+              }));
+
               setCurrentUploadId(null);
               setIsUploading(false);
-              
-              setTimeout(async () => {
-                await refreshVault();
-                showToast(`Indexed ${fileList.length} document(s) successfully`);
-              }, 600);
+
+              await refreshVault();
+              showToast(`Indexed ${fileList.length} document(s) successfully`);
+              return;
+            }
+
+            // Schedule next tick ONLY after current tick finishes
+            if (isPollingActive) {
+              pollerRef.current = window.setTimeout(pollTick, pollInterval);
             }
           } catch (err) {
             console.error("Progress polling error:", err);
             if (pollCount >= 10) {
+              isPollingActive = false;
               if (pollerRef.current) {
-                window.clearInterval(pollerRef.current);
+                window.clearTimeout(pollerRef.current);
                 pollerRef.current = null;
               }
               setIsUploading(false);
+              setCurrentUploadId(null);
               await refreshVault();
+            } else if (isPollingActive) {
+              pollerRef.current = window.setTimeout(pollTick, pollInterval);
             }
           }
-        }, pollInterval);
+        };
+
+        // Start initial poll tick
+        pollerRef.current = window.setTimeout(pollTick, pollInterval);
 
       } else {
         setIsUploading(false);

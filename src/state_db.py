@@ -28,9 +28,10 @@ def get_connection_pool():
         from psycopg_pool import ConnectionPool
         _pool = ConnectionPool(
             conninfo=db_url,
-            min_size=1,
-            max_size=10,
-            timeout=10.0,
+            min_size=2,
+            max_size=20,
+            timeout=15.0,
+            max_idle=60.0,
             kwargs={"row_factory": dict_row}
         )
         return _pool
@@ -110,6 +111,12 @@ def upsert_document(user_id, filename, status, **values):
 def delete_document_record(user_id, filename):
     with connection() as conn, conn.cursor() as cur:
         cur.execute("DELETE FROM documents WHERE user_id=%s AND filename=%s", (user_id, filename))
+
+def list_user_documents(user_id: str):
+    """Lists all document records for a specific user."""
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute("SELECT filename, status, size_bytes, page_count, chunk_count FROM documents WHERE user_id=%s", (user_id,))
+        return [dict(r) for r in cur.fetchall()]
 
 def delete_all_user_documents(user_id: str):
     """Deletes all document records for a specific user."""

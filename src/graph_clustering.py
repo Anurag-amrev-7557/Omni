@@ -147,47 +147,81 @@ def run_community_detection_and_summaries() -> dict:
         })
     update_entity_metrics(entity_updates)
 
-    # 4. Generate Community Summaries
+    # 4. Generate Community Summaries Concurrently
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     comms_grouped = defaultdict(list)
     for n in nodes:
         cid = comm_assignments.get(n["id"], 0)
         comms_grouped[cid].append(n)
 
-    community_records = []
-    for cid, cnodes in comms_grouped.items():
+    # Sort communities by size (largest first)
+    sorted_comms = sorted(comms_grouped.items(), key=lambda item: len(item[1]), reverse=True)
+
+    def process_single_community(item):
+        cid, cnodes = item
         key_entity_names = [cn["name"] for cn in sorted(cnodes, key=lambda x: pagerank_scores.get(x["id"], 0), reverse=True)[:6]]
         title = f"{key_entity_names[0]} & Related Systems" if key_entity_names else f"Community {cid}"
         
-        # Build prompt for LLM
         cnode_ids = {cn["id"] for cn in cnodes}
         crelations = [
             f"{l.get('type')}: ({nodes_by_id(nodes, l['source'])} -> {nodes_by_id(nodes, l['target'])})"
             for l in links if l["source"] in cnode_ids and l["target"] in cnode_ids
-        ][:8]
+        ][:6]
 
-        summary_text = ""
-        findings = []
-        try:
-            llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0.2, max_tokens=350)
-            res = llm.invoke(COMMUNITY_SUMMARY_PROMPT.format(
-                title=title,
-                entities=", ".join(key_entity_names),
-                relations="; ".join(crelations) or "Hierarchically clustered concepts"
-            ))
-            raw_summary = res.content
-            raw_summary = re.sub(r'<think>[\s\S]*?</think>', '', raw_summary).strip()
-            summary_text = raw_summary
-            findings = [line.strip('- *') for line in raw_summary.split('\n') if line.strip().startswith('-')]
-        except Exception:
-            summary_text = f"Topical cluster focusing on {', '.join(key_entity_names)}."
+        summary_text = f"Topical cluster focusing on {', '.join(key_entity_names)}."
+        findings = [f"Interconnects {name}" for name in key_entity_names[:3]]
 
-        community_records.append({
+        # Only invoke LLM for significant clusters (3+ entities) to ensure lightning-fast processing
+        if len(cnodes) >= 3 and key_entity_names:
+            try:
+                llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0.2, max_tokens=250, timeout=4.0)
+                res = llm.invoke(COMMUNITY_SUMMARY_PROMPT.format(
+                    title=title,
+                    entities=", ".join(key_entity_names),
+                    relations="; ".join(crelations) or "Hierarchically clustered concepts"
+                ))
+                raw_summary = res.content
+                raw_summary = re.sub(r'<think>[\s\S]*?</think>', '', raw_summary).strip()
+                if raw_summary:
+                    summary_text = raw_summary
+                    parsed_findings = [line.strip('- *') for line in raw_summary.split('\n') if line.strip().startswith('-')]
+                    if parsed_findings:
+                        findings = parsed_findings
+            except Exception as e:
+                print(f"[Clustering] LLM summary fallback for Community {cid}: {e}")
+
+        return {
             "community_id": cid,
             "level": 0,
             "title": title,
             "summary": summary_text,
             "key_entities": key_entity_names,
             "findings": findings[:4],
+        }
+
+    community_records = []
+    # Concurrently generate summaries (max 4 workers) with immediate completion
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(process_single_community, item) for item in sorted_comms[:8]]
+        for future in as_completed(futures):
+            try:
+                res = future.result(timeout=6.0)
+                community_records.append(res)
+            except Exception as exc:
+                print(f"[Clustering] Future error: {exc}")
+
+    # Add remaining small clusters with template summaries
+    for cid, cnodes in sorted_comms[8:]:
+        key_entity_names = [cn["name"] for cn in sorted(cnodes, key=lambda x: pagerank_scores.get(x["id"], 0), reverse=True)[:4]]
+        title = f"{key_entity_names[0]} Group" if key_entity_names else f"Cluster {cid}"
+        community_records.append({
+            "community_id": cid,
+            "level": 0,
+            "title": title,
+            "summary": f"Group of related entities: {', '.join(key_entity_names)}.",
+            "key_entities": key_entity_names,
+            "findings": [f"Contains {n}" for n in key_entity_names[:2]],
         })
 
     save_community_clusters(community_records)

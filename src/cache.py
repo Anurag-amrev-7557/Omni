@@ -37,6 +37,11 @@ _SEMANTIC_SIMILARITY_THRESHOLD = 0.965  # High-precision threshold to guarantee 
 _USER_VAULT_FINGERPRINTS: Dict[str, str] = {}
 
 
+# 6. User Graph Structure Cache: Map[user_id, Tuple[timestamp, graph_dict]]
+_GRAPH_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+_GRAPH_CACHE_TTL = 3600  # 1 hour
+
+
 def normalize_query(query: str) -> str:
     """Normalizes whitespace and casing for robust cache key generation."""
     return " ".join(query.strip().lower().split())
@@ -75,8 +80,28 @@ def set_cached_embedding(query: str, vector: List[float]):
 
 
 # ============================================================================
-# TIER 2: Vault Fingerprinting & Retrieval Cache
+# TIER 2: Vault Fingerprinting, Retrieval Cache & User Graph Cache
 # ============================================================================
+
+def get_cached_user_graph(user_id: str) -> Optional[Dict[str, Any]]:
+    """Returns in-memory cached graph for ultra-fast <1ms multi-hop traversals."""
+    now = time.time()
+    with _lock:
+        entry = _GRAPH_CACHE.get(user_id)
+        if entry:
+            ts, graph = entry
+            if now - ts < _GRAPH_CACHE_TTL:
+                return graph
+            _GRAPH_CACHE.pop(user_id, None)
+    return None
+
+
+def set_cached_user_graph(user_id: str, graph: Dict[str, Any]):
+    """Populates in-memory graph cache."""
+    now = time.time()
+    with _lock:
+        _GRAPH_CACHE[user_id] = (now, graph)
+
 
 def get_user_vault_fingerprint(user_id: str) -> str:
     """Returns or generates a version fingerprint for the user's Knowledge Vault."""
@@ -87,12 +112,15 @@ def get_user_vault_fingerprint(user_id: str) -> str:
 
 
 def invalidate_user_cache(user_id: str):
-    """Invalidates all retrieval and response caches for a user when their documents change."""
+    """Invalidates all retrieval, graph, and response caches for a user when their documents change."""
     with _lock:
         # Rotate fingerprint
         new_fp = hashlib.sha256(f"{user_id}_{time.time()}".encode()).hexdigest()[:16]
         _USER_VAULT_FINGERPRINTS[user_id] = new_fp
         
+        # Purge graph cache
+        _GRAPH_CACHE.pop(user_id, None)
+
         # Purge user-specific semantic entries
         _SEMANTIC_CACHE.pop(user_id, None)
         
