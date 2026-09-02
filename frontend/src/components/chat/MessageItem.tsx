@@ -142,49 +142,60 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const { bodyText, parsedCitations } = useMemo(() => {
     if (message.role !== 'assistant') return { bodyText: message.content, parsedCitations: [] };
 
-    const raw = message.content;
+    const raw = message.content || '';
     const refHeaderRegex = /(?:^|\n+)(?:[#*_\s]*)(?:References\s*&\s*Sources|References\s*and\s*Sources|References|Sources|Cited\s*Sources)(?:[#*_\s]*)(?::)?(?:\s*(?:\r?\n)+)/i;
     const match = raw.match(refHeaderRegex);
 
-    if (!match || match.index === undefined) {
-      return { bodyText: raw, parsedCitations: [] };
-    }
-
-    const body = raw.slice(0, match.index).replace(/(?:\r?\n\s*[-*_—]{3,}\s*)+$/g, '').trim();
-    const refsRaw = raw.slice(match.index + match[0].length).trim();
-
-    const lines = refsRaw.split(/\r?\n+/).map(l => l.trim()).filter(Boolean);
+    let body = raw;
     const citations: ParsedCitation[] = [];
 
-    for (const line of lines) {
-      // Check for Markdown web link: [1] [Title](url) (domain) - "quote"
-      const webMatch = line.match(/^\[(\d+)\]\s*\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)(?:\s*\(([^)]+)\))?(?:\s*(?:[—–-]|:)\s*["“]?([\s\S]*?)["”]?)?$/i);
-      if (webMatch) {
-        citations.push({
-          id: webMatch[1],
-          filename: webMatch[2]?.trim() || 'Web Link',
-          url: webMatch[3],
-          domain: webMatch[4],
-          quote: webMatch[5] ? webMatch[5].replace(/^["“]|["”]$/g, '').trim() : undefined,
-        });
-        continue;
-      }
+    if (match && match.index !== undefined) {
+      body = raw.slice(0, match.index).replace(/(?:\r?\n\s*[-*_—]{3,}\s*)+$/g, '').trim();
+      const refsRaw = raw.slice(match.index + match[0].length).trim();
+      const lines = refsRaw.split(/\r?\n+/).map(l => l.trim()).filter(Boolean);
 
-      const citMatch = line.match(/^\[(\d+)\]\s*([^\n(—–:]+?)(?:\s*\((?:Page\s*(\d+)|p\.\s*(\d+))\))?(?:\s*(?:[—–-]|:)\s*["“]?([\s\S]*?)["”]?)?$/i);
-      if (citMatch) {
-        citations.push({
-          id: citMatch[1],
-          filename: citMatch[2]?.trim() || 'Document',
-          page: citMatch[3] || citMatch[4],
-          quote: citMatch[5] ? citMatch[5].replace(/^["“]|["”]$/g, '').trim() : undefined,
-        });
-      } else if (line.length > 3) {
-        citations.push({
-          id: String(citations.length + 1),
-          filename: 'Cited Source',
-          quote: line.replace(/^["“]|["”]$/g, '').trim(),
-        });
+      for (const line of lines) {
+        // Check for Markdown web link: [1] [Title](url) (domain) - "quote"
+        const webMatch = line.match(/^\[(\d+)\]\s*\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)(?:\s*\(([^)]+)\))?(?:\s*(?:[—–-]|:)\s*["“]?([\s\S]*?)["”]?)?$/i);
+        if (webMatch) {
+          citations.push({
+            id: webMatch[1],
+            filename: webMatch[2]?.trim() || 'Web Link',
+            url: webMatch[3],
+            domain: webMatch[4],
+            quote: webMatch[5] ? webMatch[5].replace(/^["“]|["”]$/g, '').trim() : undefined,
+          });
+          continue;
+        }
+
+        const citMatch = line.match(/^\[(\d+)\]\s*([^\n(—–:]+?)(?:\s*\((?:Page\s*(\d+)|p\.\s*(\d+))\))?(?:\s*(?:[—–-]|:)\s*["“]?([\s\S]*?)["”]?)?$/i);
+        if (citMatch) {
+          citations.push({
+            id: citMatch[1],
+            filename: citMatch[2]?.trim() || 'Document',
+            page: citMatch[3] || citMatch[4],
+            quote: citMatch[5] ? citMatch[5].replace(/^["“]|["”]$/g, '').trim() : undefined,
+          });
+        } else if (line.length > 3) {
+          citations.push({
+            id: String(citations.length + 1),
+            filename: 'Cited Source',
+            quote: line.replace(/^["“]|["”]$/g, '').trim(),
+          });
+        }
       }
+    } else if (message.contexts && message.contexts.length > 0) {
+      // Auto-populate citations from message.contexts so grounded reference card and preview links work seamlessly
+      message.contexts.forEach((ctx, idx) => {
+        citations.push({
+          id: String(idx + 1),
+          filename: ctx.filename || ctx.source || 'Document',
+          page: ctx.page ? String(ctx.page) : undefined,
+          url: ctx.url,
+          domain: ctx.domain,
+          quote: ctx.parent_content || ctx.content,
+        });
+      });
     }
 
     return { bodyText: body, parsedCitations: citations };
@@ -194,6 +205,10 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const formattedBody = useMemo(() => {
     if (!bodyText) return '';
     let s = bodyText;
+
+    // 0. Transform inline citation tokens like 【1】 or 【2】 or [1] into markdown preview links
+    s = s.replace(/【(\d+)】/g, ' [cite:$1](#cite-$1) ');
+    s = s.replace(/(?<=\s)\[(\d+)\](?=\s|[.,;:!?]|$)/g, ' [cite:$1](#cite-$1) ');
 
     // 1. Normalize inline collapsed markdown tables
     s = s.replace(/\|\s*\|\s*([-:]+[-| :]*)\|/g, '|\n| $1 |\n');
@@ -302,6 +317,50 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               hr: () => <div className="my-5 border-t border-[var(--border-color)]" />,
               a: ({ href, children }) => {
                 const childStr = String(children).trim();
+                if (href && href.startsWith('#cite-')) {
+                  const citeId = href.replace('#cite-', '');
+                  const idx = parseInt(citeId, 10);
+                  const targetCit = parsedCitations.find(c => c.id === citeId) || 
+                                    (message.contexts && message.contexts[idx - 1]);
+                  const fileName = targetCit?.filename || (targetCit as any)?.source || 'Document';
+                  const pageNum = targetCit?.page ? (typeof targetCit.page === 'number' ? targetCit.page : parseInt(String(targetCit.page), 10)) : undefined;
+                  const quoteText = targetCit?.quote || (targetCit as any)?.parent_content || (targetCit as any)?.content;
+                  const isWeb = targetCit?.url || (targetCit as any)?.source_type === 'web';
+
+                  if (isWeb && targetCit?.url) {
+                    return (
+                      <a
+                        href={targetCit.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center px-1.5 py-0.2 mx-0.5 text-[11px] font-mono font-bold rounded-md bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white transition-all cursor-pointer shadow-2xs border border-blue-500/30 select-none align-baseline no-underline"
+                        title={`Open external web source: ${targetCit.url}`}
+                      >
+                        {citeId}
+                      </a>
+                    );
+                  }
+
+                  return (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onInspectDoc({
+                          filename: fileName,
+                          content: quoteText,
+                          page: pageNum
+                        });
+                      }}
+                      className="inline-flex items-center justify-center px-1.5 py-0.2 mx-0.5 text-[11px] font-mono font-bold rounded-md bg-[var(--accent-subtle)] text-[var(--accent-primary)] hover:bg-[var(--accent-primary)] hover:text-white transition-all cursor-pointer shadow-2xs border border-[var(--accent-primary)]/30 hover:scale-105 active:scale-95 select-none align-baseline"
+                      title={`Preview source [${citeId}] in ${fileName}${pageNum ? ` (Page ${pageNum})` : ''}`}
+                    >
+                      {citeId}
+                    </button>
+                  );
+                }
+
                 const isCitation = /^\[\d+\]$/.test(childStr);
                 if (isCitation) {
                   return (
