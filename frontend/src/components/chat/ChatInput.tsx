@@ -226,8 +226,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             className="fixed inset-0 z-0" 
             onClick={closeMentionMenu} 
           />
-          <div className="absolute bottom-full mb-2 left-2 sm:left-4 z-10 w-full max-w-[calc(100vw-32px)] sm:max-w-[380px] overflow-hidden pointer-events-none p-0.5">
-            <div className={`${isMentionClosing ? 'pure-slide-down' : 'pure-slide-up'} pointer-events-auto w-full max-h-72 overflow-y-auto p-1.5 bg-[var(--bg-modal)]/95 border border-[var(--border-color)] rounded-2xl shadow-[0_20px_48px_rgba(0,0,0,0.28)] select-none backdrop-blur-xl`}>
+          <div className="absolute bottom-full mb-2 left-2 sm:left-4 z-30 w-full max-w-[calc(100vw-32px)] sm:max-w-[380px] pointer-events-none">
+            <div className={`${isMentionClosing ? 'dropdown-popover-closing' : 'dropdown-popover-bottom'} pointer-events-auto w-full max-h-72 overflow-y-auto p-1.5 bg-[var(--bg-modal)]/95 border border-[var(--border-color)] rounded-2xl shadow-[0_16px_48px_rgba(0,0,0,0.22)] select-none backdrop-blur-xl`}>
               {/* Header Label */}
               <div className="flex items-center justify-between px-3 pt-2 pb-1.5 text-[11px] font-medium text-[var(--text-muted)] select-none">
                 <span className="flex items-center gap-1.5">
@@ -362,8 +362,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               className="fixed inset-0 z-0" 
               onClick={closePlusMenu} 
             />
-            <div className="absolute bottom-full mb-1 left-2 z-10 w-60 overflow-hidden pointer-events-none p-0.5">
-              <div className={`${isPlusClosing ? 'pure-slide-down' : 'pure-slide-up'} pointer-events-auto w-full py-1.5 px-1 bg-[var(--bg-modal)] border border-[var(--border-color)] rounded-2xl text-xs select-none`}>
+            <div className="absolute bottom-full mb-2 left-2 z-30 w-60 pointer-events-none">
+            <div className={`${isPlusClosing ? 'dropdown-popover-closing' : 'dropdown-popover-bottom'} pointer-events-auto w-full py-1.5 px-1 bg-[var(--bg-modal)]/95 border border-[var(--border-color)] rounded-2xl shadow-[0_16px_48px_rgba(0,0,0,0.22)] text-xs select-none backdrop-blur-xl`}>
                 <label 
                   htmlFor="chat-file-input"
                   className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[13px] text-[var(--text-main)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
