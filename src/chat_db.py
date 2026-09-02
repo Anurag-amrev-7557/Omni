@@ -32,11 +32,14 @@ def update_session_title(session_id: str, title: str):
     with connection() as conn, conn.cursor() as cur:
         cur.execute("UPDATE chat_sessions SET title=%s WHERE session_id=%s AND user_id=%s", (title, session_id, get_current_user()))
 
-def add_message(session_id: str, role: str, content: str, contexts: list[dict] | None = None):
+def add_message(session_id: str, role: str, content: str, contexts: list[dict] | None = None, session_title: str | None = None):
     with connection() as conn, conn.cursor() as cur:
         cur.execute("SELECT 1 FROM chat_sessions WHERE session_id=%s AND user_id=%s", (session_id, get_current_user()))
         if cur.fetchone() is None:
-            cur.execute("INSERT INTO chat_sessions (session_id,user_id,title) VALUES (%s,%s,%s) ON CONFLICT (session_id) DO NOTHING", (session_id, get_current_user(), "New Chat"))
+            title = session_title or "New Chat"
+            cur.execute("INSERT INTO chat_sessions (session_id,user_id,title) VALUES (%s,%s,%s) ON CONFLICT (session_id) DO NOTHING", (session_id, get_current_user(), title))
+        elif session_title:
+            cur.execute("UPDATE chat_sessions SET title=%s WHERE session_id=%s AND user_id=%s", (session_title, session_id, get_current_user()))
         cur.execute("INSERT INTO chat_messages (message_id,session_id,role,content,contexts_json) VALUES (%s,%s,%s,%s,%s)", (str(uuid.uuid4()), session_id, role, content, Jsonb(contexts) if contexts else None))
 
 def get_session_messages(session_id: str) -> list[dict]:

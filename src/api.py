@@ -787,20 +787,23 @@ def stream_chat(data: dict):
     user_id = get_current_user()
     messages = get_session_messages(session_id)
     is_first_message = len(messages) == 0
-    add_message(session_id, "user", prompt)
+    
+    ai_title = None
+    if is_first_message:
+        try:
+            clean_query = re.sub(r'\[Focus explicitly on referenced Knowledge Vault documents:.*?\]\s*', '', prompt, flags=re.DOTALL).strip()
+            ai_title = generate_chat_title(clean_query or prompt)
+        except Exception as e:
+            print(f"[Warning] Failed to generate AI title: {e}")
+
+    add_message(session_id, "user", prompt, session_title=ai_title)
     
     def sse_event_generator():
         set_current_user(user_id)
         try:
-            # Generate concise AI session title for new chats using lightweight fast model
-            if is_first_message:
-                try:
-                    clean_query = re.sub(r'\[Focus explicitly on referenced Knowledge Vault documents:.*?\]\s*', '', prompt, flags=re.DOTALL).strip()
-                    ai_title = generate_chat_title(clean_query or prompt)
-                    update_session_title(session_id, ai_title)
-                    yield f"data: {json.dumps({'type': 'title', 'title': ai_title, 'session_id': session_id})}\n\n"
-                except Exception as e:
-                    print(f"[Warning] Failed to generate AI title: {e}")
+            # Broadcast AI session title immediately on stream initialization
+            if ai_title:
+                yield f"data: {json.dumps({'type': 'title', 'title': ai_title, 'session_id': session_id})}\n\n"
 
             if web_search:
                 yield f"data: {json.dumps({'type': 'thought', 'step': 'Searching live web intelligence & global knowledge...', 'status': 'in_progress'})}\n\n"
