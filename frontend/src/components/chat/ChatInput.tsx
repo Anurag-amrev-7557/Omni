@@ -274,7 +274,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
       {/* Morphing Input Card with CSS Grid Auto-Sizing (z-20 sits in front of the sliding tray) */}
       <div 
-        className={`relative z-20 rounded-2xl border border-[var(--border-input)] bg-[var(--bg-input)] shadow-lg transition-all duration-200 ease-out focus-within:border-[var(--accent-primary)] focus-within:ring-4 focus-within:ring-[var(--accent-subtle)] ${
+        className={`relative z-20 rounded-2xl border border-[var(--border-input)] bg-[var(--bg-input)] shadow-lg transition-all duration-200 ease-out focus-within:border-[var(--accent-primary)]/80 focus-within:ring-2 focus-within:ring-[var(--accent-primary)]/25 ${
           isMultiLine ? 'px-4 pt-3 pb-3' : 'px-3.5 py-3 min-h-[52px]'
         }`}
       >
@@ -398,7 +398,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             placeholder={referencedVaultDocs.length > 0 ? "Ask grounded questions about referenced files, or type @ to add more..." : "Write a message (type @ to reference files)..."}
             rows={1}
             disabled={isStreaming}
-            className="col-start-1 row-start-1 w-full h-full bg-transparent text-[var(--text-main)] placeholder-[var(--text-muted)] placeholder:opacity-80 text-[15px] outline-none resize-none min-h-[26px] max-h-[240px] leading-[26px] py-0 m-0 select-text whitespace-pre-wrap break-words block overflow-y-auto font-sans"
+            className="col-start-1 row-start-1 w-full h-full bg-transparent text-[var(--text-main)] placeholder-[var(--text-muted)] text-[15px] outline-none resize-none min-h-[26px] max-h-[240px] leading-[26px] py-0 m-0 select-text whitespace-pre-wrap break-words block overflow-y-auto font-sans"
           />
         </div>
 
@@ -504,9 +504,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       </div>
 
       {/* Footer Disclaimer & Model Selector Row */}
-      <div className="flex items-center justify-end sm:justify-between text-xs text-[var(--text-dark)] mt-2 px-1">
+      <div className="flex items-center justify-end sm:justify-between text-xs text-[var(--text-muted)] mt-2.5 px-1">
         {/* Left Disclaimer (Hidden on mobile) */}
-        <span className="text-[11.5px] text-[var(--text-dark)] select-none hidden sm:inline">
+        <span className="text-[11.5px] text-[var(--text-muted)] select-none hidden sm:inline">
           Omni is AI and can make mistakes. Please double-check responses.
         </span>
 
@@ -518,8 +518,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             onClick={onToggleWebSearch}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-all cursor-pointer select-none ${
               webSearchEnabled
-                ? 'bg-[var(--accent-subtle)] text-[var(--accent-primary)] ring-1 ring-[var(--accent-primary)]/40 font-semibold shadow-xs'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
+                ? 'bg-[var(--accent-subtle)] text-[var(--accent-primary)] border border-[var(--accent-primary)]/30 font-medium shadow-xs'
+                : 'border border-[var(--border-color)] bg-[var(--bg-card)]/60 text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
             }`}
             title="Toggle Live Web Search & Deep Research"
           >
@@ -528,14 +528,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             {webSearchEnabled && <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-primary)]" />}
           </button>
 
-          {/* Model Selector */}
+          {/* Model Selector Pill */}
           <div className="relative">
             <button 
-              className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)]/60 text-xs text-[var(--text-muted)] hover:text-[var(--text-main)] hover:border-[var(--text-dark)] transition-all cursor-pointer shadow-2xs"
               onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
             >
               <span className="font-medium text-[var(--text-main)]">{selectedModel}</span>
-              <span className="text-[var(--text-dark)]">{effortLevel}</span>
+              <span className="text-[var(--text-muted)] text-[11px]">{effortLevel}</span>
             </button>
 
           {modelDropdownOpen && (

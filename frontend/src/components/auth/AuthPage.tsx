@@ -112,10 +112,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         <div className="flex items-center justify-between w-full">
           {/* Brand Logo with Warm Sunburst Mark */}
           <div className="flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded-full bg-[var(--accent-primary)]/15 border border-[var(--accent-primary)]/30 flex items-center justify-center text-[var(--accent-primary)] shadow-sm">
-              <Sparkles size={14} />
-            </div>
-            <span className="font-serif text-2xl font-bold tracking-tight text-[var(--text-main)]">
+            <span className="font-serif text-3xl font-medium tracking-tight text-[var(--text-main)]">
               Omni
             </span>
           </div>

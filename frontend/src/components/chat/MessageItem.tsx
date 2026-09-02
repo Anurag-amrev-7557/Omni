@@ -206,23 +206,20 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   // 2. ASSISTANT MESSAGE RENDER
   return (
     <div className="w-full flex flex-col my-5 fade-in">
-      {/* Live Research / Reasoning Thought Trace */}
-      {isLastAssistant && isStreaming && message.thought && (
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--accent-subtle)]/40 border border-[var(--accent-primary)]/20 text-xs text-[var(--accent-primary)] mb-3 animate-pulse">
-          <Globe size={13} className="animate-spin flex-shrink-0" />
-          <span className="font-medium truncate">{message.thought}</span>
-        </div>
-      )}
-
+      {/* Thinking / Streaming Orb Loader - Clean inline text next to orb with zero border/accent box */}
       {isLastAssistant && isStreaming && !bodyText.trim() ? (
-        <div className="py-2.5">
-          <OrbitingOrbLoader size="md" />
+        <div className="flex items-center gap-3 py-3 fade-in">
+          <OrbitingOrbLoader size="sm" />
+          <span className="text-[13.5px] text-[var(--text-muted)] font-normal">
+            {message.thought || "Thinking..."}
+          </span>
         </div>
       ) : (
         <div className="omni-prose max-w-none text-sm text-[var(--text-main)] leading-relaxed font-sans">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{
+              hr: () => <div className="my-5 border-t border-[var(--border-color)]" />,
               a: ({ href, children }) => (
                 <a 
                   href={href} 
