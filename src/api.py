@@ -249,6 +249,11 @@ def startup_event():
     init_db()
     init_chat_db()
     init_state_db()
+    try:
+        from src.graph_db import init_graph_db
+        init_graph_db()
+    except Exception as g_err:
+        print(f"[Warning] Graph DB init: {g_err}")
 
 @app.get("/api/health")
 def health_check():
@@ -905,3 +910,78 @@ def stream_chat(data: dict):
             yield f"data: {json.dumps({'type': 'done', 'full_text': err_msg})}\n\n"
             
     return StreamingResponse(sse_event_generator(), media_type="text/event-stream")
+
+
+# =========================================================================
+# KNOWLEDGE GRAPH & GRAPHRAG REST ENDPOINTS
+# =========================================================================
+
+@app.get("/api/graph")
+def get_graph(user_id: str = Depends(require_user)):
+    """Fetch the complete Knowledge Graph (nodes, edges, communities, metrics) for the user."""
+    try:
+        from src.graph_db import get_user_graph
+        graph_data = get_user_graph()
+        return graph_data
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch knowledge graph: {exc}")
+
+
+@app.post("/api/graph/build")
+def build_graph(
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(require_user),
+):
+    """Triggers background knowledge graph construction across all indexed vault documents."""
+    def graph_worker(uid: str):
+        set_current_user(uid)
+        try:
+            from src.graph_extractor import extract_entities_and_relations
+            from src.graph_clustering import run_community_detection_and_summaries
+            from src.db import get_qdrant_client
+            from src.config import COLLECTION_NAME
+            from qdrant_client.models import Filter, FieldCondition, MatchValue
+
+            client = get_qdrant_client()
+            res, _ = client.scroll(
+                collection_name=COLLECTION_NAME,
+                scroll_filter=Filter(
+                    must=[FieldCondition(key="metadata.user_id", match=MatchValue(value=uid))]
+                ),
+                limit=100,
+                with_payload=True,
+            )
+
+            seen_parents = set()
+            for point in res:
+                payload = point.payload or {}
+                parent_text = payload.get("parent_content") or payload.get("text") or ""
+                fname = payload.get("metadata", {}).get("filename") or payload.get("filename") or "Document"
+                page = payload.get("metadata", {}).get("page") or payload.get("page") or 1
+                
+                if parent_text and parent_text not in seen_parents:
+                    seen_parents.add(parent_text)
+                    extract_entities_and_relations(parent_text, fname, page)
+
+            run_community_detection_and_summaries()
+            print(f"[GraphWorker] Knowledge Graph build completed for user {uid} ({len(seen_parents)} parent blocks processed).")
+        except Exception as exc:
+            print(f"[GraphWorker] Error during graph build: {exc}")
+
+    background_tasks.add_task(graph_worker, user_id)
+    return {"status": "started", "message": "Knowledge graph extraction triggered in background."}
+
+
+@app.get("/api/graph/communities")
+def get_graph_communities(user_id: str = Depends(require_user)):
+    """Fetch hierarchical community summaries and macro-insights."""
+    try:
+        from src.graph_db import get_user_graph
+        graph_data = get_user_graph()
+        return {
+            "communities": graph_data.get("communities", []),
+            "total": len(graph_data.get("communities", [])),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch communities: {exc}")
+

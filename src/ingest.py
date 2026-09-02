@@ -153,6 +153,22 @@ def ingest_file(file_path: str, user_id: str | None = None, progress_callback = 
     vector_store.add_documents(child_documents)
     print(f"[DEBUG] Ingested {filename} into Qdrant: {len(parent_docs)} parent blocks, {len(child_documents)} child vectors.")
     print(f"[DEBUG] Collection name used: {COLLECTION_NAME}")
+
+    # 3. KNOWLEDGE GRAPH EXTRACTION & COMMUNITY DETECTION
+    try:
+        if progress_callback:
+            progress_callback(95, "Building Knowledge Graph entities & relations...")
+        from src.graph_extractor import extract_entities_and_relations
+        from src.graph_clustering import run_community_detection_and_summaries
+        for parent in parent_docs[:6]:
+            extract_entities_and_relations(
+                text=parent.page_content,
+                filename=filename,
+                page=parent.metadata.get("page", 1),
+            )
+        run_community_detection_and_summaries()
+    except Exception as g_exc:
+        print(f"[Ingest] Graph extraction notice for {filename}: {g_exc}")
     
     # Immediately reclaim memory to prevent Render 512MB RAM OOM
     del child_documents

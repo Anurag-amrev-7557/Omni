@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Plus, MessageSquare, Folder, Database, Eye, Search, 
+  Plus, MessageSquare, Folder, Database, Network, Eye, Search, 
   PanelLeft, MoreVertical, Trash2, Edit3, Star, ChevronsUpDown, 
   Settings, Info, X, Check, LogOut, User
 } from 'lucide-react';
@@ -16,8 +16,8 @@ interface SidebarProps {
   onSelectSession: (id: string) => void;
   onNewChat: () => void;
   onDeleteSession: (id: string) => void;
-  activeTab: 'chats' | 'projects' | 'vault' | 'chats_list';
-  onSelectTab: (tab: 'chats' | 'projects' | 'vault' | 'chats_list') => void;
+  activeTab: 'chats' | 'projects' | 'vault' | 'graph' | 'chats_list';
+  onSelectTab: (tab: 'chats' | 'projects' | 'vault' | 'graph' | 'chats_list') => void;
   onOpenSearch: () => void;
   onOpenSettings: () => void;
   onOpenProjects: () => void;
@@ -187,6 +187,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {documentsCount}
               </span>
             ) : null}
+          </button>
+
+          <button 
+            className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
+              activeTab === 'graph' 
+                ? 'bg-[var(--bg-card)] text-[var(--text-main)] shadow-sm' 
+                : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
+            }`}
+            onClick={() => handleMobileTabSelect(() => onSelectTab('graph'))}
+            title="Interactive 2.5D Knowledge Graph & Community Clusters"
+          >
+            <div className="flex items-center gap-3">
+              <Network size={17} className={activeTab === 'graph' ? 'text-[var(--accent-primary)]' : 'text-purple-500'} />
+              <span>Knowledge Graph</span>
+            </div>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500 font-mono font-semibold">
+              2.5D
+            </span>
           </button>
         </div>
 

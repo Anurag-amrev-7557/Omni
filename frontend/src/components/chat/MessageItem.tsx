@@ -8,6 +8,7 @@ import { ChatMessage, ContextChunk } from '../../types/chat';
 import { FormatBadge } from '../common/FormatBadge';
 import { DocumentSquareTile } from '../common/DocumentSquareTile';
 import { OrbitingOrbLoader } from '../common/OrbitingOrbLoader';
+import { GraphProvenanceCard } from './GraphProvenanceCard';
 import { api } from '../../services/api';
 
 interface MessageItemProps {
@@ -591,6 +592,14 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             </div>
           )}
         </div>
+      )}
+
+      {/* MULTI-HOP GRAPH REASONING & PROVENANCE PATH */}
+      {message.contexts && message.contexts.some((ctx: any) => ctx.graph_hop) && (
+        <GraphProvenanceCard
+          provenance={message.contexts.filter((ctx: any) => ctx.graph_hop).map((ctx: any) => ctx.graph_hop)}
+          onInspectDoc={onInspectDoc}
+        />
       )}
 
       {/* RETRIEVED GROUNDING CONTEXT SOURCES (Fallback when no inline citations were parsed) */}

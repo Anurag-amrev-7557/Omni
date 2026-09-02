@@ -198,6 +198,15 @@ def hybrid_search(query: str, k: int = 5) -> list[dict]:
             seen_parents.add(parent_text)
             final_docs.append(doc)
 
+    # 4.5 Multi-Hop Knowledge Graph Traversal & Provenance Fusion
+    try:
+        from src.graph_retrieve import traverse_subgraph
+        graph_res = traverse_subgraph(query)
+        if graph_res.get("contexts"):
+            final_docs = graph_res["contexts"][:2] + final_docs
+    except Exception as g_exc:
+        pass
+
     # 5. Populate Tier 2 Retrieval Cache
     set_cached_retrieval(user_id, query, k, final_docs)
     return final_docs

@@ -254,5 +254,31 @@ export const api = {
     const token = cachedToken;
     const tokenQuery = token ? `&token=${encodeURIComponent(token)}` : '';
     return `${API_BASE}/api/pdf-page-image?filename=${encodeURIComponent(filename)}&page=${page}${tokenQuery}`;
-  }
+  },
+
+  async getGraph(): Promise<any> {
+    const res = await apiFetch('/api/graph');
+    if (!res.ok) {
+      throw new Error(`Failed to fetch knowledge graph: ${res.statusText}`);
+    }
+    return res.json();
+  },
+
+  async buildGraph(): Promise<{ status: string; message: string }> {
+    const res = await apiFetch('/api/graph/build', {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to trigger graph build: ${res.statusText}`);
+    }
+    return res.json();
+  },
+
+  async getCommunities(): Promise<{ communities: any[]; total: number }> {
+    const res = await apiFetch('/api/graph/communities');
+    if (!res.ok) {
+      throw new Error(`Failed to fetch communities: ${res.statusText}`);
+    }
+    return res.json();
+  },
 };

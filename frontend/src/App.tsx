@@ -9,6 +9,7 @@ import { SearchModal } from './components/modals/SearchModal';
 import { ShareModal } from './components/modals/ShareModal';
 import { ProjectsModal } from './components/modals/ProjectsModal';
 import { ProjectsView } from './components/projects/ProjectsView';
+import { KnowledgeGraphView } from './components/graph/KnowledgeGraphView';
 import { AuthPage } from './components/auth/AuthPage';
 import { Toast } from './components/common/Toast';
 import { useDocuments } from './hooks/useDocuments';
@@ -43,7 +44,7 @@ export default function App() {
 
   // Navigation & Layout State
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'chats' | 'projects' | 'vault' | 'chats_list'>('chats');
+  const [activeTab, setActiveTab] = useState<'chats' | 'projects' | 'vault' | 'graph' | 'chats_list'>('chats');
   const [sidecarOpen, setSidecarOpen] = useState<boolean>(false);
   const [sidecarDoc, setSidecarDoc] = useState<{ filename: string; content?: string } | null>(null);
   const [webSearchEnabled, setWebSearchEnabled] = useState<boolean>(false);
@@ -623,6 +624,13 @@ export default function App() {
                 onCleanupOrphaned={cleanupOrphaned}
                 onCancelUpload={cancelUpload}
                 showToast={showToast}
+              />
+            )}
+
+            {/* KNOWLEDGE GRAPH TAB */}
+            {activeTab === 'graph' && (
+              <KnowledgeGraphView
+                onInspectDoc={handleInspectDoc}
               />
             )}
           </div>
