@@ -190,15 +190,30 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     return { bodyText: body, parsedCitations: citations };
   }, [message]);
 
-  // Normalize and heal incomplete streaming Markdown syntax
+  // Normalize and heal incomplete streaming Markdown & LaTeX math syntax
   const formattedBody = useMemo(() => {
     if (!bodyText) return '';
     let s = bodyText;
+
     // 1. Normalize inline collapsed markdown tables
     s = s.replace(/\|\s*\|\s*([-:]+[-| :]*)\|/g, '|\n| $1 |\n');
     s = s.replace(/\|\s*\|\s*([^|\n]+)/g, '|\n| $1');
 
-    // 2. Stream-Healer: Seal unclosed code fences and tags during active streaming
+    // 2. Normalize LaTeX syntax delimiters \( ... \) and \[ ... \] to $ ... $ and $$ ... $$
+    s = s.replace(/\\\(([\s\S]*?)\\\)/g, '$$$1$$');
+    s = s.replace(/\\\[([\s\S]*?)\\\]/g, '$$$$$1$$$$');
+
+    // 3. Normalize LaTeX formulas wrapped in standard parentheses like (E = mc^{2}) or (3.00 \times 10^{8})
+    s = s.replace(/\(([a-zA-Z]\s*=\s*[^)]+\{[^)]+\}[^)]*)\)/g, '$$$1$$');
+    s = s.replace(/\((\d+(?:\.\d+)?\s*\\times\s*10\^\{[^}]+\})\)/g, '$$$1$$');
+    s = s.replace(/\(([a-zA-Z]\s*=\s*[a-zA-Z0-9\s^_{}\\]+)\)/g, (match, formula) => {
+      if (formula.includes('^') || formula.includes('_') || formula.includes('\\') || formula.includes('=')) {
+        return `$${formula}$`;
+      }
+      return match;
+    });
+
+    // 4. Stream-Healer: Seal unclosed code fences and tags during active streaming
     if (isStreaming) {
       const codeFenceCount = (s.match(/```/g) || []).length;
       if (codeFenceCount % 2 !== 0) {
@@ -484,8 +499,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         </div>
       )}
 
-      {/* RETRIEVED GROUNDING CONTEXT SOURCES */}
-      {!(isLastAssistant && isStreaming) && message.contexts && message.contexts.length > 0 && (
+      {/* RETRIEVED GROUNDING CONTEXT SOURCES (Fallback when no inline citations were parsed) */}
+      {!(isLastAssistant && isStreaming) && parsedCitations.length === 0 && message.contexts && message.contexts.length > 0 && (
         <div className="mt-2.5 border border-[var(--border-color)] rounded-2xl bg-[var(--bg-card)] p-3 shadow-xs fade-in">
           <div 
             className="flex items-center justify-between cursor-pointer text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] select-none transition-colors"
