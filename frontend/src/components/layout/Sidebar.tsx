@@ -4,7 +4,7 @@ import {
   PanelLeft, MoreVertical, Trash2, Edit3, Star, ChevronsUpDown, 
   Settings, Info, X, Check, LogOut, User
 } from 'lucide-react';
-import { ChatSession } from '../../types/chat';
+import { ChatSession, cleanSessionTitle } from '../../types/chat';
 import { supabase } from '../../lib/supabase';
 import { Skeleton } from '../common/Skeleton';
 
@@ -224,7 +224,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     });
                   }}
                 >
-                  <span className="truncate flex-1 pr-6">{s.title || 'Untitled chat'}</span>
+                  <span className="truncate flex-1 pr-6">{cleanSessionTitle(s.title)}</span>
 
                   {/* Clean Subtle More Button - Visible on mobile touch screens and on hover on desktop */}
                   <button

@@ -320,9 +320,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         </div>
       )}
 
-      {/* COLLAPSIBLE GROUNDED REFERENCES & SOURCES */}
-      {parsedCitations.length > 0 && (
-        <div className="mt-4 border border-[var(--border-color)] rounded-2xl bg-[var(--bg-card)] p-3 shadow-xs">
+      {/* COLLAPSIBLE GROUNDED REFERENCES & SOURCES - Appears only when full response has completed */}
+      {!(isLastAssistant && isStreaming) && parsedCitations.length > 0 && (
+        <div className="mt-4 border border-[var(--border-color)] rounded-2xl bg-[var(--bg-card)] p-3 shadow-xs fade-in">
           <div 
             className="flex items-center justify-between cursor-pointer text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] select-none transition-colors"
             onClick={() => setReferencesOpen(!referencesOpen)}
@@ -406,9 +406,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
         </div>
       )}
 
-      {/* RETRIEVED GROUNDING CONTEXT SOURCES */}
-      {message.contexts && message.contexts.length > 0 && (
-        <div className="mt-3 border border-[var(--border-color)] rounded-2xl bg-[var(--bg-card)] p-3 shadow-xs">
+      {/* RETRIEVED GROUNDING CONTEXT SOURCES - Appears only when full response has completed */}
+      {!(isLastAssistant && isStreaming) && message.contexts && message.contexts.length > 0 && (
+        <div className="mt-3 border border-[var(--border-color)] rounded-2xl bg-[var(--bg-card)] p-3 shadow-xs fade-in">
           <div 
             className="flex items-center justify-between cursor-pointer text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] select-none transition-colors"
             onClick={() => setSourcesOpen(!sourcesOpen)}

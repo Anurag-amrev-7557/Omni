@@ -38,3 +38,17 @@ export interface ModelOption {
   name: string;
   desc: string;
 }
+
+export function cleanSessionTitle(title?: string): string {
+  if (!title) return 'New chat';
+  let t = title.trim();
+  if (t.startsWith('[')) {
+    const closeIdx = t.indexOf(']');
+    if (closeIdx !== -1) {
+      const rest = t.substring(closeIdx + 1).trim();
+      if (rest) t = rest;
+    }
+  }
+  return t || 'New chat';
+}
+

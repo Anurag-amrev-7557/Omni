@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { PanelLeft, ChevronDown, Share2, Settings, Palette, Check, Download } from 'lucide-react';
 import { AuthControls } from './AuthControls';
 import { useTheme } from '../../context/ThemeContext';
+import { cleanSessionTitle } from '../../types/chat';
 
 interface TopHeaderProps {
   sidebarCollapsed: boolean;
@@ -27,21 +28,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   const { theme, setTheme, themesList } = useTheme();
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
 
-  // Clean title prefix if user referenced vault docs
-  const cleanTitle = React.useMemo(() => {
-    if (!activeSessionTitle) return 'New chat';
-    let t = activeSessionTitle;
-    if (t.startsWith('[Focus explicitly on referenced Knowledge Vault documents:')) {
-      const idx = t.indexOf(']\n\n');
-      if (idx !== -1) {
-        t = t.substring(idx + 3).trim();
-      } else {
-        t = t.replace(/\[Focus explicitly on referenced Knowledge Vault documents:[^\]]+\]/, '').trim();
-      }
-    }
-    return t || 'New chat';
-  }, [activeSessionTitle]);
-
+  const cleanTitle = cleanSessionTitle(activeSessionTitle);
   const activeThemeObj = themesList.find(t => t.id === theme);
 
   return (
