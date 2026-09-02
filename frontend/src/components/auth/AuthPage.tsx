@@ -161,7 +161,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={isLoading}
-                className="w-full h-[48px] px-4 rounded-xl bg-[#2e2d2b] hover:bg-[#383734] text-[15px] font-medium text-[#f4f3ef] flex items-center justify-center gap-3 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                className="w-full h-[48px] px-4 rounded-xl bg-[#2e2d2b] hover:bg-[#383734] text-[16px] font-medium text-[#f4f3ef] flex items-center justify-center gap-3 transition-all cursor-pointer shadow-xs disabled:opacity-50"
               >
                 <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
                   <path
@@ -189,7 +189,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-[#2c2b29]" />
                 </div>
-                <span className="relative px-3 bg-[#1f1e1d] text-[11px] font-medium text-[#7a7771] uppercase tracking-wider">
+                <span className="relative px-3 bg-[#1f1e1d] text-[14px] font-medium text-[#7a7771] uppercase tracking-wider">
                   OR
                 </span>
               </div>
@@ -203,7 +203,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email"
-                    className="w-full h-[46px] px-3.5 rounded-xl bg-[#1c1b1a] border border-[#33322f] text-[14px] text-[#f4f3ef] placeholder-[#7a7771] focus:outline-none focus:border-[#605d56] transition-all font-sans"
+                    className="w-full h-[46px] px-3.5 rounded-xl bg-[#1c1b1a] border border-[#33322f] text-[15px] text-[#f4f3ef] placeholder-[#7a7771] outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus:border-[#605d56] transition-colors font-sans"
                   />
                 </div>
 
@@ -216,7 +216,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder={isSignUp ? 'Create password (6+ chars)' : 'Enter password'}
-                      className="w-full h-[46px] px-3.5 rounded-xl bg-[#1c1b1a] border border-[#33322f] text-[14px] text-[#f4f3ef] placeholder-[#7a7771] focus:outline-none focus:border-[#605d56] transition-all font-sans"
+                      className="w-full h-[46px] px-3.5 rounded-xl bg-[#1c1b1a] border border-[#33322f] text-[15px] text-[#f4f3ef] placeholder-[#7a7771] outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 focus:border-[#605d56] transition-colors font-sans"
                     />
                   </div>
                 )}
@@ -297,18 +297,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Bottom Download Pill */}
-        <div className="flex justify-center pb-3">
-          <button 
-            type="button"
-            onClick={() => showToast("Omni Desktop App is currently in Early Access")}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-medium bg-[#2e2d2b] hover:bg-[#383734] text-[#f4f3ef] transition-all cursor-pointer shadow-xs"
-          >
-            <span className="text-[15px] leading-none mb-0.5"></span>
-            <span>Download desktop app</span>
-          </button>
         </div>
       </div>
 
