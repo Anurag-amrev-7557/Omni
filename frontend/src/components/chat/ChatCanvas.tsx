@@ -62,6 +62,8 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
   const bottomRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
   const rafRef = useRef<number | null>(null);
+  const prevSessionIdRef = useRef<string | null | undefined>(sessionId);
+  const prevMessagesLengthRef = useRef<number>(messages.length);
 
   const handleScroll = () => {
     const el = scrollContainerRef.current;
@@ -70,11 +72,32 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
     userScrolledUpRef.current = distanceToBottom > 100;
   };
 
+  // Instant 0ms scroll to bottom on session switch
+  useEffect(() => {
+    const isSessionSwitch = prevSessionIdRef.current !== sessionId;
+    prevSessionIdRef.current = sessionId;
+    userScrolledUpRef.current = false;
+
+    if (isSessionSwitch && scrollContainerRef.current) {
+      // Teleport instantly to bottom without visible top-to-bottom travel
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
+  }, [sessionId]);
+
   useEffect(() => {
     if (userScrolledUpRef.current) return;
 
     const el = scrollContainerRef.current;
     if (!el) return;
+
+    const isNewThreadLoad = prevMessagesLengthRef.current === 0 && messages.length > 0;
+    prevMessagesLengthRef.current = messages.length;
+
+    // Instant position when messages first load into empty view
+    if (isNewThreadLoad) {
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
 
     if (isStreaming) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
