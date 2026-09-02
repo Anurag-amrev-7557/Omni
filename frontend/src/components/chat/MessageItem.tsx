@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 import { Copy, Check, RotateCw, Edit3, Volume2, FileText, ChevronDown, ChevronUp, ExternalLink, Sparkles, ThumbsUp, ThumbsDown, Globe } from 'lucide-react';
 import { ChatMessage, ContextChunk } from '../../types/chat';
 import { FormatBadge } from '../common/FormatBadge';
@@ -28,6 +30,51 @@ interface ParsedCitation {
   domain?: string;
   quote?: string;
 }
+
+const CodeBlock: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => {
+  const [copied, setCopied] = useState(false);
+  const language = className ? className.replace('language-', '').trim() : '';
+  const codeContent = String(children).replace(/\n$/, '');
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(codeContent);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
+  };
+
+  return (
+    <div className="my-3.5 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] shadow-xs overflow-hidden text-xs font-mono">
+      {/* Code Block Header Toolbar */}
+      <div className="flex items-center justify-between px-3.5 py-1.5 bg-[var(--bg-sidebar)]/80 border-b border-[var(--border-color)]/60 select-none">
+        <span className="text-[11px] font-medium text-[var(--text-muted)] uppercase tracking-wider">
+          {language || 'code'}
+        </span>
+        <button
+          onClick={handleCopy}
+          className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
+          title="Copy code"
+        >
+          {copied ? (
+            <>
+              <Check size={12} className="text-emerald-500" />
+              <span className="text-emerald-500 font-sans text-[11px]">Copied</span>
+            </>
+          ) : (
+            <>
+              <Copy size={12} />
+              <span className="font-sans text-[11px]">Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Code Text Content */}
+      <div className="p-3.5 overflow-x-auto text-[var(--text-main)] leading-relaxed">
+        <code>{children}</code>
+      </div>
+    </div>
+  );
+};
 
 export const MessageItem: React.FC<MessageItemProps> = ({
   message,
@@ -143,6 +190,30 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     return { bodyText: body, parsedCitations: citations };
   }, [message]);
 
+  // Normalize and heal incomplete streaming Markdown syntax
+  const formattedBody = useMemo(() => {
+    if (!bodyText) return '';
+    let s = bodyText;
+    // 1. Normalize inline collapsed markdown tables
+    s = s.replace(/\|\s*\|\s*([-:]+[-| :]*)\|/g, '|\n| $1 |\n');
+    s = s.replace(/\|\s*\|\s*([^|\n]+)/g, '|\n| $1');
+
+    // 2. Stream-Healer: Seal unclosed code fences and tags during active streaming
+    if (isStreaming) {
+      const codeFenceCount = (s.match(/```/g) || []).length;
+      if (codeFenceCount % 2 !== 0) {
+        s += '\n```';
+      }
+
+      const boldCount = (s.match(/\*\*/g) || []).length;
+      if (boldCount % 2 !== 0) {
+        s += '**';
+      }
+    }
+
+    return s;
+  }, [bodyText, isStreaming]);
+
   // 1. USER MESSAGE RENDER
   if (message.role === 'user') {
     return (
@@ -192,17 +263,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     );
   }
 
-  // Normalize any inline collapsed markdown tables
-  const formattedBody = useMemo(() => {
-    if (!bodyText) return '';
-    let s = bodyText;
-    // Turn "| |---|---|" into "\n|---|---|\n"
-    s = s.replace(/\|\s*\|\s*([-:]+[-| :]*)\|/g, '|\n| $1 |\n');
-    // Turn "| | Penile" into "|\n| Penile"
-    s = s.replace(/\|\s*\|\s*([^|\n]+)/g, '|\n| $1');
-    return s;
-  }, [bodyText]);
-
   // 2. ASSISTANT MESSAGE RENDER
   return (
     <div className="w-full flex flex-col my-5 fade-in">
@@ -221,20 +281,38 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       ) : (
         <div className="omni-prose max-w-none text-sm text-[var(--text-main)] leading-relaxed font-sans">
           <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
+            remarkPlugins={[remarkGfm, remarkMath]}
+            rehypePlugins={[rehypeKatex]}
             components={{
               hr: () => <div className="my-5 border-t border-[var(--border-color)]" />,
-              a: ({ href, children }) => (
-                <a 
-                  href={href} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-[var(--accent-primary)] font-medium cursor-pointer underline hover:text-[var(--accent-hover)] transition-colors inline-flex items-center gap-0.5"
-                >
-                  {children}
-                  <ExternalLink size={10} className="inline opacity-70" />
-                </a>
-              ),
+              a: ({ href, children }) => {
+                const childStr = String(children).trim();
+                const isCitation = /^\[\d+\]$/.test(childStr);
+                if (isCitation) {
+                  return (
+                    <a 
+                      href={href} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center px-1.5 py-0.2 mx-0.5 rounded-md bg-[var(--accent-subtle)] text-[var(--accent-primary)] font-medium text-[11px] hover:underline cursor-pointer border border-[var(--accent-primary)]/30 no-underline shadow-2xs leading-tight"
+                      title={`Open source citation ${childStr}`}
+                    >
+                      {children}
+                    </a>
+                  );
+                }
+                return (
+                  <a 
+                    href={href} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-[var(--accent-primary)] font-medium cursor-pointer underline hover:text-[var(--accent-hover)] transition-colors inline-flex items-center gap-0.5"
+                  >
+                    {children}
+                    <ExternalLink size={10} className="inline opacity-70" />
+                  </a>
+                );
+              },
               table: ({ children }) => (
                 <div className="overflow-x-auto my-3.5 rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] shadow-xs">
                   <table className="min-w-full divide-y divide-[var(--border-color)] text-xs text-left">
@@ -311,11 +389,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                     </code>
                   );
                 }
-                return (
-                  <div className="my-3 overflow-x-auto rounded-xl bg-[var(--bg-sidebar)] border border-[var(--border-color)] p-3.5 text-xs font-mono text-[var(--text-main)]">
-                    <code>{children}</code>
-                  </div>
-                );
+                return <CodeBlock className={className}>{children}</CodeBlock>;
               }
             }}
           >
