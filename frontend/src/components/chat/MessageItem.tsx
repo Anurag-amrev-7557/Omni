@@ -330,7 +330,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
                   const fileName = targetCit?.filename || (targetCit as any)?.source || (message.contexts && message.contexts[0]?.filename) || 'Cited Source';
                   const pageNum = targetCit?.page ? (typeof targetCit.page === 'number' ? targetCit.page : parseInt(String(targetCit.page), 10)) : undefined;
-                  const quoteText = targetCit?.quote || (targetCit as any)?.parent_content || (targetCit as any)?.content || (message.contexts && (message.contexts[0]?.parent_content || message.contexts[0]?.content));
+                  const quoteText = (targetCit as any)?.quote || (targetCit as any)?.parent_content || (targetCit as any)?.content || (message.contexts && (message.contexts[0]?.parent_content || message.contexts[0]?.content));
                   const isWeb = targetCit?.url || (targetCit as any)?.source_type === 'web';
 
                   if (isWeb && targetCit?.url) {
