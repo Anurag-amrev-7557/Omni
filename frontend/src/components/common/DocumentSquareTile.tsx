@@ -18,7 +18,6 @@ export const DocumentSquareTile: React.FC<DocumentSquareTileProps> = ({
   size = 'md',
 }) => {
   const [imgError, setImgError] = useState(false);
-  const [isExiting, setIsExiting] = useState(false);
   const ext = filename.split('.').pop()?.toLowerCase() || 'txt';
   const isPdf = ext === 'pdf';
 
@@ -38,32 +37,17 @@ export const DocumentSquareTile: React.FC<DocumentSquareTileProps> = ({
 
   const handleDismiss = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isExiting) return;
-    setIsExiting(true);
-    setTimeout(() => {
-      onRemove?.();
-    }, 420);
+    onRemove?.();
   };
 
   return (
     <div 
       className="relative group select-none flex-shrink-0 origin-center"
-      style={{
-        width: isExiting ? 0 : widthPx,
-        maxWidth: isExiting ? 0 : widthPx,
-        marginRight: isExiting ? -12 : 0,
-        pointerEvents: isExiting ? 'none' : 'auto',
-        transition: 'width 420ms cubic-bezier(0.16, 1, 0.3, 1), max-width 420ms cubic-bezier(0.16, 1, 0.3, 1), margin-right 420ms cubic-bezier(0.16, 1, 0.3, 1)'
-      }}
+      style={{ width: widthPx, maxWidth: widthPx }}
     >
-      {/* Borderless Portrait Document Sheet Card - Visibly Scales In on Mount and Scales Down to Center on Dismiss */}
+      {/* Borderless Portrait Document Sheet Card */}
       <div 
-        className={`${tileDim} rounded-2xl bg-white shadow-md hover:shadow-xl cursor-pointer overflow-hidden relative flex flex-col justify-start origin-center ${!isExiting ? 'pop-in' : ''}`}
-        style={{
-          transform: isExiting ? 'scale(0)' : undefined,
-          opacity: isExiting ? 0 : undefined,
-          transition: isExiting ? 'transform 380ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 380ms ease-in' : undefined,
-        }}
+        className={`${tileDim} rounded-2xl bg-white shadow-md hover:shadow-xl cursor-pointer overflow-hidden relative flex flex-col justify-start origin-center pop-in`}
         onClick={onClick}
         title={filename}
       >
