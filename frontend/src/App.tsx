@@ -350,6 +350,17 @@ export default function App() {
         })
       });
 
+      if (!response.ok) {
+        let errDetail = `Server returned ${response.status}`;
+        try {
+          const errData = await response.json();
+          if (errData?.detail) errDetail = errData.detail;
+        } catch {
+          // ignore json parse error
+        }
+        throw new Error(errDetail);
+      }
+
       if (!response.body) throw new Error("No response body");
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');

@@ -134,6 +134,18 @@ def add_cors_headers_if_needed(response: Response, request: Request) -> Response
         response.headers["Access-Control-Allow-Headers"] = "*"
     return response
 
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    resp = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    return add_cors_headers_if_needed(resp, request)
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    import traceback
+    traceback.print_exc()
+    resp = JSONResponse(status_code=500, content={"detail": f"Internal Server Error: {str(exc)}"})
+    return add_cors_headers_if_needed(resp, request)
+
 @app.middleware("http")
 async def logging_and_auth_middleware(request: Request, call_next):
     start_time = time.perf_counter()
@@ -146,7 +158,11 @@ async def logging_and_auth_middleware(request: Request, call_next):
 
     # Public route bypass
     if request.url.path in ("/", "/api/health", "/docs", "/redoc", "/openapi.json"):
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            resp = JSONResponse(status_code=500, content={"detail": str(exc)})
+            return add_cors_headers_if_needed(resp, request)
         return add_cors_headers_if_needed(response, request)
 
     # Authenticate API requests
@@ -166,7 +182,15 @@ async def logging_and_auth_middleware(request: Request, call_next):
             resp = JSONResponse(status_code=401, content={"detail": "Authentication required"})
             return add_cors_headers_if_needed(resp, request)
 
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        print(f"[HTTP 500] Unhandled exception processing {request.method} {request.url.path}: {exc}")
+        import traceback
+        traceback.print_exc()
+        resp = JSONResponse(status_code=500, content={"detail": f"Internal server error: {str(exc)}"})
+        return add_cors_headers_if_needed(resp, request)
+
     response = add_cors_headers_if_needed(response, request)
     latency_ms = round((time.perf_counter() - start_time) * 1000, 1)
     if not request.url.path.startswith("/api/health"):
@@ -892,7 +916,7 @@ def cleanup_orphaned():
     }
 
 @app.post("/api/chat/stream")
-def stream_chat(data: dict):
+def stream_chat(data: dict, request: Request):
     session_id = data.get("session_id")
     prompt = data.get("prompt")
     web_search = bool(data.get("web_search", False)) or "@web" in (prompt or "").lower()
@@ -901,7 +925,10 @@ def stream_chat(data: dict):
         raise HTTPException(status_code=400, detail="Missing session_id or prompt")
         
     user_id = get_current_user()
-    messages = get_session_messages(session_id)
+    try:
+        messages = get_session_messages(session_id)
+    except Exception:
+        messages = []
     is_first_message = len(messages) == 0
     
     initial_title = None
@@ -910,7 +937,10 @@ def stream_chat(data: dict):
         words = (clean_query or prompt).split()[:3]
         initial_title = " ".join(words).title() if words else "New Chat"
 
-    add_message(session_id, "user", prompt, session_title=initial_title)
+    try:
+        add_message(session_id, "user", prompt, session_title=initial_title)
+    except Exception as e:
+        print(f"[Warning] Failed to record initial user message: {e}")
     
     def sse_event_generator():
         set_current_user(user_id)
@@ -945,7 +975,10 @@ def stream_chat(data: dict):
                     yield f"data: {json.dumps({'type': 'token', 'token': token_chunk})}\n\n"
                     time.sleep(0.01)
                     
-                add_message(session_id, "assistant", cached_text, cached_hit.get("contexts"))
+                try:
+                    add_message(session_id, "assistant", cached_text, cached_hit.get("contexts"))
+                except Exception as e:
+                    print(f"[Warning] Failed to persist cached assistant message: {e}")
                 yield f"data: {json.dumps({'type': 'done', 'full_text': cached_text})}\n\n"
                 return
 
@@ -976,18 +1009,21 @@ def stream_chat(data: dict):
                 full_text += token
                 yield f"data: {json.dumps({'type': 'token', 'token': token})}\n\n"
                 
-            add_message(session_id, "assistant", full_text, retrieved_contexts)
+            try:
+                add_message(session_id, "assistant", full_text, retrieved_contexts)
+            except Exception as e:
+                print(f"[Warning] Failed to persist stream assistant message: {e}")
             
             # Populate Tier 3 Exact Cache and Tier 4 Semantic Cache for subsequent 0ms hits
-            set_exact_cached_response(user_id, prompt, messages, web_search, full_text, retrieved_contexts)
-            if not web_search:
-                try:
+            try:
+                set_exact_cached_response(user_id, prompt, messages, web_search, full_text, retrieved_contexts)
+                if not web_search:
                     if q_vec is None:
                         embed_model = get_embeddings()
                         q_vec = embed_model.embed_query(prompt)
                     add_semantic_cached_response(user_id, prompt, q_vec, full_text, retrieved_contexts)
-                except Exception as cache_err:
-                    print(f"[Warning] Failed to populate semantic cache: {cache_err}")
+            except Exception as cache_err:
+                print(f"[Warning] Failed to populate semantic cache: {cache_err}")
 
             yield f"data: {json.dumps({'type': 'done', 'full_text': full_text})}\n\n"
         except Exception as e:
@@ -995,7 +1031,16 @@ def stream_chat(data: dict):
             yield f"data: {json.dumps({'type': 'token', 'token': err_msg})}\n\n"
             yield f"data: {json.dumps({'type': 'done', 'full_text': err_msg})}\n\n"
             
-    return StreamingResponse(sse_event_generator(), media_type="text/event-stream")
+    response = StreamingResponse(
+        sse_event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+    return add_cors_headers_if_needed(response, request)
 
 
 # =========================================================================
