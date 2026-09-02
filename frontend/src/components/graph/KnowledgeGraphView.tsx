@@ -106,15 +106,22 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
     loadGraph();
   }, [loadGraph]);
 
-  // Handle Trigger Rebuild
+  // Handle Trigger Rebuild with auto-polling
   const handleRebuild = async () => {
     try {
       setBuilding(true);
       await api.buildGraph();
-      setTimeout(() => {
-        loadGraph();
-        setBuilding(false);
-      }, 3500);
+      
+      // Poll every 2.5s for updated graph data
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        attempts++;
+        await loadGraph();
+        if (attempts >= 4) {
+          clearInterval(interval);
+          setBuilding(false);
+        }
+      }, 2500);
     } catch (err) {
       console.error("Failed to trigger graph build", err);
       setBuilding(false);

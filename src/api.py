@@ -943,26 +943,78 @@ def build_graph(
             from qdrant_client.models import Filter, FieldCondition, MatchValue
 
             client = get_qdrant_client()
-            res, _ = client.scroll(
-                collection_name=COLLECTION_NAME,
-                scroll_filter=Filter(
-                    must=[FieldCondition(key="metadata.user_id", match=MatchValue(value=uid))]
-                ),
-                limit=100,
-                with_payload=True,
-            )
+            points_list = []
+            offset = None
+
+            while True:
+                try:
+                    points, offset = client.scroll(
+                        collection_name=COLLECTION_NAME,
+                        scroll_filter=Filter(
+                            should=[
+                                FieldCondition(key="metadata.user_id", match=MatchValue(value=uid)),
+                                FieldCondition(key="user_id", match=MatchValue(value=uid)),
+                            ]
+                        ),
+                        limit=100,
+                        offset=offset,
+                        with_payload=True,
+                        with_vectors=False,
+                    )
+                except Exception:
+                    points, offset = client.scroll(
+                        collection_name=COLLECTION_NAME,
+                        limit=100,
+                        offset=offset,
+                        with_payload=True,
+                        with_vectors=False,
+                    )
+
+                points_list.extend(points)
+                if offset is None:
+                    break
 
             seen_parents = set()
-            for point in res:
+            for point in points_list:
                 payload = point.payload or {}
-                parent_text = payload.get("parent_content") or payload.get("text") or ""
-                fname = payload.get("metadata", {}).get("filename") or payload.get("filename") or "Document"
-                page = payload.get("metadata", {}).get("page") or payload.get("page") or 1
+                meta = payload.get("metadata") or {}
                 
-                if parent_text and parent_text not in seen_parents:
-                    seen_parents.add(parent_text)
-                    extract_entities_and_relations(parent_text, fname, page)
+                # Check user_id ownership
+                pt_uid = meta.get("user_id") or payload.get("user_id")
+                if pt_uid and str(pt_uid) != str(uid):
+                    continue
 
+                parent_text = (
+                    meta.get("parent_content")
+                    or payload.get("parent_content")
+                    or payload.get("page_content")
+                    or meta.get("text")
+                    or payload.get("text")
+                    or ""
+                )
+                fname = meta.get("filename") or payload.get("filename") or "Document"
+                page = meta.get("page") or payload.get("page") or 1
+
+                if parent_text and len(parent_text.strip()) > 30 and parent_text not in seen_parents:
+                    seen_parents.add(parent_text)
+                    extract_entities_and_relations(parent_text, fname, int(page) if str(page).isdigit() else 1)
+
+            # Fallback to extracting from uploaded files on disk if Qdrant returned 0
+            if len(seen_parents) == 0:
+                uploads_dir = user_upload_dir()
+                if os.path.exists(uploads_dir):
+                    for fname in os.listdir(uploads_dir):
+                        fpath = os.path.join(uploads_dir, fname)
+                        if os.path.isfile(fpath):
+                            from src.pdf_viewer import extract_pdf_page_text, get_pdf_page_count
+                            total_pages = get_pdf_page_count(fname)
+                            for p in range(1, min(6, total_pages + 1)):
+                                text = extract_pdf_page_text(fname, p)
+                                if text and len(text.strip()) > 30:
+                                    seen_parents.add(text)
+                                    extract_entities_and_relations(text, fname, p)
+
+            print(f"[GraphWorker] Extracted entities from {len(seen_parents)} text blocks. Running community clustering...")
             run_community_detection_and_summaries()
             print(f"[GraphWorker] Knowledge Graph build completed for user {uid} ({len(seen_parents)} parent blocks processed).")
         except Exception as exc:
