@@ -90,9 +90,18 @@ export default function App() {
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const showToast = useCallback((msg: string) => {
+  const toastTimeoutRef = useRef<number | null>(null);
+  const showToast = useCallback((msg: string, durationMs?: number) => {
+    if (toastTimeoutRef.current) {
+      window.clearTimeout(toastTimeoutRef.current);
+      toastTimeoutRef.current = null;
+    }
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 2400);
+    const duration = durationMs ?? (msg.toLowerCase().includes('waking up') ? 7000 : 2400);
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setToastMessage(null);
+      toastTimeoutRef.current = null;
+    }, duration);
   }, []);
 
   // Custom Hooks
@@ -338,6 +347,11 @@ export default function App() {
 
     setActiveStreamingIds(prev => new Set(prev).add(targetSessionId));
 
+    // Honest UI: Free-tier cold-start wake-up notification if request takes > 3s
+    const wakeTimer = window.setTimeout(() => {
+      showToast("Waking up the free-tier server... This first request may take up to 45 seconds.", 7000);
+    }, 3000);
+
     try {
       const token = (await supabase.auth.getSession()).data.session?.access_token;
       const response = await fetch(`${API_BASE}/api/chat/stream`, {
@@ -349,6 +363,8 @@ export default function App() {
           web_search: webSearchEnabled
         })
       });
+
+      window.clearTimeout(wakeTimer);
 
       if (!response.ok) {
         let errDetail = `Server returned ${response.status}`;
@@ -463,6 +479,7 @@ export default function App() {
         setMessages(updated);
       }
     } finally {
+      window.clearTimeout(wakeTimer);
       setActiveStreamingIds(prev => {
         const next = new Set(prev);
         next.delete(targetSessionId);

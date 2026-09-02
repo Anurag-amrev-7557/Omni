@@ -22,6 +22,9 @@ export const useDocuments = (showToast: (msg: string) => void) => {
   const activeXhrRef = useRef<XMLHttpRequest | null>(null);
 
   const fetchDocuments = useCallback(async () => {
+    const wakeTimer = window.setTimeout(() => {
+      showToast("Waking up the free-tier server... This first request may take up to 45 seconds.");
+    }, 3000);
     try {
       setIsLoading(true);
       const docs = await api.getDocuments();
@@ -34,9 +37,10 @@ export const useDocuments = (showToast: (msg: string) => void) => {
     } catch (e) {
       console.error("Error fetching documents:", e);
     } finally {
+      window.clearTimeout(wakeTimer);
       setIsLoading(false);
     }
-  }, []);
+  }, [showToast]);
 
   const fetchStats = useCallback(async () => {
     try {

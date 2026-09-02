@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -92,6 +92,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const [referencesOpen, setReferencesOpen] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [feedbackGiven, setFeedbackGiven] = useState<'up' | 'down' | null>(null);
+  const [isWakingUp, setIsWakingUp] = useState(false);
 
   const handleCopy = (textToCopy: string) => {
     navigator.clipboard.writeText(textToCopy);
@@ -231,6 +232,20 @@ export const MessageItem: React.FC<MessageItemProps> = ({
     return { bodyText: body, parsedCitations: citations };
   }, [message]);
 
+  useEffect(() => {
+    let timer: number | null = null;
+    if (isLastAssistant && isStreaming && !bodyText.trim()) {
+      timer = window.setTimeout(() => {
+        setIsWakingUp(true);
+      }, 10000);
+    } else {
+      setIsWakingUp(false);
+    }
+    return () => {
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [isLastAssistant, isStreaming, bodyText]);
+
   // Normalize and heal incomplete streaming Markdown & LaTeX math syntax
   const formattedBody = useMemo(() => {
     if (!bodyText) return '';
@@ -327,16 +342,29 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   return (
     <div className="w-full flex flex-col my-5 fade-in">
       {isLastAssistant && isStreaming && !bodyText.trim() ? (
-        <div className="flex items-center gap-3 py-3 fade-in select-none">
-          <OrbitingOrbLoader size="sm" />
-          <div className="overflow-hidden h-6 flex items-center">
-            <span 
-              key={message.thought || 'thinking'} 
-              className="lottery-text-change text-[13.5px] text-[var(--text-muted)] font-normal inline-block"
-            >
-              {message.thought || "Synthesizing insights..."}
-            </span>
+        <div className="flex flex-col gap-2 py-3 fade-in select-none">
+          <div className="flex items-center gap-3">
+            <OrbitingOrbLoader size="sm" />
+            <div className="flex items-center flex-wrap gap-2">
+              <span 
+                key={isWakingUp ? 'waking-server' : (message.thought || 'thinking')} 
+                className="lottery-text-change text-[13.5px] text-[var(--text-muted)] font-normal inline-block"
+              >
+                {isWakingUp 
+                  ? "Waking up the free-tier server... This first request may take up to 45 seconds."
+                  : (message.thought || "Synthesizing insights...")}
+              </span>
+            </div>
           </div>
+          {isWakingUp && (
+            <div className="flex items-center gap-2 pl-8 text-[12px] text-amber-500/90 font-medium fade-in">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+              </span>
+              <span>Cloud container cold start in progress &bull; Resuming free-tier instance</span>
+            </div>
+          )}
         </div>
       ) : (
         <div className="omni-prose max-w-none text-sm text-[var(--text-main)] leading-relaxed font-sans">

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { MessageItem } from './MessageItem';
 import { ChatInput } from './ChatInput';
 import { ChatMessage } from '../../types/chat';
@@ -64,6 +64,21 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
   const rafRef = useRef<number | null>(null);
   const prevSessionIdRef = useRef<string | null | undefined>(sessionId);
   const prevMessagesLengthRef = useRef<number>(messages.length);
+  const [isWakingUp, setIsWakingUp] = useState(false);
+
+  useEffect(() => {
+    let timer: number | null = null;
+    if (isMessagesLoading && messages.length === 0) {
+      timer = window.setTimeout(() => {
+        setIsWakingUp(true);
+      }, 3000);
+    } else {
+      setIsWakingUp(false);
+    }
+    return () => {
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [isMessagesLoading, messages.length]);
 
   const handleScroll = () => {
     const el = scrollContainerRef.current;
@@ -168,6 +183,17 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
                   <Skeleton className="h-3.5 w-3/4 rounded-md" />
                 </div>
               </div>
+
+              {/* Honest UI: Cold start notification */}
+              {isWakingUp && (
+                <div className="flex items-center justify-center gap-2 py-4 px-3 rounded-xl bg-amber-500/5 border border-amber-500/20 text-xs text-amber-500 font-medium fade-in">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                  </span>
+                  <span>Waking up the free-tier server... This first request may take up to 45 seconds.</span>
+                </div>
+              )}
             </div>
           )}
 
