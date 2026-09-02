@@ -280,7 +280,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
       {/* Morphing Input Card with CSS Grid Auto-Sizing (z-20 sits in front of the sliding tray) */}
       <div 
-        className={`relative z-20 rounded-2xl border border-[var(--border-input)] bg-[var(--bg-input)] shadow-lg focus-within:border-[var(--accent-primary)]/80 focus-within:ring-2 focus-within:ring-[var(--accent-primary)]/25 ${
+        className={`relative z-20 rounded-2xl border border-[var(--border-input)] bg-[var(--bg-input)] shadow-lg transition-all duration-150 ease-out focus-within:border-[var(--accent-primary)]/80 focus-within:ring-2 focus-within:ring-[var(--accent-primary)]/25 ${
           isMultiLine ? 'px-4 pt-3 pb-3' : 'px-3.5 py-3 min-h-[52px]'
         }`}
       >
@@ -295,7 +295,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
         {/* REFERENCED VAULT DOCUMENTS & ATTACHED FILES CHIP CAROUSEL */}
         {(referencedVaultDocs.length > 0 || attachedFiles.length > 0) && (
-          <div className="relative group/carousel w-full mb-0.5">
+          <div className="relative group/carousel w-full mb-0.5 transition-all duration-150 ease-out">
             {/* Left Scroll Navigation Button */}
             {canScrollLeft && (
               <button
