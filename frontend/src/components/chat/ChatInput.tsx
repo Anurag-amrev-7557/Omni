@@ -543,7 +543,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <button
             type="button"
             onClick={onToggleWebSearch}
-            className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-all duration-200 active:scale-[0.97] cursor-pointer select-none shadow-2xs ${
+            className={`group flex items-center gap-1.5 px-3 h-[28px] rounded-xl text-[12.5px] transition-all duration-200 active:scale-[0.97] cursor-pointer select-none shadow-2xs ${
               webSearchEnabled
                 ? 'bg-[var(--accent-subtle)] text-[var(--accent-primary)] border border-[var(--accent-primary)]/40 font-medium'
                 : 'border border-[var(--border-color)] bg-[var(--bg-card)]/60 text-[var(--text-muted)] hover:text-[var(--text-main)] hover:border-[var(--text-dark)]'
@@ -551,14 +551,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             title={webSearchEnabled ? "Live Web Research enabled" : "Enable Live Web Research & Real-time Intelligence"}
           >
             <Globe 
-              size={13} 
+              size={13.5} 
               className={`transition-colors duration-200 ${
                 webSearchEnabled 
                   ? 'text-[var(--accent-primary)]' 
                   : 'text-[var(--text-muted)] group-hover:text-[var(--text-main)]'
               }`} 
             />
-            <span className="leading-none">Web Search</span>
+            <span className={`leading-none ${webSearchEnabled ? 'text-[var(--accent-primary)] font-medium' : 'text-[var(--text-main)] font-normal'}`}>
+              Web Search
+            </span>
             <span 
               className={`h-1.5 rounded-full bg-[var(--accent-primary)] transition-all duration-200 ease-out ${
                 webSearchEnabled ? 'w-1.5 opacity-100 scale-100' : 'w-0 opacity-0 scale-0'
@@ -569,11 +571,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           {/* Model Selector Pill */}
           <div className="relative">
             <button 
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)]/60 text-xs text-[var(--text-muted)] hover:text-[var(--text-main)] hover:border-[var(--text-dark)] transition-all cursor-pointer shadow-2xs"
+              className="flex items-center gap-1.5 px-3 h-[28px] rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)]/60 text-[12.5px] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:border-[var(--text-dark)] transition-all cursor-pointer shadow-2xs"
               onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
             >
-              <span className="font-medium text-[var(--text-main)]">{selectedModel}</span>
-              <span className="text-[var(--text-muted)] text-[11px]">{effortLevel}</span>
+              <span className="font-medium text-[var(--text-main)] leading-none">{selectedModel}</span>
+              <span className="text-[var(--text-muted)] text-[11.5px] leading-none">{effortLevel}</span>
             </button>
 
           {modelDropdownOpen && (
