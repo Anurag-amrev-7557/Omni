@@ -40,7 +40,7 @@ export interface UploadResponse {
 
 export interface UploadProgress {
   upload_id: string;
-  status: 'uploading' | 'completed' | 'failed';
+  status: 'uploading' | 'processing' | 'completed' | 'failed' | 'cancelled';
   total_files: number;
   completed_files: number;
   files: Array<{
