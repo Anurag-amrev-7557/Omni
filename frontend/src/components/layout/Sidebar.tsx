@@ -23,6 +23,7 @@ interface SidebarProps {
   onOpenProjects: () => void;
   documentsCount?: number;
   totalChunksCount?: number;
+  streamingSessionIds?: Set<string>;
   isLoadingSessions?: boolean;
   isStatsLoading?: boolean;
   showToast: (msg: string) => void;
@@ -43,6 +44,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenProjects,
   documentsCount = 0,
   totalChunksCount = 0,
+  streamingSessionIds,
   isLoadingSessions = false,
   isStatsLoading = false,
   showToast,
@@ -224,7 +226,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     });
                   }}
                 >
-                  <span className="truncate flex-1 pr-6">{cleanSessionTitle(s.title)}</span>
+                  <div className="flex items-center gap-2 truncate flex-1 pr-6">
+                    <span className="truncate">{cleanSessionTitle(s.title)}</span>
+                    {streamingSessionIds?.has(s.session_id) && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-primary)] animate-pulse flex-shrink-0" title="Generating..." />
+                    )}
+                  </div>
 
                   {/* Clean Subtle More Button - Visible on mobile touch screens and on hover on desktop */}
                   <button

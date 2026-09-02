@@ -70,7 +70,8 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputPrompt, setInputPrompt] = useState<string>('');
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
-  const [isStreaming, setIsStreaming] = useState<boolean>(false);
+  const [activeStreamingIds, setActiveStreamingIds] = useState<Set<string>>(new Set());
+  const isStreaming = Boolean(currentSessionId && activeStreamingIds.has(currentSessionId));
 
   // Model & Inference Settings
   const [selectedModel, setSelectedModel] = useState<string>('GPT-OSS 120B');
@@ -86,19 +87,11 @@ export default function App() {
   const [projectsOpen, setProjectsOpen] = useState<boolean>(false);
   const [referencedVaultDocs, setReferencedVaultDocs] = useState<string[]>([]);
 
-  // Toast (Debounced, cleanly transitions without spamming)
-  const [toastMessage, setToastMessage] = useState<string>('');
-  const toastTimeoutRef = useRef<number | null>(null);
+  // Toast
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const showToast = useCallback((msg: string) => {
-    if (!msg) return;
-    if (toastTimeoutRef.current) {
-      window.clearTimeout(toastTimeoutRef.current);
-    }
     setToastMessage(msg);
-    toastTimeoutRef.current = window.setTimeout(() => {
-      setToastMessage('');
-      toastTimeoutRef.current = null;
-    }, 2400);
+    setTimeout(() => setToastMessage(null), 2400);
   }, []);
 
   // Custom Hooks
@@ -127,7 +120,13 @@ export default function App() {
   const [isSessionsLoading, setIsSessionsLoading] = useState<boolean>(true);
   const [isMessagesLoading, setIsMessagesLoading] = useState<boolean>(false);
 
-  // Switch Session Instantly (0ms cache read + optimistic clear)
+  // Keep currentSessionId in ref so session reloads don't re-trigger on chat clicks
+  const currentSessionIdRef = useRef(currentSessionId);
+  useEffect(() => {
+    currentSessionIdRef.current = currentSessionId;
+  }, [currentSessionId]);
+
+  // Switch Session Instantly
   const handleSelectSession = useCallback((sessionId: string) => {
     if (!sessionId) return;
     currentSessionIdRef.current = sessionId;
@@ -137,25 +136,20 @@ export default function App() {
     setReferencedVaultDocs([]);
     setAttachedFiles([]);
 
-    // 1. Instant cache hit: render immediately (0ms)
     const cached = messageCacheRef.current.get(sessionId);
     if (cached !== undefined) {
       setMessages(cached);
       setIsMessagesLoading(false);
     } else {
-      // Clear previous messages immediately so stale chat does not linger
       setMessages([]);
       setIsMessagesLoading(true);
     }
 
-    // 2. Non-blocking SWR background fetch to keep messages synchronized
     api.getMessages(sessionId).then((msgs) => {
       if (currentSessionIdRef.current === sessionId) {
         messageCacheRef.current.set(sessionId, msgs);
         setMessages(msgs);
       }
-    }).catch((e) => {
-      console.error("Error loading session messages:", e);
     }).finally(() => {
       if (currentSessionIdRef.current === sessionId) {
         setIsMessagesLoading(false);
@@ -163,25 +157,10 @@ export default function App() {
     });
   }, []);
 
-  // Sync cache with current active messages as they stream/arrive
-  useEffect(() => {
-    if (currentSessionId && messages.length > 0) {
-      messageCacheRef.current.set(currentSessionId, messages);
-    }
-  }, [currentSessionId, messages]);
-
-  // Keep currentSessionId in ref so session reloads don't re-trigger on chat clicks
-  const currentSessionIdRef = useRef(currentSessionId);
-  useEffect(() => {
-    currentSessionIdRef.current = currentSessionId;
-  }, [currentSessionId]);
-
-  // Fetch Sessions (Initial mount displays skeleton; subsequent refreshes sync silently in background)
+  // Fetch Sessions
   const loadSessions = useCallback(async (isInitial = false) => {
     try {
-      if (isInitial) {
-        setIsSessionsLoading(true);
-      }
+      if (isInitial) setIsSessionsLoading(true);
       const sess = await api.getSessions();
       setSessions(sess);
       if (sess.length > 0 && !currentSessionIdRef.current) {
@@ -190,26 +169,17 @@ export default function App() {
     } catch (e) {
       console.error("Error loading sessions:", e);
     } finally {
-      if (isInitial) {
-        setIsSessionsLoading(false);
-      }
+      if (isInitial) setIsSessionsLoading(false);
     }
   }, [handleSelectSession]);
 
-  // Initial cold mount load only (strictly runs once!)
   useEffect(() => {
     loadSessions(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadSessions]);
 
-  // Create New Thread (Instant 0ms UI switch with optimistic state)
+  // Create New Thread
   const handleNewChat = useCallback(() => {
-    const newSessionId = typeof crypto !== 'undefined' && crypto.randomUUID 
-      ? crypto.randomUUID() 
-      : '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, c =>
-          (+c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> +c / 4).toString(16)
-        );
-    
+    const newSessionId = crypto.randomUUID();
     currentSessionIdRef.current = newSessionId;
     setCurrentSessionId(newSessionId);
     setMessages([]);
@@ -219,49 +189,21 @@ export default function App() {
     setAttachedFiles([]);
     setActiveTab('chats');
     showToast("Started new chat");
-
-    setSessions(prev => {
-      // Keep previous sessions and prepend the new clean draft thread
-      if (prev.some(s => s.session_id === newSessionId)) return prev;
-      return [{ session_id: newSessionId, title: 'New Chat', created_at: new Date().toISOString() }, ...prev];
-    });
   }, [showToast]);
 
-  // Delete Thread (Instant 0ms Optimistic UI + Seamless Shift to Recent Top Chat)
+  // Delete Thread
   const handleDeleteSession = useCallback((sessionId: string) => {
-    // 1. Clear from in-memory cache
     messageCacheRef.current.delete(sessionId);
-
-    // 2. Instantly remove from local sidebar state
     setSessions(prev => {
       const remaining = prev.filter(s => s.session_id !== sessionId);
-
-      // 3. If deleting the currently active chat, shift instantly to the top recent chat
       if (currentSessionIdRef.current === sessionId) {
-        if (remaining.length > 0) {
-          handleSelectSession(remaining[0].session_id);
-        } else {
-          handleNewChat();
-        }
+        if (remaining.length > 0) handleSelectSession(remaining[0].session_id);
+        else handleNewChat();
       }
       return remaining;
     });
-
-    showToast("Thread deleted");
-
-    // 4. Asynchronous non-blocking background delete
-    api.deleteSession(sessionId).catch((e) => {
-      console.error("Error deleting session on server:", e);
-      showToast("Could not delete session from server");
-      loadSessions(false);
-    });
-  }, [handleSelectSession, handleNewChat, showToast, loadSessions]);
-
-  // Inspect document in sidecar reader
-  const handleInspectDoc = (doc: { filename: string; content?: string }) => {
-    setSidecarDoc(doc);
-    setSidecarOpen(true);
-  };
+    api.deleteSession(sessionId).catch(() => loadSessions(false));
+  }, [handleSelectSession, handleNewChat, loadSessions]);
 
   // Project Management Handlers
   const handleCreateProject = (name: string, description: string, color: string) => {
@@ -269,39 +211,45 @@ export default function App() {
       id: `proj-${Date.now()}`,
       name,
       description,
-      documentCount: 0,
-      chatCount: 0,
-      createdAt: new Date().toISOString().split('T')[0],
       color,
+      documentsCount: 0,
+      conversationsCount: 0,
+      createdAt: new Date().toISOString()
     };
     const updated = [newProject, ...projects];
     setProjects(updated);
     localStorage.setItem('omni_projects', JSON.stringify(updated));
-    setActiveProjectId(newProject.id);
-    localStorage.setItem('omni_active_project', newProject.id);
+    showToast(`Created project: ${name}`);
+  };
+
+  const handleSelectProject = (project: ProjectItem) => {
+    setActiveProject(project);
+    localStorage.setItem('omni_active_project', project.id);
+    showToast(`Switched to project: ${project.name}`);
   };
 
   const handleDeleteProject = (id: string) => {
     const updated = projects.filter(p => p.id !== id);
     setProjects(updated);
     localStorage.setItem('omni_projects', JSON.stringify(updated));
-    if (activeProjectId === id) {
-      setActiveProjectId('default-vault');
+    showToast("Project deleted");
+    if (activeProject?.id === id) {
+      setActiveProject(null);
       localStorage.setItem('omni_active_project', 'default-vault');
     }
   };
 
-  // Handle Send Prompt with SSE Streaming
+  // Handle Send Prompt with Concurrent Multi-Chat SSE Streaming
   const handleSendPrompt = async (customText?: string) => {
     const text = customText || inputPrompt;
     if (!text.trim() && attachedFiles.length === 0) return;
-    if (isStreaming || !currentSessionId) return;
+    const targetSessionId = currentSessionId;
+    if (!targetSessionId || activeStreamingIds.has(targetSessionId)) return;
 
-    // Check Guest Query Limit (Max 2 free queries before requesting auth)
     if (!currentUser) {
       if (guestQueryCount >= 2) {
         setPendingPrompt(text);
-        setAuthReason("You've completed your 2 free guest trial questions! Sign in with Google or Email in 5 seconds to continue chatting without limits.");
+        setAuthReason("You've completed your 2 free guest trial questions! Sign in with Google or Email to continue.");
         setAuthOpen(true);
         return;
       }
@@ -318,18 +266,26 @@ export default function App() {
     let actualPrompt = text.trim();
     if (referencedVaultDocs.length > 0) {
       const refHeader = `[Focus explicitly on referenced Knowledge Vault documents: ${referencedVaultDocs.join(', ')}]\n\n`;
-      actualPrompt = actualPrompt ? `${refHeader}${actualPrompt}` : `${refHeader}Analyze and summarize key findings from the referenced documents.`;
+      actualPrompt = `${refHeader}${actualPrompt}`;
       setReferencedVaultDocs([]);
     } else if (!actualPrompt) {
       actualPrompt = "Summarize the attached files.";
     }
 
     setInputPrompt('');
-    setIsStreaming(true);
 
     const userMsg: ChatMessage = { role: 'user', content: actualPrompt };
     const tempAssistantMsg: ChatMessage = { role: 'assistant', content: '', contexts: null };
-    setMessages(prev => [...prev, userMsg, tempAssistantMsg]);
+
+    const currentCached = messageCacheRef.current.get(targetSessionId) || [];
+    const newSessionMessages = [...currentCached, userMsg, tempAssistantMsg];
+    messageCacheRef.current.set(targetSessionId, newSessionMessages);
+
+    if (currentSessionIdRef.current === targetSessionId) {
+      setMessages(newSessionMessages);
+    }
+
+    setActiveStreamingIds(prev => new Set(prev).add(targetSessionId));
 
     try {
       const token = (await supabase.auth.getSession()).data.session?.access_token;
@@ -337,7 +293,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
-          session_id: currentSessionId,
+          session_id: targetSessionId,
           prompt: actualPrompt,
           web_search: webSearchEnabled
         })
@@ -369,8 +325,13 @@ export default function App() {
               const parsed = JSON.parse(dataStr);
               if (parsed.type === 'title' && parsed.title) {
                 const newTitle = parsed.title;
-                const targetSessId = parsed.session_id || currentSessionId;
-                setSessions(prev => prev.map(s => s.session_id === targetSessId ? { ...s, title: newTitle } : s));
+                setSessions(prev => {
+                  const exists = prev.some(s => s.session_id === targetSessionId);
+                  if (exists) {
+                    return prev.map(s => s.session_id === targetSessionId ? { ...s, title: newTitle } : s);
+                  }
+                  return [{ session_id: targetSessionId, title: newTitle, created_at: new Date().toISOString() }, ...prev];
+                });
               }
               if (parsed.type === 'thought' && parsed.step) {
                 thoughtContent = parsed.step;
@@ -384,60 +345,67 @@ export default function App() {
               if (parsed.contexts) {
                 streamContexts = parsed.contexts;
               }
-              setMessages(prev => {
-                const updated = [...prev];
-                const lastIdx = updated.length - 1;
-                if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
-                  updated[lastIdx] = {
-                    ...updated[lastIdx],
-                    content: targetContent,
-                    thought: thoughtContent,
-                    contexts: streamContexts || updated[lastIdx].contexts
-                  };
-                }
-                return updated;
-              });
-            } catch {
-              // Ignore partial unparsed chunks
-            }
+
+              const cached = messageCacheRef.current.get(targetSessionId) || [];
+              const updated = [...cached];
+              const lastIdx = updated.length - 1;
+              if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
+                updated[lastIdx] = {
+                  ...updated[lastIdx],
+                  content: targetContent,
+                  thought: thoughtContent,
+                  contexts: streamContexts || updated[lastIdx].contexts
+                };
+              }
+              messageCacheRef.current.set(targetSessionId, updated);
+
+              if (currentSessionIdRef.current === targetSessionId) {
+                setMessages(updated);
+              }
+            } catch {}
           }
         }
       }
 
-      setIsStreaming(false);
-
-      // Ensure assistant message has content if stream finished empty
       if (!targetContent.trim()) {
-        setMessages(prev => {
-          const updated = [...prev];
-          const lastIdx = updated.length - 1;
-          if (lastIdx >= 0 && updated[lastIdx].role === 'assistant' && !updated[lastIdx].content) {
-            updated[lastIdx] = {
-              ...updated[lastIdx],
-              content: "I could not retrieve matching information. Please try rephrasing or enable Web Search.",
-            };
-          }
-          return updated;
-        });
+        const cached = messageCacheRef.current.get(targetSessionId) || [];
+        const updated = [...cached];
+        const lastIdx = updated.length - 1;
+        if (lastIdx >= 0 && updated[lastIdx].role === 'assistant' && !updated[lastIdx].content) {
+          updated[lastIdx] = {
+            ...updated[lastIdx],
+            content: "I could not retrieve matching information. Please try rephrasing or enable Web Search.",
+          };
+        }
+        messageCacheRef.current.set(targetSessionId, updated);
+        if (currentSessionIdRef.current === targetSessionId) {
+          setMessages(updated);
+        }
       }
 
       loadSessions();
     } catch (e) {
       console.error("Stream error:", e);
       showToast("Error generating response");
-      setMessages(prev => {
-        const updated = [...prev];
-        const lastIdx = updated.length - 1;
-        if (lastIdx >= 0 && updated[lastIdx].role === 'assistant' && !updated[lastIdx].content) {
-          updated[lastIdx] = {
-            ...updated[lastIdx],
-            content: "⚠️ *An error occurred while connecting to the assistant. Please try again.*",
-          };
-        }
-        return updated;
-      });
+      const cached = messageCacheRef.current.get(targetSessionId) || [];
+      const updated = [...cached];
+      const lastIdx = updated.length - 1;
+      if (lastIdx >= 0 && updated[lastIdx].role === 'assistant' && !updated[lastIdx].content) {
+        updated[lastIdx] = {
+          ...updated[lastIdx],
+          content: "⚠️ *An error occurred while connecting to the assistant. Please try again.*",
+        };
+      }
+      messageCacheRef.current.set(targetSessionId, updated);
+      if (currentSessionIdRef.current === targetSessionId) {
+        setMessages(updated);
+      }
     } finally {
-      setIsStreaming(false);
+      setActiveStreamingIds(prev => {
+        const next = new Set(prev);
+        next.delete(targetSessionId);
+        return next;
+      });
     }
   };
 
@@ -487,6 +455,7 @@ export default function App() {
         onOpenProjects={() => setProjectsOpen(true)}
         documentsCount={documents.length || stats.files_count}
         totalChunksCount={stats.total_chunks}
+        streamingSessionIds={activeStreamingIds}
         isLoadingSessions={isSessionsLoading}
         isStatsLoading={isLoading}
         showToast={showToast}
