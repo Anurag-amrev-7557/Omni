@@ -161,9 +161,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={isLoading}
-                className="w-full h-[46px] px-4 rounded-xl bg-[#2e2d2b] hover:bg-[#383734] text-[14px] font-medium text-[#f4f3ef] flex items-center justify-center gap-3 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                className="w-full h-[48px] px-4 rounded-xl bg-[#2e2d2b] hover:bg-[#383734] text-[15px] font-medium text-[#f4f3ef] flex items-center justify-center gap-3 transition-all cursor-pointer shadow-xs disabled:opacity-50"
               >
-                <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
                   <path
                     fill="#4285F4"
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -182,16 +182,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   />
                 </svg>
                 <span>Continue with Google</span>
-              </button>
-
-              {/* Apple OAuth Button */}
-              <button
-                type="button"
-                onClick={() => showToast("Apple sign-in is currently in preview")}
-                className="w-full h-[46px] mt-2.5 px-4 rounded-xl bg-[#2e2d2b] hover:bg-[#383734] text-[14px] font-medium text-[#f4f3ef] flex items-center justify-center gap-2.5 transition-all cursor-pointer shadow-xs"
-              >
-                <span className="text-[17px] leading-none mb-0.5"></span>
-                <span>Continue with Apple</span>
               </button>
 
               {/* Subtle OR Divider */}
