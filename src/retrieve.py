@@ -5,6 +5,8 @@ from rank_bm25 import BM25Okapi
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client.models import Filter, FieldCondition, MatchValue
 
+import gc
+
 # Restrict thread pools to avoid memory spikes on cloud instances
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
@@ -19,31 +21,35 @@ except ImportError:
     from db import get_qdrant_client
     from config import COLLECTION_NAME
 
+ENABLE_CROSS_ENCODER = os.getenv("ENABLE_CROSS_ENCODER", "false").lower() == "true"
+
 
 @lru_cache(maxsize=1)
 def get_embeddings():
     """Ultra-lightweight ONNX FastEmbed (~30MB RAM) with HuggingFace fallback."""
     try:
         from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
-        return FastEmbedEmbeddings(model_name="BAAI/bge-small-en-v1.5")
+        return FastEmbedEmbeddings(model_name="BAAI/bge-small-en-v1.5", threads=1, batch_size=8)
     except Exception as e:
         print(f"FastEmbed notice: {e}, attempting HuggingFace fallback...")
         from langchain_huggingface import HuggingFaceEmbeddings
         return HuggingFaceEmbeddings(
             model_name="all-MiniLM-L6-v2",
             model_kwargs={"device": "cpu"},
-            encode_kwargs={"normalize_embeddings": True, "batch_size": 8}
+            encode_kwargs={"normalize_embeddings": True, "batch_size": 4}
         )
 
 
 @lru_cache(maxsize=1)
 def get_reranker():
     """Lightweight Cross-Encoder with graceful RRF fallback on constrained environments."""
+    if not ENABLE_CROSS_ENCODER:
+        # Keep CrossEncoder inactive on 512MB RAM cloud environments (Render Free Tier)
+        return None
     try:
         from sentence_transformers import CrossEncoder
         return CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device="cpu")
     except Exception:
-        # Gracefully disabled on memory-constrained servers to stay under 512MB RAM
         return None
 
 

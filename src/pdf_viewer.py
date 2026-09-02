@@ -1,10 +1,11 @@
-import pymupdf
+import gc
 import io
+import pymupdf
 
-def render_pdf_page_image(pdf_path: str, page_num: int = 1, dpi: int = 150) -> bytes:
+def render_pdf_page_image(pdf_path: str, page_num: int = 1, dpi: int = 120) -> bytes:
     """
     Renders a specific PDF page to a PNG image byte stream using PyMuPDF.
-    page_num is 1-indexed.
+    page_num is 1-indexed. Optimized for low RAM footprints.
     """
     try:
         doc = pymupdf.open(pdf_path)
@@ -13,7 +14,10 @@ def render_pdf_page_image(pdf_path: str, page_num: int = 1, dpi: int = 150) -> b
         page = doc.load_page(page_num - 1)
         pix = page.get_pixmap(dpi=dpi)
         img_bytes = pix.tobytes("png")
+        del pix
         doc.close()
+        del doc
+        gc.collect()
         return img_bytes
     except Exception as e:
         print(f"Error rendering PDF page image: {e}")

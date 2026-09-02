@@ -153,6 +153,14 @@ def ingest_file(file_path: str, user_id: str | None = None, progress_callback = 
     vector_store.add_documents(child_documents)
     print(f"[DEBUG] Ingested {filename} into Qdrant: {len(parent_docs)} parent blocks, {len(child_documents)} child vectors.")
     print(f"[DEBUG] Collection name used: {COLLECTION_NAME}")
+    
+    # Immediately reclaim memory to prevent Render 512MB RAM OOM
+    del child_documents
+    del parent_docs
+    del pages
+    import gc
+    gc.collect()
+
     if progress_callback:
         progress_callback(100, "Completed")
 
