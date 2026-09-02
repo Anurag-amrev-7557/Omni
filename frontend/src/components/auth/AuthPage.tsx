@@ -112,10 +112,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         <div className="flex items-center justify-between w-full">
           {/* Brand Logo with Warm Sunburst Mark */}
           <div className="flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded-full bg-[#e07a5f]/15 border border-[#e07a5f]/30 flex items-center justify-center text-[#e07a5f] shadow-sm">
-              <Sparkles size={14} />
-            </div>
-            <span className="font-serif text-2xl font-bold tracking-tight text-[#f4f3ef]">
+            <span className="font-serif text-3xl font-light tracking-tight text-[#f4f3ef]">
               Omni
             </span>
           </div>
@@ -136,7 +133,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         <div className="my-auto py-6 w-full flex flex-col items-center justify-center">
           <div className="w-full max-w-xl flex flex-col items-center text-center">
             {/* Editorial Headline */}
-            <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl font-light text-[#f4f3ef] mb-3 tracking-tight text-center whitespace-nowrap">
+            <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl font-light text-[#f4f3ef] mb-4 tracking-tight text-center whitespace-nowrap">
               Question what’s next
             </h1>
             <p className="font-serif text-[18px] text-[#b8b5ad] mb-8 text-center leading-relaxed">
@@ -161,7 +158,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 type="button"
                 onClick={handleGoogleSignIn}
                 disabled={isLoading}
-                className="w-full h-[48px] px-4 rounded-xl bg-[#2e2d2b] hover:bg-[#383734] text-[16px] font-medium text-[#f4f3ef] flex items-center justify-center gap-3 transition-all cursor-pointer shadow-xs disabled:opacity-50"
+                className="w-full h-[40px] px-4 rounded-xl bg-[#2e2d2b] hover:bg-[#383734] text-[16px] font-medium text-[#f4f3ef] flex items-center justify-center gap-3 transition-all cursor-pointer shadow-xs disabled:opacity-50"
               >
                 <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
                   <path
@@ -260,7 +257,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               </form>
 
               {/* Switch Auth Method Subtext */}
-              <div className="mt-4 pt-3 border-t border-[#2c2b29] flex items-center justify-between text-xs text-[#7a7771]">
+              <div className="mt-4 pt-3 border-t border-[#2c2b29] flex flex-col items-center justify-center text-xs text-[#7a7771]">
                 {authMethod === 'otp' ? (
                   <button
                     type="button"
@@ -268,31 +265,30 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       setAuthMethod('password');
                       setErrorMessage(null);
                     }}
-                    className="hover:text-[#f4f3ef] hover:underline cursor-pointer transition-colors"
+                    className="hover:text-[#f4f3ef] hover:underline cursor-pointer transition-colors text-center"
                   >
                     Use password instead
                   </button>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMethod('otp');
-                      setErrorMessage(null);
-                    }}
-                    className="hover:text-[#f4f3ef] hover:underline cursor-pointer transition-colors"
-                  >
-                    Send passwordless magic link
-                  </button>
-                )}
-
-                {authMethod === 'password' && (
-                  <button
-                    type="button"
-                    onClick={() => setIsSignUp(!isSignUp)}
-                    className="text-[#e07a5f] hover:underline font-medium cursor-pointer"
-                  >
-                    {isSignUp ? 'Already have account? Sign in' : 'Need account? Sign up'}
-                  </button>
+                  <div className="flex items-center justify-between w-full">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthMethod('otp');
+                        setErrorMessage(null);
+                      }}
+                      className="hover:text-[#f4f3ef] hover:underline cursor-pointer transition-colors"
+                    >
+                      Send passwordless magic link
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsSignUp(!isSignUp)}
+                      className="text-[#e07a5f] hover:underline font-medium cursor-pointer"
+                    >
+                      {isSignUp ? 'Already have account? Sign in' : 'Need account? Sign up'}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
