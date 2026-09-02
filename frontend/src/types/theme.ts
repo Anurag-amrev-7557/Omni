@@ -10,7 +10,16 @@ export type ThemeId =
   | 'amber' 
   | 'amber-dark';
 
-export type OrbStyle = 'vortex' | 'vortex-pure' | 'bands' | 'geodesic' | 'pill' | 'pulse';
+export type OrbStyle = 
+  | 'vortex' 
+  | 'vortex-pure' 
+  | 'bands' 
+  | 'geodesic' 
+  | 'pill' 
+  | 'pulse'
+  | 'synapse'
+  | 'gyroscope'
+  | 'hypercube';
 
 export interface OrbConfig {
   id: OrbStyle;
@@ -43,6 +52,24 @@ export const ORB_PRESETS: Record<OrbStyle, OrbConfig> = {
     name: '3D Geodesic Fibonacci',
     badge: 'Lattice',
     description: 'Structured point-cloud sphere with high-contrast exponential depth scaling',
+  },
+  synapse: {
+    id: 'synapse',
+    name: 'Neural Synapse Network',
+    badge: 'Synaptic',
+    description: 'Dynamic neural network nodes with firing electrical impulses and interconnecting synaptic dendrite paths',
+  },
+  gyroscope: {
+    id: 'gyroscope',
+    name: 'Quantum Gyroscope Rings',
+    badge: 'Orbital',
+    description: 'Tri-axial precessing electron rings with glowing relativistic tracer nodes and core focal point',
+  },
+  hypercube: {
+    id: 'hypercube',
+    name: '4D Hypercube Tesseract',
+    badge: 'Isometric',
+    description: 'Four-dimensional hypercube vertices projecting into 3D isometric space with pulsating geometric laser links',
   },
   pill: {
     id: 'pill',

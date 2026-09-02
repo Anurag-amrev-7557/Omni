@@ -155,32 +155,61 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       const lines = refsRaw.split(/\r?\n+/).map(l => l.trim()).filter(Boolean);
 
       for (const line of lines) {
-        // Check for Markdown web link: [1] [Title](url) (domain) - "quote"
-        const webMatch = line.match(/^\[(\d+)\]\s*\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)(?:\s*\(([^)]+)\))?(?:\s*(?:[—–-]|:)\s*["“]?([\s\S]*?)["”]?)?$/i);
+        // Strip markdown bullets, numbers, and outer bolding: "- **[1] ...**" -> "[1] ..."
+        const clean = line
+          .replace(/^[\s*\-•\d.]+\s*/, '')
+          .replace(/^\*\*(.*?)\*\*$/, '$1')
+          .trim();
+
+        if (!clean) continue;
+
+        // 1. Check for Markdown web link: [1] [Title](url) (domain) - "quote"
+        const webMatch = clean.match(/^\[?(\d+)\]?\s*(?:\*\*)?\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)(?:\*\*)?(?:\s*(?:\*|\()?([^\s)*]+)(?:\*|\))?)?(?:\s*(?:[—–-]|:)\s*["“]?([\s\S]*?)["”]?)?$/i);
         if (webMatch) {
           citations.push({
             id: webMatch[1],
             filename: webMatch[2]?.trim() || 'Web Link',
             url: webMatch[3],
-            domain: webMatch[4],
+            domain: webMatch[4]?.replace(/^[(*]|[)*]$/g, '').trim(),
             quote: webMatch[5] ? webMatch[5].replace(/^["“]|["”]$/g, '').trim() : undefined,
           });
           continue;
         }
 
-        const citMatch = line.match(/^\[(\d+)\]\s*([^\n(—–:]+?)(?:\s*\((?:Page\s*(\d+)|p\.\s*(\d+))\))?(?:\s*(?:[—–-]|:)\s*["“]?([\s\S]*?)["”]?)?$/i);
+        // 2. Check for Vault Document Reference: [1] filename.pdf (Page X) - "quote"
+        const citMatch = clean.match(/^\[?(\d+)\]?\s*(?:\*\*)?([^\n(*—–:]+?)(?:\*\*)?(?:\s*(?:\*|\()?(?:Page\s*(\d+)|p\.\s*(\d+))(?:\*|\))?)?(?:\s*(?:[—–-]|:)\s*["“]?([\s\S]*?)["”]?)?$/i);
         if (citMatch) {
+          const id = citMatch[1];
+          const rawName = citMatch[2]?.trim().replace(/^\*\*|\*\*$/g, '').trim() || 'Document';
+          const page = citMatch[3] || citMatch[4];
+          let quote = citMatch[5] ? citMatch[5].replace(/^["“]|["”]$/g, '').trim() : undefined;
+
+          // Hydrate quote from message.contexts if omitted by the LLM
+          if (!quote && message.contexts) {
+            const ctxIdx = parseInt(id, 10) - 1;
+            const matchedCtx = message.contexts[ctxIdx] || message.contexts.find(c => c.filename && rawName.toLowerCase().includes(c.filename.toLowerCase()));
+            if (matchedCtx) {
+              quote = matchedCtx.parent_content || matchedCtx.content;
+            }
+          }
+
           citations.push({
-            id: citMatch[1],
-            filename: citMatch[2]?.trim() || 'Document',
-            page: citMatch[3] || citMatch[4],
-            quote: citMatch[5] ? citMatch[5].replace(/^["“]|["”]$/g, '').trim() : undefined,
+            id,
+            filename: rawName,
+            page,
+            quote,
           });
-        } else if (line.length > 3) {
+        } else if (clean.length > 3) {
+          // Hydrate with corresponding message.contexts item if available
+          const idx = citations.length;
+          const fallbackCtx = message.contexts && message.contexts[idx];
           citations.push({
-            id: String(citations.length + 1),
-            filename: 'Cited Source',
-            quote: line.replace(/^["“]|["”]$/g, '').trim(),
+            id: String(idx + 1),
+            filename: fallbackCtx?.filename || 'Cited Source',
+            page: fallbackCtx?.page ? String(fallbackCtx.page) : undefined,
+            url: fallbackCtx?.url,
+            domain: fallbackCtx?.domain,
+            quote: fallbackCtx?.parent_content || fallbackCtx?.content || clean.replace(/^["“]|["”]$/g, '').trim(),
           });
         }
       }

@@ -426,7 +426,7 @@ export const OrbitingOrbLoader: React.FC<OrbitingOrbLoaderProps> = ({
       };
 
       renderGeodesic();
-    } else {
+    } else if (activeStyle === 'pulse') {
       // =========================================================================
       // 4. QUANTUM PULSE AMBIENT CORE
       // =========================================================================
@@ -507,6 +507,246 @@ export const OrbitingOrbLoader: React.FC<OrbitingOrbLoaderProps> = ({
       };
 
       renderPulse();
+    }
+
+    // =========================================================================
+    // 6. NEURAL SYNAPSE NETWORK (DYNAMIC FIRING SYNAPTIC DENDRITES)
+    // =========================================================================
+    else if (activeStyle === 'synapse') {
+      const numNodes = 14;
+      const nodes: Array<{ x: number; y: number; z: number; pulsePhase: number }> = [];
+      
+      for (let i = 0; i < numNodes; i++) {
+        const phi = Math.acos(1 - 2 * (i + 0.5) / numNodes);
+        const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+        nodes.push({
+          x: Math.sin(phi) * Math.cos(theta),
+          y: Math.cos(phi),
+          z: Math.sin(phi) * Math.sin(theta),
+          pulsePhase: Math.random() * Math.PI * 2,
+        });
+      }
+
+      const renderSynapse = () => {
+        ctx.clearRect(0, 0, canvasPx, canvasPx);
+        time += 0.025;
+        angleY += 0.018;
+
+        const cosY = Math.cos(angleY);
+        const sinY = Math.sin(angleY);
+
+        const projNodes = nodes.map((n, idx) => {
+          const x1 = n.x * cosY - n.z * sinY;
+          const z1 = n.x * sinY + n.z * cosY;
+          const y2 = n.y * cosTiltX - z1 * sinTiltX;
+          const z2 = n.y * sinTiltX + z1 * cosTiltX;
+
+          return {
+            idx,
+            projX: centerX + x1 * sphereRadius,
+            projY: centerY + y2 * sphereRadius,
+            zNorm: z2,
+            isAccent: idx % 3 === 0,
+            pulse: 0.5 + 0.5 * Math.sin(time * 3 + n.pulsePhase),
+          };
+        });
+
+        // Draw Synaptic Dendrite Links between close nodes
+        for (let i = 0; i < projNodes.length; i++) {
+          for (let j = i + 1; j < projNodes.length; j++) {
+            const a = projNodes[i];
+            const b = projNodes[j];
+            const dx = a.projX - b.projX;
+            const dy = a.projY - b.projY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const maxDist = sphereRadius * 1.35;
+
+            if (dist < maxDist) {
+              const alpha = (1 - dist / maxDist) * 0.35 * Math.min(1, Math.max(0.1, (a.zNorm + b.zNorm + 2) / 4));
+              ctx.save();
+              ctx.beginPath();
+              ctx.moveTo(a.projX, a.projY);
+              ctx.lineTo(b.projX, b.projY);
+              ctx.strokeStyle = (a.isAccent || b.isAccent) ? formatRgba(themeAccentColor, alpha) : formatRgba(themeTextColor, alpha);
+              ctx.lineWidth = size === 'sm' ? 0.75 : 1.1;
+              ctx.stroke();
+              ctx.restore();
+            }
+          }
+        }
+
+        // Draw Neuron Nodes
+        projNodes.sort((a, b) => a.zNorm - b.zNorm);
+        for (const n of projNodes) {
+          const k = Math.max(0, Math.min(1, (n.zNorm + 1) / 2));
+          const nodeRadius = (size === 'sm' ? 1.2 : size === 'lg' ? 2.4 : 1.8) * (0.6 + 0.4 * k + 0.3 * n.pulse);
+          const alpha = 0.25 + 0.75 * k;
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(n.projX, n.projY, nodeRadius, 0, Math.PI * 2);
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = n.isAccent ? themeAccentColor : themeTextColor;
+          ctx.fill();
+          ctx.restore();
+        }
+
+        animationFrameId = requestAnimationFrame(renderSynapse);
+      };
+
+      renderSynapse();
+    }
+
+    // =========================================================================
+    // 7. QUANTUM GYROSCOPE RINGS (TRI-AXIAL PRECESSION ELECTRON GIMBALS)
+    // =========================================================================
+    else if (activeStyle === 'gyroscope') {
+      const renderGyro = () => {
+        ctx.clearRect(0, 0, canvasPx, canvasPx);
+        time += 0.03;
+
+        const rings = [
+          { axis: 'x', speed: 1.0, radius: sphereRadius * 0.95, color: themeAccentColor },
+          { axis: 'y', speed: 1.3, radius: sphereRadius * 0.75, color: themeTextColor },
+          { axis: 'z', speed: 0.8, radius: sphereRadius * 0.55, color: themeAccentColor },
+        ];
+
+        for (const ring of rings) {
+          const angle = time * ring.speed;
+          ctx.save();
+          ctx.translate(centerX, centerY);
+          ctx.rotate(angle * 0.3);
+
+          // Draw elliptical gimbal path
+          ctx.beginPath();
+          ctx.ellipse(0, 0, ring.radius, ring.radius * Math.abs(Math.cos(angle)), angle * 0.5, 0, Math.PI * 2);
+          ctx.strokeStyle = formatRgba(ring.color, 0.28);
+          ctx.lineWidth = size === 'sm' ? 0.9 : 1.3;
+          ctx.stroke();
+
+          // Draw orbiting electron bead
+          const beadX = Math.cos(angle * 2) * ring.radius;
+          const beadY = Math.sin(angle * 2) * (ring.radius * Math.abs(Math.cos(angle)));
+          ctx.beginPath();
+          ctx.arc(beadX, beadY, size === 'sm' ? 1.4 : 2.2, 0, Math.PI * 2);
+          ctx.fillStyle = ring.color;
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Central core bead
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, (size === 'sm' ? 1.5 : 2.4) * (0.8 + 0.2 * Math.sin(time * 4)), 0, Math.PI * 2);
+        ctx.fillStyle = themeAccentColor;
+        ctx.fill();
+        ctx.restore();
+
+        animationFrameId = requestAnimationFrame(renderGyro);
+      };
+
+      renderGyro();
+    }
+
+    // =========================================================================
+    // 8. 4D HYPERCUBE TESSERACT (FOUR-DIMENSIONAL ISOMETRIC ROTATION)
+    // =========================================================================
+    else if (activeStyle === 'hypercube') {
+      // 16 vertices of a 4D hypercube
+      const vertices4D: number[][] = [];
+      for (let i = 0; i < 16; i++) {
+        vertices4D.push([
+          (i & 1 ? 1 : -1) * 0.75,
+          (i & 2 ? 1 : -1) * 0.75,
+          (i & 4 ? 1 : -1) * 0.75,
+          (i & 8 ? 1 : -1) * 0.75,
+        ]);
+      }
+
+      // 32 edges connecting vertices that differ by exactly 1 bit
+      const edges: [number, number][] = [];
+      for (let i = 0; i < 16; i++) {
+        for (let bit = 1; bit < 16; bit <<= 1) {
+          if ((i & bit) === 0) {
+            edges.push([i, i | bit]);
+          }
+        }
+      }
+
+      const renderHypercube = () => {
+        ctx.clearRect(0, 0, canvasPx, canvasPx);
+        time += 0.022;
+
+        const theta = time * 0.8;
+        const phi = time * 0.5;
+
+        // 4D Rotation in XW and YZ planes
+        const cosT = Math.cos(theta);
+        const sinT = Math.sin(theta);
+        const cosP = Math.cos(phi);
+        const sinP = Math.sin(phi);
+
+        const projected3D = vertices4D.map(v => {
+          let [x, y, z, w] = v;
+          // Rotate in XW plane
+          const x1 = x * cosT - w * sinT;
+          const w1 = x * sinT + w * cosT;
+          // Rotate in YZ plane
+          const y1 = y * cosP - z * sinP;
+          const z1 = y * sinP + z * cosP;
+
+          // 4D to 3D perspective projection
+          const distance = 2.0;
+          const fov = 1 / (distance - w1 * 0.5);
+          const x3 = x1 * fov;
+          const y3 = y1 * fov;
+          const z3 = z1 * fov;
+
+          // 3D to 2D screen projection with tilt
+          const x2d = x3 * cosTiltZ - y3 * sinTiltZ;
+          const y2d = (x3 * sinTiltZ + y3 * cosTiltZ) * cosTiltX - z3 * sinTiltX;
+
+          return {
+            x: centerX + x2d * sphereRadius * 1.5,
+            y: centerY + y2d * sphereRadius * 1.5,
+            z: z3,
+          };
+        });
+
+        // Draw 32 Connecting Laser Edges
+        for (const [i, j] of edges) {
+          const a = projected3D[i];
+          const b = projected3D[j];
+          const avgZ = (a.z + b.z) / 2;
+          const alpha = Math.max(0.12, Math.min(0.85, 0.35 + avgZ * 0.45));
+
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.strokeStyle = ((i ^ j) === 8) ? formatRgba(themeAccentColor, alpha * 0.9) : formatRgba(themeTextColor, alpha * 0.6);
+          ctx.lineWidth = size === 'sm' ? 0.75 : 1.1;
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Draw 16 Vertices
+        for (let i = 0; i < projected3D.length; i++) {
+          const p = projected3D[i];
+          const radius = size === 'sm' ? 1.1 : size === 'lg' ? 2.2 : 1.6;
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+          ctx.fillStyle = (i & 8) ? themeAccentColor : themeTextColor;
+          ctx.globalAlpha = 0.85;
+          ctx.fill();
+          ctx.restore();
+        }
+
+        animationFrameId = requestAnimationFrame(renderHypercube);
+      };
+
+      renderHypercube();
     }
 
     return () => {

@@ -530,10 +530,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         </div>
       </div>
 
-      {/* Footer Disclaimer & Controls Row (Web Search Left, Model Selector Right) */}
+      {/* Footer Disclaimer & Controls Row (Disclaimer on Left, [Web Search + Model Selector] on Right) */}
       <div className="flex items-center justify-between text-xs text-[var(--text-muted)] mt-2.5 px-1">
-        {/* Left: Live Web Research Toggle */}
-        <div className="flex items-center gap-2.5">
+        {/* Left Disclaimer */}
+        <span className="text-[11.5px] text-[var(--text-muted)] select-none hidden sm:inline">
+          Omni is AI and can make mistakes. Please double-check responses.
+        </span>
+
+        {/* Right Controls: Web Search (Left of Model) & Model Selector */}
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Live Web Research Toggle (Left of Model Toggle) */}
           <button
             type="button"
             onClick={onToggleWebSearch}
@@ -562,13 +568,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             />
           </button>
 
-          <span className="text-[11.5px] text-[var(--text-muted)] select-none hidden lg:inline">
-            Omni is AI and can make mistakes.
-          </span>
-        </div>
-
-        {/* Right Controls: Model Selector Pill */}
-        <div className="flex items-center gap-2">
+          {/* Model Selector Pill */}
           <div className="relative">
             <button 
               className="flex items-center gap-1.5 px-3 h-[28px] rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)]/60 text-[12.5px] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:border-[var(--text-dark)] transition-all cursor-pointer shadow-2xs"
