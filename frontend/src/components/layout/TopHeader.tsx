@@ -27,43 +27,70 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   const { theme, setTheme, themesList } = useTheme();
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
 
+  // Clean title prefix if user referenced vault docs
+  const cleanTitle = React.useMemo(() => {
+    if (!activeSessionTitle) return 'New chat';
+    let t = activeSessionTitle;
+    if (t.startsWith('[Focus explicitly on referenced Knowledge Vault documents:')) {
+      const idx = t.indexOf(']\n\n');
+      if (idx !== -1) {
+        t = t.substring(idx + 3).trim();
+      } else {
+        t = t.replace(/\[Focus explicitly on referenced Knowledge Vault documents:[^\]]+\]/, '').trim();
+      }
+    }
+    return t || 'New chat';
+  }, [activeSessionTitle]);
+
+  const activeThemeObj = themesList.find(t => t.id === theme);
+
   return (
-    <header className="h-14 min-h-[52px] w-full px-6 flex items-center justify-between border-b border-[var(--border-color)] bg-[var(--bg-dark)] select-none">
-      {/* Left Title & Collapse */}
-      <div className="flex items-center gap-3">
+    <header className="h-14 min-h-[52px] w-full px-4 sm:px-6 flex items-center justify-between border-b border-[var(--border-color)] bg-[var(--bg-dark)] select-none z-10">
+      {/* Left Title & Sidebar Toggle */}
+      <div className="flex items-center gap-2.5">
         {sidebarCollapsed && (
           <button 
-            className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors"
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] border border-[var(--border-color)] transition-all cursor-pointer shadow-2xs"
             onClick={onExpandSidebar} 
             title="Expand Sidebar"
           >
-            <PanelLeft size={16} />
+            <PanelLeft size={15} />
           </button>
         )}
 
         <div 
-          className="flex items-center gap-1.5 text-sm font-medium text-[var(--text-main)] cursor-pointer hover:opacity-80 transition-opacity"
+          className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-[var(--bg-hover)] cursor-pointer transition-all group max-w-[220px] sm:max-w-[340px] md:max-w-[480px]"
           onClick={onOpenSettings}
+          title="Chat Settings & Inference Config"
         >
-          <span className="max-w-[280px] truncate">{activeSessionTitle || 'New chat'}</span>
-          <ChevronDown size={14} className="text-[var(--text-muted)]" />
+          <span className="text-[13.5px] font-medium text-[var(--text-main)] truncate leading-none">
+            {cleanTitle}
+          </span>
+          <ChevronDown size={13} className="text-[var(--text-muted)] group-hover:text-[var(--text-main)] transition-colors flex-shrink-0" />
         </div>
       </div>
 
-      {/* Right Action Icons & Theme Quick Switcher */}
+      {/* Right Action Icons & Controls */}
       <div className="flex items-center gap-2">
         <AuthControls onOpenAuth={onOpenAuth} />
 
         {/* Theme Quick Switcher Dropdown */}
         <div className="relative">
           <button 
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:border-[var(--text-dark)] transition-all"
+            className="flex items-center gap-2 h-[32px] px-3 text-[12.5px] font-medium rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-main)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-hover)] transition-all cursor-pointer shadow-2xs"
             onClick={() => setThemeMenuOpen(!themeMenuOpen)}
             title="Switch Theme"
           >
-            <Palette size={13} className="text-[var(--accent-primary)]" />
+            {activeThemeObj ? (
+              <span 
+                className="w-2.5 h-2.5 rounded-full border border-black/20 dark:border-white/20 flex-shrink-0 shadow-xs" 
+                style={{ backgroundColor: activeThemeObj.previewColors.bg }}
+              />
+            ) : (
+              <Palette size={13} className="text-[var(--accent-primary)]" />
+            )}
             <span className="capitalize hidden sm:inline">{theme}</span>
-            <ChevronDown size={12} />
+            <ChevronDown size={12} className="text-[var(--text-muted)]" />
           </button>
 
           {themeMenuOpen && (
@@ -135,10 +162,10 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           )}
         </div>
 
-        {/* Export Chat Button at Top Right */}
+        {/* Export Chat Button */}
         {onExportChat && hasMessages && (
           <button 
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:border-[var(--text-dark)] transition-all cursor-pointer"
+            className="flex items-center gap-1.5 h-[32px] px-3 text-[12.5px] font-medium rounded-xl border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-main)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-hover)] transition-all cursor-pointer shadow-2xs"
             onClick={onExportChat}
             title="Export chat to Markdown (.md)"
           >
@@ -147,12 +174,13 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           </button>
         )}
 
+        {/* Settings Button */}
         <button 
-          className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
+          className="w-[32px] h-[32px] rounded-xl flex items-center justify-center border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] hover:border-[var(--border-hover)] transition-all cursor-pointer shadow-2xs"
           onClick={onOpenSettings}
-          title="Settings & Tokens"
+          title="Settings & Inference Parameters"
         >
-          <Settings size={16} />
+          <Settings size={15} />
         </button>
       </div>
     </header>
