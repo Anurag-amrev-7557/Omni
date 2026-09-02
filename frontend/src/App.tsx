@@ -86,6 +86,7 @@ export default function App() {
     documents,
     stats,
     health,
+    isLoading,
     isUploading,
     refreshVault,
     uploadFiles,
@@ -103,6 +104,8 @@ export default function App() {
 
   // In-memory message cache for instant 0ms chat window transitions
   const messageCacheRef = useRef<Map<string, ChatMessage[]>>(new Map());
+  const [isSessionsLoading, setIsSessionsLoading] = useState<boolean>(true);
+  const [isMessagesLoading, setIsMessagesLoading] = useState<boolean>(false);
 
   // Switch Session Instantly (0ms cache read + optimistic clear)
   const handleSelectSession = useCallback((sessionId: string) => {
@@ -117,9 +120,11 @@ export default function App() {
     const cached = messageCacheRef.current.get(sessionId);
     if (cached !== undefined) {
       setMessages(cached);
+      setIsMessagesLoading(false);
     } else {
       // Clear previous messages immediately so stale chat does not linger
       setMessages([]);
+      setIsMessagesLoading(true);
     }
 
     // 2. Non-blocking SWR background fetch to keep messages synchronized
@@ -128,6 +133,8 @@ export default function App() {
       setMessages(msgs);
     }).catch((e) => {
       console.error("Error loading session messages:", e);
+    }).finally(() => {
+      setIsMessagesLoading(false);
     });
   }, []);
 
@@ -141,6 +148,7 @@ export default function App() {
   // Fetch Sessions
   const loadSessions = useCallback(async () => {
     try {
+      setIsSessionsLoading(true);
       const sess = await api.getSessions();
       setSessions(sess);
       if (sess.length > 0 && !currentSessionId) {
@@ -148,6 +156,8 @@ export default function App() {
       }
     } catch (e) {
       console.error("Error loading sessions:", e);
+    } finally {
+      setIsSessionsLoading(false);
     }
   }, [currentSessionId, handleSelectSession]);
 
@@ -413,6 +423,8 @@ export default function App() {
         onOpenProjects={() => setProjectsOpen(true)}
         documentsCount={documents.length || stats.files_count}
         totalChunksCount={stats.total_chunks}
+        isLoadingSessions={isSessionsLoading}
+        isStatsLoading={isLoading}
         showToast={showToast}
       />
 
@@ -439,6 +451,7 @@ export default function App() {
                 messages={messages}
                 sessionId={currentSessionId}
                 isStreaming={isStreaming}
+                isMessagesLoading={isMessagesLoading}
                 inputPrompt={inputPrompt}
                 setInputPrompt={setInputPrompt}
                 attachedFiles={attachedFiles}
@@ -510,6 +523,7 @@ export default function App() {
                 documents={documents}
                 stats={stats}
                 health={health}
+                isLoading={isLoading}
                 isUploading={isUploading}
                 onUpload={uploadFiles}
                 onRefresh={refreshVault}

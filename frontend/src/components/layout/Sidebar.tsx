@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { ChatSession } from '../../types/chat';
 import { supabase } from '../../lib/supabase';
+import { Skeleton } from '../common/Skeleton';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -22,6 +23,8 @@ interface SidebarProps {
   onOpenProjects: () => void;
   documentsCount?: number;
   totalChunksCount?: number;
+  isLoadingSessions?: boolean;
+  isStatsLoading?: boolean;
   showToast: (msg: string) => void;
 }
 
@@ -40,6 +43,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenProjects,
   documentsCount = 0,
   totalChunksCount = 0,
+  isLoadingSessions = false,
+  isStatsLoading = false,
   showToast,
 }) => {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
@@ -173,11 +178,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <Database size={17} className="text-[var(--accent-primary)]" />
               <span>Knowledge Vault</span>
             </div>
-            {documentsCount > 0 && (
+            {isStatsLoading ? (
+              <Skeleton className="w-5 h-4 rounded-full" />
+            ) : documentsCount > 0 ? (
               <span className="text-[11.5px] px-2 py-0.5 rounded-full bg-[var(--bg-input)] text-[var(--text-main)] font-mono font-medium border border-[var(--border-color)]">
                 {documentsCount}
               </span>
-            )}
+            ) : null}
           </button>
         </div>
 
@@ -187,7 +194,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div className="px-2.5 overflow-y-auto max-h-[calc(100vh-340px)] flex flex-col gap-1">
-          {sessions.length === 0 ? (
+          {isLoadingSessions ? (
+            <div className="flex flex-col gap-1 px-1 py-1">
+              {[75, 55, 85, 60, 70].map((w, idx) => (
+                <div key={idx} className="flex items-center px-3.5 py-2.5 rounded-xl">
+                  <Skeleton className="h-3.5 rounded-md" style={{ width: `${w}%` }} />
+                </div>
+              ))}
+            </div>
+          ) : sessions.length === 0 ? (
             <div className="px-4 py-5 text-sm text-[var(--text-dark)] text-center">
               No previous chats
             </div>

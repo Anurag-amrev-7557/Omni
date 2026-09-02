@@ -12,6 +12,7 @@ interface KnowledgeVaultProps {
   documents: DocumentItem[];
   stats: CollectionStats;
   health: PipelineHealth | null;
+  isLoading?: boolean;
   isUploading: boolean;
   onUpload: (files: FileList | File[]) => void;
   onRefresh: () => void;
@@ -31,6 +32,7 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
   documents,
   stats,
   health,
+  isLoading = false,
   isUploading,
   onUpload,
   onRefresh,
@@ -285,6 +287,7 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
           <VaultDocList
             documents={filteredDocuments}
             selectedFilenames={selectedFilenames}
+            isLoading={isLoading}
             onToggleSelect={handleToggleSelect}
             onSelectAll={handleSelectAll}
             onInspect={onInspect}

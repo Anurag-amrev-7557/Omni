@@ -2,6 +2,7 @@ import React from 'react';
 import { Eye, Download, RotateCw, Trash2, Check, BookOpen, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { DocumentItem } from '../../types/document';
 import { FormatBadge } from '../common/FormatBadge';
+import { Skeleton } from '../common/Skeleton';
 
 export type SortField = 'name' | 'type' | 'size' | 'pages' | 'status';
 export type SortDirection = 'asc' | 'desc';
@@ -20,6 +21,7 @@ interface VaultDocListProps {
   onSort: (field: SortField) => void;
   hasSearchQuery: boolean;
   onResetSearch: () => void;
+  isLoading?: boolean;
 }
 
 export const VaultDocList: React.FC<VaultDocListProps> = ({
@@ -36,9 +38,55 @@ export const VaultDocList: React.FC<VaultDocListProps> = ({
   onSort,
   hasSearchQuery,
   onResetSearch,
+  isLoading = false,
 }) => {
   const isAllSelected = documents.length > 0 && selectedFilenames.length === documents.length;
   const isIndeterminate = selectedFilenames.length > 0 && selectedFilenames.length < documents.length;
+
+  if (isLoading && documents.length === 0) {
+    return (
+      <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] overflow-hidden shadow-2xs select-none fade-in">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-[var(--border-color)] bg-[var(--bg-input)]/20">
+                <th className="w-12 py-3 px-4"><Skeleton className="w-4 h-4 rounded" /></th>
+                <th className="py-3 px-4"><Skeleton className="w-24 h-3 rounded" /></th>
+                <th className="py-3 px-4"><Skeleton className="w-16 h-3 rounded" /></th>
+                <th className="py-3 px-4 text-right"><Skeleton className="w-12 h-3 rounded ml-auto" /></th>
+                <th className="w-28 py-3 px-4 text-right"><Skeleton className="w-16 h-3 rounded ml-auto" /></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border-color)]/60">
+              {[50, 65, 42, 58, 48].map((w, idx) => (
+                <tr key={idx} className="h-14">
+                  <td className="py-3 px-4"><Skeleton className="w-4 h-4 rounded" /></td>
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="w-7 h-7 rounded-lg flex-shrink-0" />
+                      <div className="space-y-1.5 flex-1">
+                        <Skeleton className="h-3.5 rounded" style={{ width: `${w}%` }} />
+                        <Skeleton className="h-2.5 w-20 rounded" />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 px-4"><Skeleton className="w-16 h-4 rounded-full" /></td>
+                  <td className="py-3 px-4 text-right"><Skeleton className="w-12 h-3 rounded ml-auto" /></td>
+                  <td className="py-3 px-4 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <Skeleton className="w-7 h-7 rounded-lg" />
+                      <Skeleton className="w-7 h-7 rounded-lg" />
+                      <Skeleton className="w-7 h-7 rounded-lg" />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
 
   if (documents.length === 0) {
     return (

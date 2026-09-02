@@ -892,4 +892,39 @@ html, body {
   scrollbar-width: none !important; /* Firefox and Standard Browsers */
 }
 
+/* =========================================================
+   PREMIUM MINIMALIST SKELETON SHIMMER SYSTEM
+========================================================= */
+@keyframes omni-skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.omni-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-card) 25%,
+    var(--bg-input) 37%,
+    var(--bg-card) 63%
+  );
+  background-size: 400% 100%;
+  animation: omni-skeleton-shimmer 1.8s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+[data-theme="light"] .omni-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.05) 25%,
+    rgba(0, 0, 0, 0.09) 37%,
+    rgba(0, 0, 0, 0.05) 63%
+  );
+  background-size: 400% 100%;
+  animation: omni-skeleton-shimmer 1.8s ease-in-out infinite;
+}
+
 
