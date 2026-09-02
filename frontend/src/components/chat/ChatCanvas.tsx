@@ -69,7 +69,8 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
     const el = scrollContainerRef.current;
     if (!el) return;
     const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    userScrolledUpRef.current = distanceToBottom > 100;
+    // If user scrolled up by more than 60px, pause stream auto-pinning
+    userScrolledUpRef.current = distanceToBottom > 60;
   };
 
   // Instant 0ms scroll to bottom on session switch
@@ -103,16 +104,8 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => {
         if (el && !userScrolledUpRef.current) {
-          const target = el.scrollHeight - el.clientHeight;
-          const diff = target - el.scrollTop;
-          if (diff > 0) {
-            // Smoothly lerp towards target for fluid line-by-line scroll tracking
-            if (diff < 200) {
-              el.scrollTop = el.scrollTop + Math.max(diff * 0.5, 4);
-            } else {
-              el.scrollTop = target;
-            }
-          }
+          // Butter-smooth hardware viewport lock to streaming tail (matches Claude & ChatGPT 120Hz behavior)
+          el.scrollTop = el.scrollHeight;
         }
       });
     } else {
