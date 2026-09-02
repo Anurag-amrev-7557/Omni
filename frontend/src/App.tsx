@@ -217,6 +217,11 @@ export default function App() {
     setAttachedFiles([]);
     setActiveTab('chats');
     showToast("Started new chat");
+
+    setSessions(prev => {
+      if (prev.some(s => s.session_id === newSessionId)) return prev;
+      return [{ session_id: newSessionId, title: 'New Chat', created_at: new Date().toISOString() }, ...prev];
+    });
   }, [showToast]);
 
   // Delete Thread
