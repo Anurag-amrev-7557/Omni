@@ -133,10 +133,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         <div className="my-auto py-6 w-full flex flex-col items-center justify-center">
           <div className="w-full max-w-xl flex flex-col items-center text-center">
             {/* Editorial Headline */}
-            <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl font-normal text-[var(--text-main)] mb-3 tracking-tight text-center whitespace-nowrap">
+            <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl font-light text-[var(--text-main)] mb-3 tracking-tight text-center whitespace-nowrap">
               Question what’s next
             </h1>
-            <p className="text-[17px] text-[var(--text-muted)] mb-8 text-center leading-relaxed">
+            <p className="text-[17px] font-light text-[var(--text-muted)] mb-8 text-center leading-relaxed">
               Your thinking partner for big ambitions
             </p>
 
