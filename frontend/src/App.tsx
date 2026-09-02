@@ -130,6 +130,7 @@ export default function App() {
   // Switch Session Instantly (0ms cache read + optimistic clear)
   const handleSelectSession = useCallback((sessionId: string) => {
     if (!sessionId) return;
+    currentSessionIdRef.current = sessionId;
     setCurrentSessionId(sessionId);
     setActiveTab('chats');
     setInputPrompt('');
@@ -149,12 +150,16 @@ export default function App() {
 
     // 2. Non-blocking SWR background fetch to keep messages synchronized
     api.getMessages(sessionId).then((msgs) => {
-      messageCacheRef.current.set(sessionId, msgs);
-      setMessages(msgs);
+      if (currentSessionIdRef.current === sessionId) {
+        messageCacheRef.current.set(sessionId, msgs);
+        setMessages(msgs);
+      }
     }).catch((e) => {
       console.error("Error loading session messages:", e);
     }).finally(() => {
-      setIsMessagesLoading(false);
+      if (currentSessionIdRef.current === sessionId) {
+        setIsMessagesLoading(false);
+      }
     });
   }, []);
 
@@ -199,10 +204,16 @@ export default function App() {
 
   // Create New Thread (Instant 0ms UI switch with optimistic state)
   const handleNewChat = useCallback(() => {
-    const tempId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `sess-${Date.now()}`;
-    setCurrentSessionId(tempId);
+    const newSessionId = typeof crypto !== 'undefined' && crypto.randomUUID 
+      ? crypto.randomUUID() 
+      : '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, c =>
+          (+c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> +c / 4).toString(16)
+        );
+    
+    currentSessionIdRef.current = newSessionId;
+    setCurrentSessionId(newSessionId);
     setMessages([]);
-    messageCacheRef.current.set(tempId, []);
+    messageCacheRef.current.set(newSessionId, []);
     setInputPrompt('');
     setReferencedVaultDocs([]);
     setAttachedFiles([]);
@@ -210,12 +221,10 @@ export default function App() {
     showToast("Started new chat");
 
     setSessions(prev => {
-      if (prev.some(s => s.session_id === tempId)) return prev;
-      return [{ session_id: tempId, title: 'New Chat', created_at: new Date().toISOString() }, ...prev];
+      // Keep previous sessions and prepend the new clean draft thread
+      if (prev.some(s => s.session_id === newSessionId)) return prev;
+      return [{ session_id: newSessionId, title: 'New Chat', created_at: new Date().toISOString() }, ...prev];
     });
-
-    // Non-blocking background sync
-    api.createSession('New Chat').catch(() => {});
   }, [showToast]);
 
   // Delete Thread (Instant 0ms Optimistic UI + Seamless Shift to Recent Top Chat)
