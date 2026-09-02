@@ -236,3 +236,15 @@ def delete_document_graph(filename: str):
             AND entity_id NOT IN (SELECT source_entity_id FROM graph_relations WHERE user_id=%s)
             AND entity_id NOT IN (SELECT target_entity_id FROM graph_relations WHERE user_id=%s)
         """, (user_id, user_id, user_id))
+
+def clear_user_graph():
+    """Deletes all knowledge graph data for the current user."""
+    user_id = get_current_user()
+    with connection() as conn, conn.cursor() as cur:
+        # Delete relations first (due to foreign key constraints)
+        cur.execute("DELETE FROM graph_relations WHERE user_id=%s", (user_id,))
+        # Delete entities
+        cur.execute("DELETE FROM graph_entities WHERE user_id=%s", (user_id,))
+        # Delete communities
+        cur.execute("DELETE FROM graph_communities WHERE user_id=%s", (user_id,))
+    print(f"[GraphDB] Cleared all knowledge graph data for user {user_id}")

@@ -23,7 +23,7 @@ try:
     from src.chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session, update_session_title
     from src.pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
     from src.auth import require_user, set_current_user, get_current_user
-    from src.state_db import init_state_db, upsert_document, save_upload_job, get_upload_job, delete_document_record, save_feedback
+    from src.state_db import init_state_db, upsert_document, save_upload_job, get_upload_job, delete_document_record, save_feedback, delete_all_user_documents, delete_all_user_upload_jobs, delete_all_user_feedback
     from src.storage import save_file, get_file_bytes, delete_file
     from src.audio import transcribe_audio
     from src.retrieve import get_embeddings
@@ -41,7 +41,7 @@ except ImportError:
     from chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session, update_session_title
     from pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
     from auth import require_user, set_current_user, get_current_user
-    from state_db import init_state_db, upsert_document, save_upload_job, get_upload_job, delete_document_record, save_feedback
+    from state_db import init_state_db, upsert_document, save_upload_job, get_upload_job, delete_document_record, save_feedback, delete_all_user_documents, delete_all_user_upload_jobs, delete_all_user_feedback
     from storage import save_file, get_file_bytes, delete_file
     from audio import transcribe_audio
     from retrieve import get_embeddings
@@ -618,6 +618,7 @@ def delete_document(filename: str):
     uploads_dir = user_upload_dir()
     filename = safe_filename(filename)
     file_path = os.path.join(uploads_dir, filename)
+    user_id = get_current_user()
     
     # Delete Qdrant first.  If the remote operation fails, retain the source
     # file so the user can retry instead of losing the only re-indexable copy.
@@ -627,15 +628,22 @@ def delete_document(filename: str):
         raise HTTPException(status_code=502, detail=f"Could not delete vectors from Qdrant: {exc}")
 
     # Delete from local cache and Cloudflare R2
-    delete_file(get_current_user(), filename, local_path=file_path)
+    delete_file(user_id, filename, local_path=file_path)
 
     # Clean up PostgreSQL document state
     try:
-        delete_document_record(get_current_user(), filename)
+        delete_document_record(user_id, filename)
     except Exception as exc:
         print(f"[Warning] Could not delete document record from DB: {exc}")
 
-    invalidate_user_cache(get_current_user())
+    # Clean up knowledge graph for this document
+    try:
+        from src.graph_db import delete_document_graph
+        delete_document_graph(filename)
+    except Exception as g_exc:
+        print(f"[Warning] Could not delete document graph: {g_exc}")
+
+    invalidate_user_cache(user_id)
     return {"success": True, "filename": filename}
 
 @app.get("/api/download/{filename}")
@@ -664,7 +672,17 @@ def reindex_document(filename: str):
         if not data:
             raise HTTPException(status_code=404, detail="File not found")
     try:
+        # Clear existing data before re-indexing
         delete_file_from_collection(filename)
+        
+        # Clear graph data for this document
+        try:
+            from src.graph_db import delete_document_graph
+            delete_document_graph(filename)
+            print(f"[Reindex] Cleared graph data for {filename}")
+        except Exception as g_exc:
+            print(f"[Reindex] Graph cleanup warning for {filename}: {g_exc}")
+        
         ingest_file(file_path, user_id)
         invalidate_user_cache(user_id)
         return {"success": True, "filename": filename}
@@ -784,11 +802,59 @@ def delete_chat_session(session_id: str):
 
 @app.post("/api/reset")
 def reset_all():
-    clear_collection()
-    sessions = get_all_sessions()
-    for s in sessions:
-        delete_session(s["session_id"])
+    user_id = get_current_user()
+    
+    # Clear Qdrant vector collection for current user
+    try:
+        clear_collection()
+        print(f"[Reset] Cleared Qdrant collection for user {user_id}")
+    except Exception as q_exc:
+        print(f"[Warning] Failed to clear Qdrant collection: {q_exc}")
+    
+    # Clear knowledge graph for current user
+    try:
+        from src.graph_db import clear_user_graph
+        clear_user_graph()
+    except Exception as g_exc:
+        print(f"[Warning] Failed to clear knowledge graph: {g_exc}")
+    
+    # Clear document records for current user
+    try:
+        delete_all_user_documents(user_id)
+    except Exception as d_exc:
+        print(f"[Warning] Failed to clear document records: {d_exc}")
+    
+    # Clear upload jobs for current user
+    try:
+        delete_all_user_upload_jobs(user_id)
+    except Exception as u_exc:
+        print(f"[Warning] Failed to clear upload jobs: {u_exc}")
+    
+    # Clear feedback for current user
+    try:
+        delete_all_user_feedback(user_id)
+    except Exception as f_exc:
+        print(f"[Warning] Failed to clear feedback: {f_exc}")
+    
+    # Clear chat sessions for current user
+    try:
+        sessions = get_all_sessions()
+        for s in sessions:
+            delete_session(s["session_id"])
+        print(f"[Reset] Cleared {len(sessions)} chat sessions for user {user_id}")
+    except Exception as s_exc:
+        print(f"[Warning] Failed to clear chat sessions: {s_exc}")
+    
+    # Invalidate user cache
+    try:
+        invalidate_user_cache(user_id)
+    except Exception as c_exc:
+        print(f"[Warning] Failed to invalidate cache: {c_exc}")
+    
+    # Create new session
     new_id = create_session("New Chat")
+    print(f"[Reset] Created new session {new_id} for user {user_id}")
+    
     return {"success": True, "new_session_id": new_id}
 
 @app.post("/api/cleanup-orphaned")
@@ -932,16 +998,23 @@ def get_graph(user_id: str = Depends(require_user)):
 def build_graph(
     background_tasks: BackgroundTasks,
     user_id: str = Depends(require_user),
+    force_rebuild: bool = Query(False, description="Force complete graph rebuild even if graph exists"),
 ):
     """Triggers background knowledge graph construction across all indexed vault documents."""
-    def graph_worker(uid: str):
+    def graph_worker(uid: str, force: bool):
         set_current_user(uid)
         try:
             from src.graph_extractor import extract_entities_and_relations
             from src.graph_clustering import run_community_detection_and_summaries
+            from src.graph_db import get_user_graph, clear_user_graph
             from src.db import get_qdrant_client
             from src.config import COLLECTION_NAME
             from qdrant_client.models import Filter, FieldCondition, MatchValue
+
+            # Clear existing graph if force rebuild is requested
+            if force:
+                print(f"[GraphWorker] Force rebuild requested - clearing existing graph for user {uid}")
+                clear_user_graph()
 
             client = get_qdrant_client()
             points_list = []
@@ -976,6 +1049,9 @@ def build_graph(
                     break
 
             seen_parents = set()
+            total_entities = 0
+            total_relations = 0
+            
             for point in points_list:
                 payload = point.payload or {}
                 meta = payload.get("metadata") or {}
@@ -998,7 +1074,9 @@ def build_graph(
 
                 if parent_text and len(parent_text.strip()) > 30 and parent_text not in seen_parents:
                     seen_parents.add(parent_text)
-                    extract_entities_and_relations(parent_text, fname, int(page) if str(page).isdigit() else 1)
+                    result = extract_entities_and_relations(parent_text, fname, int(page) if str(page).isdigit() else 1)
+                    total_entities += len(result.get("entities", []))
+                    total_relations += len(result.get("relations", []))
 
             # Fallback to extracting from uploaded files on disk if Qdrant returned 0
             if len(seen_parents) == 0:
@@ -1013,16 +1091,39 @@ def build_graph(
                                 text = extract_pdf_page_text(fname, p)
                                 if text and len(text.strip()) > 30:
                                     seen_parents.add(text)
-                                    extract_entities_and_relations(text, fname, p)
+                                    result = extract_entities_and_relations(text, fname, p)
+                                    total_entities += len(result.get("entities", []))
+                                    total_relations += len(result.get("relations", []))
 
-            print(f"[GraphWorker] Extracted entities from {len(seen_parents)} text blocks. Running community clustering...")
+            print(f"[GraphWorker] Extracted {total_entities} entities and {total_relations} relations from {len(seen_parents)} text blocks.")
+            
+            # Always run community detection for full builds
             run_community_detection_and_summaries()
             print(f"[GraphWorker] Knowledge Graph build completed for user {uid} ({len(seen_parents)} parent blocks processed).")
+            
+            # Get final graph stats
+            final_graph = get_user_graph()
+            return {
+                "status": "completed",
+                "user_id": uid,
+                "blocks_processed": len(seen_parents),
+                "entities_extracted": total_entities,
+                "relations_extracted": total_relations,
+                "final_nodes": final_graph.get("stats", {}).get("total_nodes", 0),
+                "final_links": final_graph.get("stats", {}).get("total_links", 0),
+                "final_communities": final_graph.get("stats", {}).get("total_communities", 0),
+            }
         except Exception as exc:
             print(f"[GraphWorker] Error during graph build: {exc}")
+            return {
+                "status": "failed",
+                "user_id": uid,
+                "error": str(exc)
+            }
 
-    background_tasks.add_task(graph_worker, user_id)
-    return {"status": "started", "message": "Knowledge graph extraction triggered in background."}
+    background_tasks.add_task(graph_worker, user_id, force_rebuild)
+    action = "force rebuild" if force_rebuild else "incremental update"
+    return {"status": "started", "message": f"Knowledge graph {action} triggered in background."}
 
 
 @app.get("/api/graph/communities")
@@ -1038,4 +1139,27 @@ def get_graph_communities(user_id: str = Depends(require_user)):
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to fetch communities: {exc}")
+
+@app.post("/api/graph/update-communities")
+def update_communities(user_id: str = Depends(require_user)):
+    """Manually trigger community detection and clustering on existing graph data."""
+    set_current_user(user_id)
+    try:
+        from src.graph_clustering import run_community_detection_and_summaries
+        from src.graph_db import get_user_graph
+        
+        # Run community detection
+        result = run_community_detection_and_summaries()
+        
+        # Get updated graph stats
+        graph_data = get_user_graph()
+        
+        return {
+            "success": True,
+            "message": "Community detection completed",
+            "communities_updated": len(graph_data.get("communities", [])),
+            "result": result
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to update communities: {exc}")
 

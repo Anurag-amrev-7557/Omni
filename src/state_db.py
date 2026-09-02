@@ -111,6 +111,24 @@ def delete_document_record(user_id, filename):
     with connection() as conn, conn.cursor() as cur:
         cur.execute("DELETE FROM documents WHERE user_id=%s AND filename=%s", (user_id, filename))
 
+def delete_all_user_documents(user_id: str):
+    """Deletes all document records for a specific user."""
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM documents WHERE user_id=%s", (user_id,))
+    print(f"[StateDB] Cleared all document records for user {user_id}")
+
+def delete_all_user_upload_jobs(user_id: str):
+    """Deletes all upload job records for a specific user."""
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM upload_jobs WHERE user_id=%s", (user_id,))
+    print(f"[StateDB] Cleared all upload jobs for user {user_id}")
+
+def delete_all_user_feedback(user_id: str):
+    """Deletes all feedback records for a specific user."""
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM chat_feedback WHERE user_id=%s", (user_id,))
+    print(f"[StateDB] Cleared all feedback for user {user_id}")
+
 def save_upload_job(job_id, user_id, status, total_files, completed_files, details):
     with connection() as conn, conn.cursor() as cur:
         cur.execute("""INSERT INTO upload_jobs (id,user_id,status,total_files,completed_files,details)

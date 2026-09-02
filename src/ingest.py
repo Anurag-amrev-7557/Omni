@@ -69,6 +69,16 @@ def load_pages_with_pymupdf(file_path: str) -> list[Document]:
 
 def ingest_file(file_path: str, user_id: str | None = None, progress_callback = None):
     init_db()
+    
+    # Ensure user_id is set for proper session-based operations
+    if not user_id:
+        try:
+            from src.auth import get_current_user
+            user_id = get_current_user()
+        except ImportError:
+            from auth import get_current_user
+            user_id = get_current_user()
+    
     filename = os.path.basename(file_path)
     ext = os.path.splitext(filename)[1].lower()
     
@@ -142,6 +152,14 @@ def ingest_file(file_path: str, user_id: str | None = None, progress_callback = 
     except Exception as exc:
         print(f"[Ingest] Deduplication warning for {filename}: {exc}")
 
+    # Clean knowledge graph data for this file before re-insertion
+    try:
+        from src.graph_db import delete_document_graph
+        delete_document_graph(filename)
+        print(f"[Ingest] Cleared existing graph data for {filename}")
+    except Exception as g_exc:
+        print(f"[Ingest] Graph cleanup warning for {filename}: {g_exc}")
+
     vector_store = QdrantVectorStore(
         client=client,
         collection_name=COLLECTION_NAME,
@@ -160,13 +178,31 @@ def ingest_file(file_path: str, user_id: str | None = None, progress_callback = 
             progress_callback(95, "Building Knowledge Graph entities & relations...")
         from src.graph_extractor import extract_entities_and_relations
         from src.graph_clustering import run_community_detection_and_summaries
-        for parent in parent_docs[:6]:
-            extract_entities_and_relations(
+        
+        # Process more parent chunks for better coverage (up to 12 chunks)
+        chunks_to_process = min(12, len(parent_docs))
+        entities_extracted = 0
+        relations_extracted = 0
+        
+        for parent in parent_docs[:chunks_to_process]:
+            result = extract_entities_and_relations(
                 text=parent.page_content,
                 filename=filename,
                 page=parent.metadata.get("page", 1),
             )
-        run_community_detection_and_summaries()
+            entities_extracted += len(result.get("entities", []))
+            relations_extracted += len(result.get("relations", []))
+        
+        print(f"[Ingest] Extracted {entities_extracted} entities and {relations_extracted} relations from {filename}")
+        
+        # Only run community detection if this is a significant addition
+        # (more than 5 entities or 5 relations) to avoid expensive clustering on small updates
+        if entities_extracted > 5 or relations_extracted > 5:
+            run_community_detection_and_summaries()
+            print(f"[Ingest] Updated community clusters after processing {filename}")
+        else:
+            print(f"[Ingest] Skipped community detection for small update ({entities_extracted} entities, {relations_extracted} relations)")
+            
     except Exception as g_exc:
         print(f"[Ingest] Graph extraction notice for {filename}: {g_exc}")
     
