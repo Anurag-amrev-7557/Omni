@@ -57,7 +57,12 @@ def extract_entities_and_relations(
     if not text or len(text.strip()) < 40:
         return {"entities": [], "relations": []}
 
-    prompt = EXTRACTION_PROMPT.format(filename=filename, page=page, text=text[:2500])
+    prompt = (
+        EXTRACTION_PROMPT
+        .replace("{filename}", str(filename))
+        .replace("{page}", str(page))
+        .replace("{text}", str(text[:2500]))
+    )
     
     extracted_json = None
     for model in ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]:
