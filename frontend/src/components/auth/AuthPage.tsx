@@ -107,7 +107,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   return (
     <div className="fixed inset-0 z-[100] flex bg-[var(--bg-dark)] overflow-hidden fade-in select-none">
       {/* LEFT COLUMN: BRAND & AUTH FORM */}
-      <div className="flex-1 flex flex-col justify-between p-6 sm:p-10 md:p-14 lg:p-16 overflow-y-auto max-w-2xl mx-auto lg:max-w-none">
+      <div className="flex-1 flex flex-col justify-between p-3 sm:p-5 md:p-7 lg:p-8 overflow-y-auto">
         {/* Top Header Row */}
         <div className="flex items-center justify-between w-full">
           {/* Brand Logo with Warm Sunburst Mark */}
@@ -130,13 +130,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         </div>
 
         {/* Center Auth Hero & Form */}
-        <div className="my-auto py-10 max-w-md w-full mx-auto">
+        <div className="my-auto py-6 max-w-lg w-full mx-auto flex flex-col justify-center">
           {/* Editorial Headline */}
-          <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-normal text-[var(--text-main)] mb-2.5 tracking-tight text-center sm:text-left">
+          <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-normal text-[var(--text-main)] mb-2.5 tracking-tight text-center whitespace-nowrap">
             Question what’s next
           </h1>
-          <p className="text-[14.5px] text-[var(--text-muted)] mb-8 text-center sm:text-left leading-relaxed">
-            Your thinking partner for big ambitions & grounded research
+          <p className="text-[14.5px] text-[var(--text-muted)] mb-8 text-center leading-relaxed">
+            Your thinking partner for big ambitions
           </p>
 
           {/* Soft Wall Alert if Query Limit Triggered */}
@@ -304,7 +304,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         </div>
 
         {/* Bottom Download Pill */}
-        <div className="flex justify-center sm:justify-start">
+        <div className="flex justify-center pb-2">
           <button 
             type="button"
             onClick={() => showToast("Omni Desktop App is currently in Early Access")}
