@@ -61,25 +61,44 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
 
   const handleScroll = () => {
     const el = scrollContainerRef.current;
     if (!el) return;
     const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    userScrolledUpRef.current = distanceToBottom > 80;
+    userScrolledUpRef.current = distanceToBottom > 100;
   };
 
   useEffect(() => {
-    if (!userScrolledUpRef.current) {
-      const el = scrollContainerRef.current;
-      if (el) {
-        if (isStreaming) {
-          el.scrollTop = el.scrollHeight;
-        } else {
-          bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (userScrolledUpRef.current) return;
+
+    const el = scrollContainerRef.current;
+    if (!el) return;
+
+    if (isStreaming) {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (el && !userScrolledUpRef.current) {
+          const target = el.scrollHeight - el.clientHeight;
+          const diff = target - el.scrollTop;
+          if (diff > 0) {
+            // Smoothly lerp towards target for fluid line-by-line scroll tracking
+            if (diff < 200) {
+              el.scrollTop = el.scrollTop + Math.max(diff * 0.5, 4);
+            } else {
+              el.scrollTop = target;
+            }
+          }
         }
-      }
+      });
+    } else {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
   }, [messages, isStreaming]);
 
   return (
