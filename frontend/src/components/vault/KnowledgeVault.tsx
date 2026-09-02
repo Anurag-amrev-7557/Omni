@@ -4,7 +4,6 @@ import { DocumentItem, CollectionStats, PipelineHealth } from '../../types/docum
 import { VaultToolbar } from './VaultToolbar';
 import { VaultDocList, SortField, SortDirection } from './VaultDocList';
 import { VaultUploadModal } from './VaultUploadModal';
-import { VaultMassActionsBar } from './VaultMassActionsBar';
 import { VaultBottomRibbon } from './VaultBottomRibbon';
 import { UploadProgressItem } from '../common/UploadProgressItem';
 
@@ -303,16 +302,12 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
         </div>
       </div>
 
-      {/* Docked Bottom Status & Metrics Ribbon */}
+      {/* Docked Bottom Status, Metrics & In-Place Mass Operations Ribbon */}
       <VaultBottomRibbon
         totalFiles={completedDocs.length}
         totalMb={totalMb}
         totalChunks={stats.total_chunks || (completedDocs.length * 120)}
         health={health}
-      />
-
-      {/* Floating Mass Actions Dock Bar (Floats above bottom ribbon) */}
-      <VaultMassActionsBar
         selectedFilenames={selectedFilenames}
         documents={completedDocs}
         onClearSelection={handleClearSelection}
