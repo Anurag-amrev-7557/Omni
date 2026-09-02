@@ -543,28 +543,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <button
             type="button"
             onClick={onToggleWebSearch}
-            className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12.5px] transition-all cursor-pointer select-none shadow-2xs ${
+            className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-all duration-200 active:scale-[0.97] cursor-pointer select-none shadow-2xs ${
               webSearchEnabled
-                ? 'bg-[var(--accent-subtle)] text-[var(--accent-primary)] border border-[var(--accent-primary)]/40 font-medium shadow-[0_0_12px_rgba(224,122,95,0.15)] ring-1 ring-[var(--accent-primary)]/20'
-                : 'border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
+                ? 'bg-[var(--accent-subtle)] text-[var(--accent-primary)] border border-[var(--accent-primary)]/40 font-medium'
+                : 'border border-[var(--border-color)] bg-[var(--bg-card)]/60 text-[var(--text-muted)] hover:text-[var(--text-main)] hover:border-[var(--text-dark)]'
             }`}
             title={webSearchEnabled ? "Live Web Research enabled" : "Enable Live Web Research & Real-time Intelligence"}
           >
             <Globe 
-              size={13.5} 
-              className={`transition-transform duration-300 ${
+              size={13} 
+              className={`transition-colors duration-200 ${
                 webSearchEnabled 
-                  ? 'text-[var(--accent-primary)] animate-[spin_12s_linear_infinite]' 
-                  : 'group-hover:rotate-45'
+                  ? 'text-[var(--accent-primary)]' 
+                  : 'text-[var(--text-muted)] group-hover:text-[var(--text-main)]'
               }`} 
             />
-            <span>Web Search</span>
-            {webSearchEnabled && (
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--accent-primary)] opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--accent-primary)]"></span>
-              </span>
-            )}
+            <span className="leading-none">Web Search</span>
+            <span 
+              className={`h-1.5 rounded-full bg-[var(--accent-primary)] transition-all duration-200 ease-out ${
+                webSearchEnabled ? 'w-1.5 opacity-100 scale-100' : 'w-0 opacity-0 scale-0'
+              }`} 
+            />
           </button>
 
           {/* Model Selector Pill */}
