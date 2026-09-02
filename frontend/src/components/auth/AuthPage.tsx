@@ -257,7 +257,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               </form>
 
               {/* Switch Auth Method Subtext */}
-              <div className="mt-5 pt-5 pb-0 -mb-2 border-t border-[#2c2b29] flex flex-col items-center justify-center text-xs text-[#7a7771]">
+              <div className="mt-5 pt-5 pb-0 -mb-2 border-t border-[#2c2b29] flex flex-col items-center justify-center text-[13px] text-[#b8b5ad]">
                 {authMethod === 'otp' ? (
                   <button
                     type="button"
@@ -265,19 +265,19 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       setAuthMethod('password');
                       setErrorMessage(null);
                     }}
-                    className="hover:text-[#f4f3ef] hover:underline cursor-pointer transition-colors text-center"
+                    className="text-[#b8b5ad] hover:text-[#f4f3ef] hover:underline cursor-pointer transition-colors text-center font-normal"
                   >
                     Use password instead
                   </button>
                 ) : (
-                  <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center justify-between w-full text-xs">
                     <button
                       type="button"
                       onClick={() => {
                         setAuthMethod('otp');
                         setErrorMessage(null);
                       }}
-                      className="hover:text-[#f4f3ef] hover:underline cursor-pointer transition-colors"
+                      className="text-[#b8b5ad] hover:text-[#f4f3ef] hover:underline cursor-pointer transition-colors"
                     >
                       Send passwordless magic link
                     </button>
