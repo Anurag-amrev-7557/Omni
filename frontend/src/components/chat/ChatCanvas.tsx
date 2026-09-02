@@ -74,7 +74,7 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
             <div className="space-y-6 pt-6 fade-in">
               {/* User message skeleton */}
               <div className="flex justify-end">
-                <div className="max-w-[70%] sm:max-w-[50%] w-full rounded-2xl p-4 bg-[var(--bg-user-bubble)] border border-[var(--border-color)]/50 space-y-2.5">
+                <div className="max-w-[70%] sm:max-w-[50%] w-full rounded-2xl p-4 bg-[var(--bg-user-bubble)] border border-[var(--border-color)] space-y-2.5">
                   <Skeleton className="h-3.5 w-4/5 rounded-md" />
                   <Skeleton className="h-3.5 w-3/5 rounded-md" />
                 </div>
@@ -97,7 +97,7 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
 
               {/* Second user message skeleton */}
               <div className="flex justify-end pt-2">
-                <div className="max-w-[55%] sm:max-w-[40%] w-full rounded-2xl p-4 bg-[var(--bg-user-bubble)] border border-[var(--border-color)]/50 space-y-2">
+                <div className="max-w-[55%] sm:max-w-[40%] w-full rounded-2xl p-4 bg-[var(--bg-user-bubble)] border border-[var(--border-color)] space-y-2">
                   <Skeleton className="h-3.5 w-3/4 rounded-md" />
                 </div>
               </div>
