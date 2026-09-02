@@ -257,7 +257,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               </form>
 
               {/* Switch Auth Method Subtext */}
-              <div className="mt-5 pt-4 pb-1 border-t border-[#2c2b29] flex flex-col items-center justify-center text-xs text-[#7a7771]">
+              <div className="mt-5 pt-5 pb-0 -mb-2 border-t border-[#2c2b29] flex flex-col items-center justify-center text-xs text-[#7a7771]">
                 {authMethod === 'otp' ? (
                   <button
                     type="button"
@@ -265,7 +265,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       setAuthMethod('password');
                       setErrorMessage(null);
                     }}
-                    className="hover:text-[#f4f3ef] hover:underline cursor-pointer transition-colors text-center py-0.5"
+                    className="hover:text-[#f4f3ef] hover:underline cursor-pointer transition-colors text-center"
                   >
                     Use password instead
                   </button>
