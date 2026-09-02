@@ -113,11 +113,11 @@ if custom_origins:
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if not os.getenv("CORS_ORIGINS") else allowed_origins_list,
     allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.vercel\.app|.*\.onrender\.com)(:[0-9]+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 def add_cors_headers_if_needed(response: Response, request: Request) -> Response:
@@ -125,7 +125,12 @@ def add_cors_headers_if_needed(response: Response, request: Request) -> Response
     if origin:
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"
+        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, User-Agent, DNT, Cache-Control, X-Mx-ReqToken, Keep-Alive, X-Requested-With, If-Modified-Since"
+        response.headers["Access-Control-Expose-Headers"] = "*"
+    else:
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"
         response.headers["Access-Control-Allow-Headers"] = "*"
     return response
 
@@ -134,9 +139,9 @@ async def logging_and_auth_middleware(request: Request, call_next):
     start_time = time.perf_counter()
     user_id = None
     
-    # Pre-flight OPTIONS bypass with CORS headers
+    # Pre-flight OPTIONS bypass with CORS headers (returns 200 OK)
     if request.method == "OPTIONS":
-        response = Response(status_code=204)
+        response = Response(status_code=200)
         return add_cors_headers_if_needed(response, request)
 
     # Public route bypass
