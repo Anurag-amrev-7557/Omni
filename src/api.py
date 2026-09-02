@@ -792,10 +792,11 @@ def stream_chat(data: dict):
     def sse_event_generator():
         set_current_user(user_id)
         try:
-            # Generate AI session title for new chats using lightweight fast model
+            # Generate concise AI session title for new chats using lightweight fast model
             if is_first_message:
                 try:
-                    ai_title = generate_chat_title(prompt)
+                    clean_query = re.sub(r'\[Focus explicitly on referenced Knowledge Vault documents:.*?\]\s*', '', prompt, flags=re.DOTALL).strip()
+                    ai_title = generate_chat_title(clean_query or prompt)
                     update_session_title(session_id, ai_title)
                     yield f"data: {json.dumps({'type': 'title', 'title': ai_title, 'session_id': session_id})}\n\n"
                 except Exception as e:
