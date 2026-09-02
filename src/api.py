@@ -7,7 +7,7 @@ import asyncio
 import uuid
 import time
 from typing import Optional, Dict
-from fastapi import FastAPI, File, UploadFile, Query, HTTPException, BackgroundTasks, Request
+from fastapi import FastAPI, File, UploadFile, Query, HTTPException, BackgroundTasks, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response, JSONResponse, FileResponse
 
