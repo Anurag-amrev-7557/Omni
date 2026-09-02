@@ -10,7 +10,12 @@ import {
   Layers, 
   SlidersHorizontal,
   Info,
-  ChevronRight
+  ChevronRight,
+  Eye,
+  EyeOff,
+  Play,
+  Pause,
+  Settings
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { GraphNode, GraphLink, GraphCommunity, KnowledgeGraphData } from '../../types/graph';
@@ -18,22 +23,36 @@ import { EntityDetailDrawer } from './EntityDetailDrawer';
 import { CommunityInsightsModal } from './CommunityInsightsModal';
 import { OrbitingOrbLoader } from '../common/OrbitingOrbLoader';
 
-// Color palette for community clusters
+// Premium Color palette for community clusters with enhanced vibrancy
 const COMMUNITY_COLORS = [
-  '#da7756', // Terracotta Accent
-  '#3b82f6', // Electric Blue
-  '#8b5cf6', // Violet
-  '#10b981', // Emerald
-  '#f59e0b', // Amber
-  '#ec4899', // Pink
-  '#06b6d4', // Cyan
-  '#84cc16', // Lime
+  '#FF6B6B', // Vibrant Coral Red
+  '#4ECDC4', // Teal Turquoise
+  '#45B7D1', // Sky Blue
+  '#96CEB4', // Soft Mint
+  '#FECA57', // Golden Yellow
+  '#FF9FF3', // Pink Magenta
+  '#54A0FF', // Royal Blue
+  '#5F27CD', // Deep Purple
+  '#00D2D3', // Bright Cyan
+  '#FF6B9D', // Hot Pink
+  '#C4E538', // Lime Green
+  '#F368E0', // Neon Purple
 ];
 
 interface KnowledgeGraphViewProps {
   onInspectDoc?: (doc: { filename: string; page?: number; content?: string }) => void;
   className?: string;
 }
+
+// Helper function to darken hex colors for gradients
+const darkenColor = (color: string, percent: number): string => {
+  const num = parseInt(color.replace('#', ''), 16);
+  const amt = Math.round(2.55 * percent);
+  const R = (num >> 16) - amt;
+  const G = (num >> 8 & 0x00FF) - amt;
+  const B = (num & 0x0000FF) - amt;
+  return '#' + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 + (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 + (B < 255 ? B < 1 ? 0 : B : 255)).toString(16).slice(1);
+};
 
 export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
   onInspectDoc,
@@ -53,6 +72,8 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [insightsOpen, setInsightsOpen] = useState<boolean>(false);
   const [filterCommunity, setFilterCommunity] = useState<number | null>(null);
+  const [showLabels, setShowLabels] = useState<boolean>(true);
+  const [physicsEnabled, setPhysicsEnabled] = useState<boolean>(true);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const nodesRef = useRef<GraphNode[]>([]);
@@ -177,6 +198,8 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
 
     // Physics Simulation Step
     const runSimulationStep = () => {
+      if (!physicsEnabled) return;
+      
       const nodes = nodesRef.current;
       const links = linksRef.current;
       const width = canvas.clientWidth || 800;
@@ -277,7 +300,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
       const links = linksRef.current;
       const nodeMap = new Map(nodes.map(n => [n.id, n]));
 
-      // 1. Draw Links
+      // 1. Draw Links with Enhanced Styling
       for (const link of links) {
         const srcId = typeof link.source === 'object' ? (link.source as any).id : link.source;
         const tgtId = typeof link.target === 'object' ? (link.target as any).id : link.target;
@@ -289,64 +312,165 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
                                 (hoveredNode && (src.id === hoveredNode.id || tgt.id === hoveredNode.id));
           const isDimmed = (selectedNode || hoveredNode) && !isHighlighted;
 
+          const srcColor = COMMUNITY_COLORS[src.community_id % COMMUNITY_COLORS.length] || '#FF6B6B';
+          const tgtColor = COMMUNITY_COLORS[tgt.community_id % COMMUNITY_COLORS.length] || '#FF6B6B';
+
           ctx.save();
+          
+          // Create gradient for link
+          const gradient = ctx.createLinearGradient(src.x || 0, src.y || 0, tgt.x || 0, tgt.y || 0);
+          gradient.addColorStop(0, isHighlighted ? srcColor : isDimmed ? 'rgba(150,150,150,0.15)' : 'rgba(200,200,200,0.3)');
+          gradient.addColorStop(1, isHighlighted ? tgtColor : isDimmed ? 'rgba(150,150,150,0.15)' : 'rgba(200,200,200,0.3)');
+
           ctx.beginPath();
           ctx.moveTo(src.x || 0, src.y || 0);
           ctx.lineTo(tgt.x || 0, tgt.y || 0);
-          ctx.strokeStyle = isHighlighted ? '#da7756' : isDimmed ? 'rgba(150,150,150,0.1)' : 'rgba(150,150,150,0.22)';
-          ctx.lineWidth = isHighlighted ? 2.2 : 1.0;
+          ctx.strokeStyle = gradient;
+          ctx.lineWidth = isHighlighted ? 3.0 : isDimmed ? 0.8 : 1.5;
+          ctx.lineCap = 'round';
+          
+          // Add glow effect for highlighted links
+          if (isHighlighted) {
+            ctx.shadowColor = srcColor;
+            ctx.shadowBlur = 8;
+          }
+          
           ctx.stroke();
+          ctx.shadowBlur = 0; // Reset shadow
 
-          // Link relation label if highlighted
-          if (isHighlighted && transform.k > 0.8) {
+          // Enhanced Link relation label with background
+          if (isHighlighted && transform.k > 0.7) {
             const midX = ((src.x || 0) + (tgt.x || 0)) / 2;
             const midY = ((src.y || 0) + (tgt.y || 0)) / 2;
-            ctx.font = '10px monospace';
-            ctx.fillStyle = '#da7756';
+            
+            // Background for text
+            const text = link.type;
+            ctx.font = 'bold 10px Inter, sans-serif';
+            const textMetrics = ctx.measureText(text);
+            const padding = 4;
+            
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.beginPath();
+            ctx.roundRect(
+              midX - textMetrics.width / 2 - padding,
+              midY - 8,
+              textMetrics.width + padding * 2,
+              14,
+              4
+            );
+            ctx.fill();
+            
+            // Text
+            ctx.fillStyle = '#ffffff';
             ctx.textAlign = 'center';
-            ctx.fillText(link.type, midX, midY - 3);
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, midX, midY);
           }
+          
           ctx.restore();
         }
       }
 
-      // 2. Draw Nodes
+      // 2. Draw Nodes with Enhanced Premium Styling
       for (const node of nodes) {
         const isActive = activeNodeIds.has(node.id);
         const isSelected = selectedNode?.id === node.id;
         const isHovered = hoveredNode?.id === node.id;
         const isDimmed = !isActive || ((selectedNode || hoveredNode) && !isSelected && !isHovered);
 
-        const commColor = COMMUNITY_COLORS[node.community_id % COMMUNITY_COLORS.length] || '#da7756';
-        const baseRadius = Math.max(5, Math.min(18, 5 + (node.degree || 1) * 1.6 + (node.pagerank || 1) * 2));
-        const radius = isSelected || isHovered ? baseRadius * 1.3 : baseRadius;
+        const commColor = COMMUNITY_COLORS[node.community_id % COMMUNITY_COLORS.length] || '#FF6B6B';
+        const baseRadius = Math.max(8, Math.min(24, 8 + (node.degree || 1) * 2.0 + (node.pagerank || 1) * 3));
+        const radius = isSelected || isHovered ? baseRadius * 1.4 : baseRadius;
 
         ctx.save();
         
-        // Community Glow Halo
+        // Enhanced Premium Glow Halo with gradient
         if (isSelected || isHovered) {
+          const gradient = ctx.createRadialGradient(
+            node.x || 0, node.y || 0, radius,
+            node.x || 0, node.y || 0, radius + 15
+          );
+          gradient.addColorStop(0, `${commColor}66`);
+          gradient.addColorStop(0.5, `${commColor}33`);
+          gradient.addColorStop(1, `${commColor}00`);
+          
           ctx.beginPath();
-          ctx.arc(node.x || 0, node.y || 0, radius + 8, 0, Math.PI * 2);
-          ctx.fillStyle = `${commColor}33`;
+          ctx.arc(node.x || 0, node.y || 0, radius + 15, 0, Math.PI * 2);
+          ctx.fillStyle = gradient;
           ctx.fill();
         }
 
-        // Main Node Body
+        // Main Node Body with gradient fill
+        const nodeGradient = ctx.createRadialGradient(
+          (node.x || 0) - radius * 0.3, (node.y || 0) - radius * 0.3, 0,
+          node.x || 0, node.y || 0, radius
+        );
+        nodeGradient.addColorStop(0, isDimmed ? 'rgba(180,180,180,0.6)' : commColor);
+        nodeGradient.addColorStop(1, isDimmed ? 'rgba(100,100,100,0.4)' : darkenColor(commColor, 20));
+        
         ctx.beginPath();
         ctx.arc(node.x || 0, node.y || 0, radius, 0, Math.PI * 2);
-        ctx.fillStyle = isDimmed ? 'rgba(120,120,120,0.3)' : commColor;
-        ctx.globalAlpha = isDimmed ? 0.35 : 1.0;
+        ctx.fillStyle = nodeGradient;
+        ctx.globalAlpha = isDimmed ? 0.4 : 1.0;
         ctx.fill();
-        ctx.strokeStyle = isSelected ? '#ffffff' : 'rgba(0,0,0,0.3)';
-        ctx.lineWidth = isSelected ? 2.5 : 1.0;
+        
+        // Premium border with glow effect
+        ctx.strokeStyle = isSelected ? '#ffffff' : isHovered ? `${commColor}CC` : 'rgba(255,255,255,0.4)';
+        ctx.lineWidth = isSelected ? 3.0 : isHovered ? 2.5 : 1.5;
+        ctx.shadowColor = commColor;
+        ctx.shadowBlur = isSelected ? 15 : isHovered ? 10 : 0;
         ctx.stroke();
+        ctx.shadowBlur = 0; // Reset shadow
 
-        // Node Label (Visible if zoomed in or highlighted)
-        if (transform.k > 0.65 || isSelected || isHovered) {
-          ctx.font = `${isSelected ? 'bold 12px' : '11px'} Inter, sans-serif`;
-          ctx.fillStyle = isDimmed ? 'rgba(150,150,150,0.4)' : '#e4e4e7';
+        // Inner highlight for 3D effect
+        if (!isDimmed) {
+          ctx.beginPath();
+          ctx.arc(node.x || 0, node.y || 0, radius * 0.7, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+
+        // Enhanced Node Label with better visibility
+        const showLabel = (transform.k > 0.5 || isSelected || isHovered) && showLabels;
+        if (showLabel) {
+          const fontSize = isSelected ? 'bold 13px' : isHovered ? 'bold 12px' : '11px';
+          ctx.font = `${fontSize} Inter, -apple-system, BlinkMacSystemFont, sans-serif`;
+          
+          // Text shadow for better readability
+          ctx.shadowColor = 'rgba(0,0,0,0.8)';
+          ctx.shadowBlur = 4;
+          ctx.shadowOffsetX = 1;
+          ctx.shadowOffsetY = 1;
+          
+          ctx.fillStyle = isDimmed ? 'rgba(180,180,180,0.6)' : '#ffffff';
           ctx.textAlign = 'center';
-          ctx.fillText(node.name, node.x || 0, (node.y || 0) + radius + 13);
+          ctx.textBaseline = 'middle';
+          
+          // Truncate long names for better display
+          const displayName = node.name.length > 20 ? node.name.substring(0, 20) + '...' : node.name;
+          ctx.fillText(displayName, node.x || 0, (node.y || 0) + radius + 16);
+          
+          // Reset text shadow
+          ctx.shadowColor = 'transparent';
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
+        }
+
+        // Show entity type as small badge
+        if (transform.k > 0.8 || isSelected || isHovered) {
+          const badgeSize = 6;
+          ctx.beginPath();
+          ctx.arc((node.x || 0) + radius - badgeSize, (node.y || 0) - radius + badgeSize, badgeSize, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          ctx.fill();
+          
+          ctx.font = 'bold 8px Inter, sans-serif';
+          ctx.fillStyle = commColor;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(node.type?.charAt(0) || 'C', (node.x || 0) + radius - badgeSize, (node.y || 0) - radius + badgeSize);
         }
 
         ctx.restore();
@@ -363,7 +487,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
       cancelAnimationFrame(animFrameRef.current);
       window.removeEventListener('resize', handleResize);
     };
-  }, [activeNodeIds, selectedNode, hoveredNode]);
+  }, [activeNodeIds, selectedNode, hoveredNode, showLabels, physicsEnabled]);
 
   // Coordinate Conversion: Screen to World
   const screenToWorld = useCallback((screenX: number, screenY: number) => {
@@ -582,15 +706,40 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
           >
             <Maximize2 size={15} />
           </button>
+          <div className="h-px bg-[var(--border-color)] my-0.5" />
+          <button
+            onClick={() => setShowLabels(!showLabels)}
+            className={`p-2 rounded-lg transition-colors cursor-pointer ${showLabels ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'}`}
+            title={showLabels ? "Hide Labels" : "Show Labels"}
+          >
+            {showLabels ? <Eye size={15} /> : <EyeOff size={15} />}
+          </button>
+          <button
+            onClick={() => setPhysicsEnabled(!physicsEnabled)}
+            className={`p-2 rounded-lg transition-colors cursor-pointer ${physicsEnabled ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'}`}
+            title={physicsEnabled ? "Pause Physics" : "Resume Physics"}
+          >
+            {physicsEnabled ? <Pause size={15} /> : <Play size={15} />}
+          </button>
         </div>
 
-        {/* Floating Bottom Stats Pill */}
-        <div className="absolute bottom-4 left-4 z-20 px-3 py-1.5 rounded-xl bg-[var(--bg-card)]/90 backdrop-blur-md border border-[var(--border-color)] shadow-md text-[11px] text-[var(--text-muted)] flex items-center gap-3 font-mono">
-          <span>{graphData.stats.total_nodes} Entities</span>
-          <span>·</span>
-          <span>{graphData.stats.total_links} Relations</span>
-          <span>·</span>
-          <span>{graphData.stats.total_communities} Communities</span>
+        {/* Floating Bottom Stats Pill - Premium Design */}
+        <div className="absolute bottom-4 left-4 z-20 px-4 py-2 rounded-xl bg-[var(--bg-card)]/95 backdrop-blur-md border border-[var(--border-color)] shadow-lg text-[11px] text-[var(--text-muted)] flex items-center gap-3 font-mono">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-[var(--accent-primary)] animate-pulse" />
+            <span className="text-[var(--text-main)] font-semibold">{graphData.stats.total_nodes}</span>
+            <span className="text-[var(--text-muted)]">Entities</span>
+          </div>
+          <span className="text-[var(--border-color)]">·</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[var(--text-main)] font-semibold">{graphData.stats.total_links}</span>
+            <span className="text-[var(--text-muted)]">Relations</span>
+          </div>
+          <span className="text-[var(--border-color)]">·</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[var(--text-main)] font-semibold">{graphData.stats.total_communities}</span>
+            <span className="text-[var(--text-muted)]">Communities</span>
+          </div>
         </div>
       </div>
 
