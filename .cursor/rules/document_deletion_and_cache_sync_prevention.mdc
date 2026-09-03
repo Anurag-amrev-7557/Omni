@@ -1,0 +1,58 @@
+---
+description: Document Deletion and Cache Invalidation Scoping Prevention
+globs: ["src/**/*.py", "frontend/src/**/*.ts", "frontend/src/**/*.tsx"]
+---
+
+## 🚨 Document Deletion and Cache Invalidation Scoping Prevention
+
+### **Problem**:
+When deleting single or multiple documents, the documents disappear from the UI with a success toast, but reappear immediately upon page reload or vault refresh.
+
+### **Root Cause**:
+1. **User Scoping Mismatch in Vector/Relational DBs**: Default/demo files were indexed under `DEFAULT_LOCAL_USER` ("10d2f529-3fae-4a29-9a5e-312876700ff9"). When an unauthenticated/guest session deleted documents, deletion queries filtered strictly by `metadata.user_id == guest_id`, resulting in 0 points/rows deleted in Qdrant and Postgres. On refresh, remaining vectors or DB records resurrected the documents.
+2. **Conditional Cache Write Blocking Empty State**: Frontend SWR cache sync used `if (documents.length > 0) localStorage.setItem(...)`. When all documents were deleted, length was `0`, preventing the cache from updating to `[]`.
+3. **Physical File Path Misses**: `resolve_document_path` only inspected the user's specific directory and missed `data/uploaded_docs/default/` or `data/uploaded_docs/<DEFAULT_LOCAL_USER>/`.
+4. **PostgreSQL Schema Type Syntax**: In Postgres where `user_id` is a `UUID` column, querying `user_id = 'default'` crashes queries with `invalid input syntax for type uuid: "default"`.
+
+### **Prevention Rule**:
+
+```python
+# ❌ WRONG - Filtering strictly by guest_id when user is guest/local
+delete_selector = Filter(must=[
+    FieldCondition(key="metadata.filename", match=MatchValue(value=filename)),
+    FieldCondition(key="metadata.user_id", match=MatchValue(value=user_id)) # Matches 0 chunks for shared/default docs!
+])
+
+# ❌ WRONG - Passing non-UUID string to Postgres UUID column
+cur.execute("SELECT * FROM documents WHERE user_id = %s OR user_id = 'default'", (norm_user,))
+
+# ❌ WRONG - Skipping localStorage cache write when empty
+if (documents.length > 0) {
+  localStorage.setItem('omni_documents_cache', JSON.stringify(documents));
+}
+
+# ✅ CORRECT - Match both specific user and local/default user aliases
+is_guest_or_local = not user_id or user_id in ("default_user", DEFAULT_LOCAL_USER, "default") or str(user_id).startswith("guest_")
+if not is_guest_or_local:
+    delete_selector = Filter(must=[file_condition, user_condition])
+else:
+    delete_selector = file_condition # Delete all points for this filename
+
+# ✅ CORRECT - Only compare valid UUIDs in Postgres
+cur.execute(
+    "SELECT * FROM documents WHERE user_id = %s OR user_id = %s OR user_id IS NULL",
+    (norm_user, DEFAULT_LOCAL_USER)
+)
+
+# ✅ CORRECT - Unconditional cache sync to properly persist empty arrays
+useEffect(() => {
+  try {
+    localStorage.setItem('omni_documents_cache', JSON.stringify(documents));
+  } catch {}
+}, [documents]);
+```
+
+### **Implementation**:
+1. When deleting files in multi-storage architectures (disk, Qdrant vectors, Postgres metadata, Supabase storage, knowledge graph), delete across all fallback directories and user aliases for local/guest sessions.
+2. In frontend SWR cache hooks, always persist the full array (even when `[]`) so deleting all items cannot be undone by stale localStorage cache.
+3. Protect embedded Qdrant concurrent deletes using `threading.Lock()` and use `MatchAny(any=filenames)` for atomic batch deletions.

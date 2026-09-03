@@ -7,11 +7,11 @@ from langchain_groq import ChatGroq
 from langchain_core.documents import Document
 from langchain_qdrant import QdrantVectorStore
 try:
-    from src.db import get_qdrant_client, init_db
+    from src.db import get_qdrant_client, init_db, invalidate_stats_cache
     from src.config import COLLECTION_NAME
     from src.retrieve import get_embeddings
 except ImportError:
-    from db import get_qdrant_client, init_db
+    from db import get_qdrant_client, init_db, invalidate_stats_cache
     from config import COLLECTION_NAME
     from retrieve import get_embeddings
 
@@ -31,21 +31,43 @@ def load_pages_with_pymupdf(file_path: str) -> list[Document]:
     """Loads PDF pages using PyMuPDF for high-fidelity text extraction."""
     doc = pymupdf.open(file_path)
     pages = []
-    for page_num in range(len(doc)):
-        page = doc.load_page(page_num)
-        text = page.get_text("text")
-        if text.strip():
-            pages.append(Document(page_content=text, metadata={"page": page_num + 1}))
-    doc.close()
+    try:
+        for page_num in range(len(doc)):
+            page = doc.load_page(page_num)
+            text = page.get_text("text")
+            if text.strip():
+                pages.append(Document(page_content=text, metadata={"page": page_num + 1}))
+    finally:
+        doc.close()
     return pages
 
+def load_pages_from_bytes(file_bytes: bytes, ext: str) -> list[Document]:
+    """Extracts document pages directly from memory bytes for fast instant ingestion."""
+    if ext == ".pdf":
+        doc = pymupdf.open(stream=file_bytes, filetype="pdf")
+        pages = []
+        try:
+            for page_num in range(len(doc)):
+                page = doc.load_page(page_num)
+                text = page.get_text("text")
+                if text.strip():
+                    pages.append(Document(page_content=text, metadata={"page": page_num + 1}))
+        finally:
+            doc.close()
+        return pages
+    else:
+        text = file_bytes.decode("utf-8", errors="replace")
+        return [Document(page_content=text, metadata={"page": 1})] if text.strip() else []
+
 def ingest_file(
-    file_path: str,
+    file_path: str = None,
     user_id: str | None = None,
     extract_graph: bool = False,
     generate_ai_summary: bool = False,
-    on_progress: Any = None
-):
+    on_progress: Any = None,
+    file_bytes: bytes | None = None,
+    filename: str | None = None,
+) -> dict:
     start_time = time.time()
     init_db()
     if on_progress:
@@ -57,7 +79,11 @@ def ingest_file(
         except Exception:
             user_id = "default_user"
 
-    filename = os.path.basename(file_path)
+    if not filename and file_path:
+        filename = os.path.basename(file_path)
+    elif not filename:
+        filename = "document.pdf"
+
     ext = os.path.splitext(filename)[1].lower()
     
     TEXT_AND_CODE_EXTS = {
@@ -68,7 +94,9 @@ def ingest_file(
         ".css", ".scss", ".html", ".xml", ".toml"
     }
 
-    if ext == ".pdf":
+    if file_bytes is not None:
+        pages = load_pages_from_bytes(file_bytes, ext)
+    elif ext == ".pdf":
         pages = load_pages_with_pymupdf(file_path)
     elif ext in TEXT_AND_CODE_EXTS:
         from langchain_community.document_loaders import TextLoader
@@ -138,15 +166,28 @@ def ingest_file(
         on_progress("indexing", 85, f"Storing vectors in Qdrant collection...")
     print(f"[Ingest] Indexing {len(child_documents)} child vectors for {filename}...")
     vector_store.add_documents(child_documents)
+    invalidate_stats_cache()
     
     elapsed_time = time.time() - start_time
-    print(f"[Ingest] ✓ Completed {filename} in {elapsed_time:.2f}s for user {user_id}: {len(parent_docs)} parent blocks, {len(child_documents)} child vectors.")
+    total_page_count = len(pages)
+    total_chunk_count = len(child_documents)
+    total_parents_count = len(parent_docs)
+    print(f"[Ingest] ✓ Completed {filename} in {elapsed_time:.2f}s for user {user_id}: {total_parents_count} parent blocks, {total_chunk_count} child vectors.")
+
+    chunks_to_process = []
+    if extract_graph:
+        chunks_to_process = parent_docs if total_parents_count <= 6 else [parent_docs[int(i * (total_parents_count - 1) / 5)] for i in range(6)]
+
+    # Explicit garbage collection to prevent memory spikes on 512MB RAM instances
+    import gc
+    del child_documents, parent_docs, pages
+    gc.collect()
 
     if on_progress:
-        on_progress("completed", 100, f"Indexed {len(child_documents)} chunks successfully ({elapsed_time:.1f}s)")
+        on_progress("completed", 100, f"Indexed successfully ({elapsed_time:.1f}s)")
 
     # Knowledge Graph Extraction & Community Detection (opt-in or single document upload)
-    if extract_graph:
+    if extract_graph and chunks_to_process:
         print(f"[Ingest] Running knowledge graph extraction for {filename} (this may take 10-20s)...")
         try:
             from src.graph_db import delete_document_graph, run_entity_resolution_and_deduplication
@@ -155,8 +196,6 @@ def ingest_file(
 
             delete_document_graph(filename, user_id=user_id)
 
-            total_parents = len(parent_docs)
-            chunks_to_process = parent_docs if total_parents <= 6 else [parent_docs[int(i * (total_parents - 1) / 5)] for i in range(6)]
             entities_extracted = 0
             relations_extracted = 0
 
@@ -176,6 +215,15 @@ def ingest_file(
             print(f"[Ingest] Knowledge Graph updated for {filename} (user: {user_id}): {entities_extracted} entities, {relations_extracted} relations.")
         except Exception as g_exc:
             print(f"[Ingest] Graph extraction notice for {filename}: {g_exc}")
+
+    return {
+        "success": True,
+        "filename": filename,
+        "page_count": total_page_count,
+        "chunk_count": total_chunk_count,
+        "summary": summary,
+        "elapsed_seconds": round(elapsed_time, 2)
+    }
 
 # Backward compatibility alias
 ingest_pdf = ingest_file

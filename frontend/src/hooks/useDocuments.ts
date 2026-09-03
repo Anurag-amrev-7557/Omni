@@ -3,23 +3,56 @@ import { DocumentItem, CollectionStats } from '../types/document';
 import { api } from '../services/api';
 
 export const useDocuments = (showToast: (msg: string) => void) => {
-  const [documents, setDocuments] = useState<DocumentItem[]>([]);
-  const [stats, setStats] = useState<CollectionStats>({
-    total_chunks: 0,
-    files_count: 0,
-    files: []
+  const [documents, setDocuments] = useState<DocumentItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('omni_documents_cache');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [stats, setStats] = useState<CollectionStats>(() => {
+    try {
+      const saved = localStorage.getItem('omni_stats_cache');
+      return saved ? JSON.parse(saved) : {
+        total_chunks: 0,
+        files_count: 0,
+        files: []
+      };
+    } catch {
+      return {
+        total_chunks: 0,
+        files_count: 0,
+        files: []
+      };
+    }
   });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isUploading, setIsUploading] = useState<boolean>(false);
+
+  // Sync cache with localStorage on updates (unconditional to allow caching empty array when all docs deleted)
+  useEffect(() => {
+    try {
+      localStorage.setItem('omni_documents_cache', JSON.stringify(documents));
+    } catch {}
+  }, [documents]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('omni_stats_cache', JSON.stringify(stats));
+    } catch {}
+  }, [stats]);
 
   const fetchDocuments = useCallback(async () => {
     try {
       setIsLoading(true);
       const docs = await api.getDocuments();
       setDocuments(docs);
+      try {
+        localStorage.setItem('omni_documents_cache', JSON.stringify(docs));
+      } catch {}
     } catch (e: any) {
-      console.error("Error fetching documents:", e);
-      showToast(`Failed to fetch documents: ${e?.message || "Unknown error"}`);
+      console.warn("Server unavailable or cold-starting, keeping local document cache:", e);
     } finally {
       setIsLoading(false);
     }
@@ -29,6 +62,9 @@ export const useDocuments = (showToast: (msg: string) => void) => {
     try {
       const s = await api.getStats();
       setStats(s);
+      try {
+        localStorage.setItem('omni_stats_cache', JSON.stringify(s));
+      } catch {}
     } catch (e: any) {
       console.error("Error fetching stats:", e);
       // Don't show toast for stats errors as they're less critical
@@ -45,14 +81,23 @@ export const useDocuments = (showToast: (msg: string) => void) => {
       }
       return [doc, ...prev];
     });
+    setStats(prev => {
+      if (!prev.files.includes(doc.filename)) {
+        return {
+          ...prev,
+          files_count: prev.files_count + 1,
+          files: [doc.filename, ...prev.files],
+        };
+      }
+      return prev;
+    });
   }, []);
 
   const refreshVault = useCallback(async () => {
     try {
       await Promise.all([fetchDocuments(), fetchStats()]);
     } catch (error) {
-      console.error("Error refreshing vault:", error);
-      throw error; // Re-throw so caller can handle
+      console.warn("Vault refresh note:", error);
     }
   }, [fetchDocuments, fetchStats]);
 
@@ -62,14 +107,56 @@ export const useDocuments = (showToast: (msg: string) => void) => {
 
   const uploadFiles = async (files: FileList | File[]) => {
     if (!files || files.length === 0) return;
+    const fileArray = Array.from(files);
     setIsUploading(true);
+
+    // Snapshot state for potential rollback
+    const previousDocs = documents;
+    const previousStats = stats;
+
+    // Build optimistic DocumentItem entries
+    const optimisticDocs: DocumentItem[] = fileArray.map(file => ({
+      filename: file.name,
+      size_mb: parseFloat((file.size / (1024 * 1024)).toFixed(2)) || 0.01,
+      pages: 1,
+      indexed: false,
+      status: 'indexing' as const,
+      isOptimistic: true,
+    }));
+
+    // Optimistically prepend to documents state immediately!
+    setDocuments(prev => {
+      const existingNames = new Set(optimisticDocs.map(o => o.filename));
+      const remaining = prev.filter(d => !existingNames.has(d.filename));
+      return [...optimisticDocs, ...remaining];
+    });
+
+    // Optimistically update collection stats
+    setStats(prev => ({
+      ...prev,
+      files_count: prev.files_count + optimisticDocs.length,
+      files: Array.from(new Set([...optimisticDocs.map(o => o.filename), ...prev.files])),
+    }));
+
+    showToast(`Ingesting ${fileArray.length} file(s) into vector vault...`);
+
     try {
-      showToast(`Ingesting ${files.length} file(s) into vector vault...`);
       const res = await api.uploadDocuments(files);
 
       // Immediately sync state with documents list returned from upload endpoint
       if (res.documents && Array.isArray(res.documents)) {
         setDocuments(res.documents);
+      } else {
+        // Mark optimistic documents as indexed
+        setDocuments(prev => 
+          prev.map(d => {
+            const match = optimisticDocs.find(o => o.filename === d.filename);
+            if (match) {
+              return { ...d, indexed: true, status: 'indexed' as const, isOptimistic: false };
+            }
+            return d;
+          })
+        );
       }
 
       // Concurrently ensure latest collection stats & documents are synced
@@ -87,6 +174,9 @@ export const useDocuments = (showToast: (msg: string) => void) => {
       }
     } catch (e: any) {
       console.error("Upload error:", e);
+      // Rollback optimistic documents & stats
+      setDocuments(previousDocs);
+      setStats(previousStats);
       const errorMsg = e?.message || "Error ingesting documents";
       showToast(`✗ Upload failed: ${errorMsg}`);
     } finally {
@@ -96,26 +186,63 @@ export const useDocuments = (showToast: (msg: string) => void) => {
 
   const deleteDocument = async (filename: string) => {
     if (!window.confirm(`Delete "${filename}" and its vector embeddings from Qdrant?`)) return;
+
+    // Snapshot for rollback
+    const previousDocs = documents;
+    const previousStats = stats;
+
+    // Optimistically remove document from state and cache immediately!
+    const nextDocs = documents.filter(d => d.filename !== filename);
+    const nextStats = {
+      ...stats,
+      files_count: Math.max(0, stats.files_count - 1),
+      files: stats.files.filter(f => f !== filename),
+    };
+    setDocuments(nextDocs);
+    setStats(nextStats);
     try {
-      showToast(`Deleting "${filename}"...`);
+      localStorage.setItem('omni_documents_cache', JSON.stringify(nextDocs));
+      localStorage.setItem('omni_stats_cache', JSON.stringify(nextStats));
+    } catch {}
+    showToast(`Removed "${filename}" from vault`);
+
+    try {
       const res = await api.deleteDocument(filename);
       if (res.success) {
-        showToast(`✓ Removed "${filename}" from vault`);
+        // Refresh vault in background to ensure clean chunk count sync
         await refreshVault();
       } else {
         throw new Error("Delete operation returned unsuccessful");
       }
     } catch (e: any) {
       console.error("Delete error:", e);
+      // Rollback immediately on failure
+      setDocuments(previousDocs);
+      setStats(previousStats);
+      try {
+        localStorage.setItem('omni_documents_cache', JSON.stringify(previousDocs));
+        localStorage.setItem('omni_stats_cache', JSON.stringify(previousStats));
+      } catch {}
       showToast(`✗ Failed to delete "${filename}": ${e?.message || "Unknown error"}`);
     }
   };
 
   const reindexDocument = async (filename: string) => {
+    // Snapshot previous document state
+    const previousDoc = documents.find(d => d.filename === filename);
+
+    // Optimistically set document status to indexing
+    setDocuments(prev => 
+      prev.map(d => d.filename === filename ? { ...d, indexed: false, status: 'indexing' as const } : d)
+    );
+    showToast(`Re-indexing "${filename}"...`);
+
     try {
-      showToast(`Re-indexing "${filename}"...`);
       const res = await api.reindexDocument(filename);
       if (res.success) {
+        setDocuments(prev => 
+          prev.map(d => d.filename === filename ? { ...d, indexed: true, status: 'indexed' as const } : d)
+        );
         showToast(`✓ Re-indexed "${filename}" successfully`);
         await refreshVault();
       } else {
@@ -123,11 +250,24 @@ export const useDocuments = (showToast: (msg: string) => void) => {
       }
     } catch (e: any) {
       console.error("Reindex error:", e);
+      // Rollback
+      if (previousDoc) {
+        setDocuments(prev => 
+          prev.map(d => d.filename === filename ? previousDoc : d)
+        );
+      }
       showToast(`✗ Failed to re-index "${filename}": ${e?.message || "Unknown error"}`);
     }
   };
 
   const enhanceDocument = async (filename: string, options?: { extractGraph?: boolean; generateSummary?: boolean }) => {
+    const previousDoc = documents.find(d => d.filename === filename);
+
+    // Optimistically set document status to indexing/enhancing
+    setDocuments(prev => 
+      prev.map(d => d.filename === filename ? { ...d, status: 'indexing' as const } : d)
+    );
+
     try {
       const features = [];
       if (options?.extractGraph) features.push("knowledge graph");
@@ -140,6 +280,9 @@ export const useDocuments = (showToast: (msg: string) => void) => {
       });
       
       if (res.success) {
+        setDocuments(prev => 
+          prev.map(d => d.filename === filename ? { ...d, status: 'indexed' as const, indexed: true } : d)
+        );
         showToast(`✓ Enhanced "${filename}" successfully (${res.processing_time}s)`);
         await refreshVault();
       } else {
@@ -147,6 +290,11 @@ export const useDocuments = (showToast: (msg: string) => void) => {
       }
     } catch (e: any) {
       console.error("Enhancement error:", e);
+      if (previousDoc) {
+        setDocuments(prev => 
+          prev.map(d => d.filename === filename ? previousDoc : d)
+        );
+      }
       showToast(`✗ Failed to enhance "${filename}": ${e?.message || "Unknown error"}`);
     }
   };
@@ -187,31 +335,53 @@ export const useDocuments = (showToast: (msg: string) => void) => {
     if (filenames.length === 0) return;
     if (!window.confirm(`Delete ${filenames.length} selected document(s) and their vector embeddings from Qdrant?`)) return;
     
-    let successCount = 0;
-    let failedCount = 0;
-    
+    // Snapshot for rollback
+    const previousDocs = documents;
+    const previousStats = stats;
+    const targets = new Set(filenames);
+
+    // Optimistically remove all targeted documents from UI and cache immediately!
+    const nextDocs = documents.filter(d => !targets.has(d.filename));
+    const nextStats = {
+      ...stats,
+      files_count: Math.max(0, stats.files_count - filenames.length),
+      files: stats.files.filter(f => !targets.has(f)),
+    };
+    setDocuments(nextDocs);
+    setStats(nextStats);
     try {
-      showToast(`Deleting ${filenames.length} document(s)...`);
-      
-      for (const fn of filenames) {
-        try {
-          await api.deleteDocument(fn);
-          successCount++;
-        } catch (e) {
-          console.error(`Failed to delete ${fn}:`, e);
-          failedCount++;
-        }
+      localStorage.setItem('omni_documents_cache', JSON.stringify(nextDocs));
+      localStorage.setItem('omni_stats_cache', JSON.stringify(nextStats));
+    } catch {}
+    showToast(`Deleting ${filenames.length} document(s)...`);
+
+    try {
+      let res;
+      try {
+        res = await api.batchDeleteDocuments(filenames);
+      } catch (batchErr) {
+        console.warn("Batch delete endpoint fallback to individual calls:", batchErr);
+        const settled = await Promise.allSettled(filenames.map(fn => api.deleteDocument(fn)));
+        const anyFailed = settled.some(s => s.status === 'rejected');
+        if (anyFailed) throw new Error("Some documents failed to delete");
+        res = { success: true, deleted: filenames };
       }
-      
-      await refreshVault();
-      
-      if (failedCount === 0) {
-        showToast(`✓ Successfully deleted ${successCount} document(s)`);
+
+      if (res && res.success) {
+        showToast(`✓ Successfully deleted ${filenames.length} document(s)`);
+        await refreshVault();
       } else {
-        showToast(`⚠ Deleted ${successCount} document(s), ${failedCount} failed`);
+        throw new Error("Batch delete returned unsuccessful");
       }
     } catch (e: any) {
       console.error("Batch delete error:", e);
+      // Full rollback on failure
+      setDocuments(previousDocs);
+      setStats(previousStats);
+      try {
+        localStorage.setItem('omni_documents_cache', JSON.stringify(previousDocs));
+        localStorage.setItem('omni_stats_cache', JSON.stringify(previousStats));
+      } catch {}
       showToast(`✗ Batch delete failed: ${e?.message || "Unknown error"}`);
     }
   };

@@ -5,7 +5,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from contextvars import ContextVar
 from functools import lru_cache
-from fastapi import Header, HTTPException
+from fastapi import Header, Query, HTTPException
 try:
     import jwt
     from jwt import PyJWKClient
@@ -43,50 +43,72 @@ def jwks_client():
         raise HTTPException(status_code=503, detail="SUPABASE_URL is not configured")
     return PyJWKClient(f"{SUPABASE_URL.rstrip('/')}/auth/v1/.well-known/jwks.json")
 
+def _get_ssl_context():
+    import ssl
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        pass
+    try:
+        return ssl.create_default_context()
+    except Exception:
+        return ssl._create_unverified_context()
+
 DEFAULT_LOCAL_USER = "10d2f529-3fae-4a29-9a5e-312876700ff9"
 DEFAULT_GUEST_USER = DEFAULT_LOCAL_USER
 
 def require_user(
     authorization: str | None = Header(default=None),
-    x_guest_id: str | None = Header(default=None, alias="X-Guest-Id")
+    x_guest_id: str | None = Header(default=None, alias="X-Guest-Id"),
+    token_param: str | None = Query(default=None, alias="token"),
+    guest_id_param: str | None = Query(default=None, alias="guest_id"),
+    user_id_param: str | None = Query(default=None, alias="user_id"),
 ) -> str:
     """Validates Supabase JWT or defaults to session-isolated guest or local user."""
-    # 1. If explicit authorization Bearer token is passed and is valid
+    # 1. Check token from authorization header or query parameter (used by <img> tags and downloads)
+    raw_token = None
     if authorization and authorization.startswith("Bearer "):
-        token = authorization.removeprefix("Bearer ").strip()
-        if token and token not in ("null", "undefined", "", "guest", "local") and not token.startswith("guest_"):
-            if SUPABASE_URL and HAS_JWT:
-                try:
-                    key = jwks_client().get_signing_key_from_jwt(token).key
-                    claims = jwt.decode(
-                        token,
-                        key,
-                        algorithms=["RS256", "ES256"],
-                        options={"verify_aud": False},
-                    )
-                    user_id = claims.get("sub")
-                    if user_id:
-                        return user_id
-                except Exception:
-                    if SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY:
-                        try:
-                            request = Request(
-                                f"{SUPABASE_URL.rstrip('/')}/auth/v1/user",
-                                headers={"apikey": SUPABASE_PUBLISHABLE_KEY, "Authorization": f"Bearer {token}"},
-                            )
-                            with urlopen(request, timeout=5) as response:
-                                user_data = json.loads(response.read())
-                                user_id = user_data.get("id")
-                            if user_id:
-                                return user_id
-                        except Exception:
-                            pass
-                    raise HTTPException(status_code=401, detail="Invalid or expired access token")
-        elif token and token.startswith("guest_"):
-            return token
+        raw_token = authorization.removeprefix("Bearer ").strip()
+    elif token_param:
+        raw_token = token_param.strip()
 
-    # 2. If client supplied X-Guest-Id header
-    if x_guest_id and (x_guest_id.startswith("guest_") or len(x_guest_id) >= 8):
-        return x_guest_id.strip()
+    if raw_token and raw_token not in ("null", "undefined", "", "guest", "local") and not raw_token.startswith("guest_"):
+        if SUPABASE_URL and HAS_JWT:
+            try:
+                key = jwks_client().get_signing_key_from_jwt(raw_token).key
+                claims = jwt.decode(
+                    raw_token,
+                    key,
+                    algorithms=["RS256", "ES256"],
+                    options={"verify_aud": False},
+                )
+                user_id = claims.get("sub")
+                if user_id:
+                    return user_id
+            except Exception:
+                pass
+
+        if SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY:
+            try:
+                request = Request(
+                    f"{SUPABASE_URL.rstrip('/')}/auth/v1/user",
+                    headers={"apikey": SUPABASE_PUBLISHABLE_KEY, "Authorization": f"Bearer {raw_token}"},
+                )
+                with urlopen(request, context=_get_ssl_context(), timeout=5) as response:
+                    user_data = json.loads(response.read())
+                    user_id = user_data.get("id")
+                if user_id:
+                    return user_id
+            except Exception:
+                pass
+        raise HTTPException(status_code=401, detail="Invalid or expired access token")
+    elif raw_token and raw_token.startswith("guest_"):
+        return raw_token
+
+    # 2. Check guest ID from header or query parameter
+    guest = x_guest_id or guest_id_param or user_id_param
+    if guest and (guest.startswith("guest_") or len(guest) >= 8):
+        return guest.strip()
 
     return DEFAULT_LOCAL_USER

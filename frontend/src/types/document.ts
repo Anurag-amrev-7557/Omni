@@ -3,6 +3,8 @@ export interface DocumentItem {
   size_mb: number;
   pages: number;
   indexed?: boolean;
+  status?: 'indexing' | 'uploading' | 'failed' | 'indexed';
+  isOptimistic?: boolean;
 }
 
 export interface CollectionStats {

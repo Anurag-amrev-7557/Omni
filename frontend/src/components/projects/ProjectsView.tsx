@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
-  Folder, Plus, Database, MessageSquare, ArrowRight, 
-  Search, Check, Trash2, Edit3, X, FileText, Clock, Layers, Sparkles
+  Folder, Plus, Database, MessageSquare, 
+  Search, Trash2, X, FileText, Clock
 } from 'lucide-react';
 import { ProjectItem } from '../../types/project';
 import { DocumentItem } from '../../types/document';

@@ -55,6 +55,9 @@ export const setCachedToken = (token: string | null) => {
 export const getCachedToken = (): string | null => cachedToken;
 
 export const getAuthToken = async (): Promise<string | null> => {
+  if (cachedToken !== null && cachedToken !== undefined) {
+    return cachedToken;
+  }
   if (tokenProvider) {
     try {
       const t = await tokenProvider();
@@ -105,21 +108,17 @@ export const apiFetch = async (path: string, options: RequestInit = {}) => {
 export const api = {
   // Session APIs
   async getSessions(): Promise<ChatSession[]> {
-    try {
-      const res = await apiFetch('/api/sessions');
-      if (!res.ok) return [];
-      const data = await res.json();
-      return data.sessions || [];
-    } catch {
-      return [];
-    }
+    const res = await apiFetch('/api/sessions');
+    if (!res.ok) throw new Error(`Failed to load sessions (HTTP ${res.status})`);
+    const data = await res.json();
+    return data.sessions || [];
   },
 
-  async createSession(title: string = 'New chat'): Promise<{ session_id: string; title: string }> {
+  async createSession(title: string = 'New chat', sessionId?: string): Promise<{ session_id: string; title: string }> {
     const res = await apiFetch('/api/sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title })
+      body: JSON.stringify({ title, session_id: sessionId })
     });
     return res.json();
   },
@@ -130,26 +129,18 @@ export const api = {
 
   // Message APIs
   async getMessages(sessionId: string): Promise<ChatMessage[]> {
-    try {
-      const res = await apiFetch(`/api/sessions/${sessionId}/messages`);
-      if (!res.ok) return [];
-      const data = await res.json();
-      return data.messages || [];
-    } catch {
-      return [];
-    }
+    const res = await apiFetch(`/api/sessions/${sessionId}/messages`);
+    if (!res.ok) throw new Error(`Failed to load messages (HTTP ${res.status})`);
+    const data = await res.json();
+    return data.messages || [];
   },
 
   // Document APIs
   async getDocuments(): Promise<DocumentItem[]> {
-    try {
-      const res = await apiFetch('/api/documents');
-      if (!res.ok) return [];
-      const data = await res.json();
-      return data.documents || [];
-    } catch {
-      return [];
-    }
+    const res = await apiFetch('/api/documents');
+    if (!res.ok) throw new Error(`Failed to load documents (HTTP ${res.status})`);
+    const data = await res.json();
+    return data.documents || [];
   },
 
   async getStats(): Promise<CollectionStats> {
@@ -188,6 +179,15 @@ export const api = {
   async deleteDocument(filename: string): Promise<{ success: boolean }> {
     const res = await apiFetch(`/api/documents/${encodeURIComponent(filename)}`, {
       method: 'DELETE'
+    });
+    return res.json();
+  },
+
+  async batchDeleteDocuments(filenames: string[]): Promise<{ success: boolean; deleted: string[] }> {
+    const res = await apiFetch('/api/documents/batch-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filenames }),
     });
     return res.json();
   },
@@ -267,11 +267,25 @@ export const api = {
   },
 
   getDownloadUrl(filename: string): string {
-    return `${API_BASE}/api/download/${encodeURIComponent(filename)}`;
+    const guestId = getGuestSessionId();
+    const token = getCachedToken();
+    const params = new URLSearchParams();
+    if (token) params.set('token', token);
+    if (guestId) params.set('guest_id', guestId);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return `${API_BASE}/api/download/${encodeURIComponent(filename)}${qs}`;
   },
 
   getPdfPageImageUrl(filename: string, page: number): string {
-    return `${API_BASE}/api/pdf-page-image?filename=${encodeURIComponent(filename)}&page=${page}`;
+    const guestId = getGuestSessionId();
+    const token = getCachedToken();
+    const params = new URLSearchParams({
+      filename,
+      page: String(page),
+    });
+    if (token) params.set('token', token);
+    if (guestId) params.set('guest_id', guestId);
+    return `${API_BASE}/api/pdf-page-image?${params.toString()}`;
   },
 
   // Knowledge Graph APIs

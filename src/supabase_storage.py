@@ -21,11 +21,27 @@ def get_supabase_client() -> Client:
         return _supabase_client
     
     supabase_url = os.getenv("SUPABASE_URL", "").strip()
-    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    supabase_key = (
+        os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip() or 
+        os.getenv("SUPABASE_SERVICE_KEY", "").strip() or 
+        os.getenv("SUPABASE_KEY", "").strip()
+    )
+    if not supabase_url or not supabase_key:
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
+            supabase_url = os.getenv("SUPABASE_URL", "").strip()
+            supabase_key = (
+                os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip() or 
+                os.getenv("SUPABASE_SERVICE_KEY", "").strip() or 
+                os.getenv("SUPABASE_KEY", "").strip()
+            )
+        except Exception:
+            pass
     
     if not supabase_url or not supabase_key:
         raise ValueError(
-            "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables must be set"
+            "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_KEY) environment variables must be set"
         )
     
     _supabase_client = create_client(supabase_url, supabase_key)

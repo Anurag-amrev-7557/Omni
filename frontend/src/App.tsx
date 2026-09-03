@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Sidebar } from './components/layout/Sidebar';
 import { TopHeader } from './components/layout/TopHeader';
 import { SidecarReader } from './components/layout/SidecarReader';
@@ -22,7 +22,23 @@ import { ProjectItem, INITIAL_PROJECTS } from './types/project';
 export default function App() {
   // Navigation & Layout State
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'chats' | 'projects' | 'vault' | 'graph' | 'chats_list'>('chats');
+  const [activeTab, setActiveTab] = useState<'chats' | 'projects' | 'vault' | 'graph' | 'chats_list'>(() => {
+    try {
+      const saved = localStorage.getItem('omni_active_tab');
+      if (saved && ['chats', 'projects', 'vault', 'graph', 'chats_list'].includes(saved)) {
+        return saved as any;
+      }
+    } catch {}
+    return 'chats';
+  });
+
+  // Persist active tab across page refreshes
+  useEffect(() => {
+    try {
+      localStorage.setItem('omni_active_tab', activeTab);
+    } catch {}
+  }, [activeTab]);
+
   const [sidecarOpen, setSidecarOpen] = useState<boolean>(false);
   const [sidecarDoc, setSidecarDoc] = useState<{ filename: string; content?: string; page?: number } | null>(null);
 
@@ -42,13 +58,99 @@ export default function App() {
     return localStorage.getItem('omni_active_project') || 'default-vault';
   });
 
-  // Chat & Session State
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Chat & Session Helper: Get cached messages for instant display without waiting for network
+  const getCachedMessages = (sessionId: string | null): ChatMessage[] => {
+    if (!sessionId) return [];
+    try {
+      const cached = localStorage.getItem(`omni_msgs_${sessionId}`);
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  // Chat & Session State (Instant SWR hydration from cache)
+  const [sessions, setSessions] = useState<ChatSession[]>(() => {
+    try {
+      const saved = localStorage.getItem('omni_sessions_cache');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(() => {
+    try {
+      const active = localStorage.getItem('omni_active_session_id');
+      if (active) return active;
+      const saved = localStorage.getItem('omni_sessions_cache');
+      const parsed = saved ? JSON.parse(saved) : [];
+      return parsed.length > 0 ? parsed[0].session_id : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const active = localStorage.getItem('omni_active_session_id');
+      const saved = localStorage.getItem('omni_sessions_cache');
+      const parsed = saved ? JSON.parse(saved) : [];
+      const initialId = active || (parsed.length > 0 ? parsed[0].session_id : null);
+      return getCachedMessages(initialId);
+    } catch {
+      return [];
+    }
+  });
+
   const [inputPrompt, setInputPrompt] = useState<string>('');
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [isStreaming, setIsStreaming] = useState<boolean>(false);
+  const [isLoadingSessions, setIsLoadingSessions] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('omni_sessions_cache');
+      const parsed = saved ? JSON.parse(saved) : [];
+      return parsed.length === 0;
+    } catch {
+      return true;
+    }
+  });
+
+  const [isLoadingMessages, setIsLoadingMessages] = useState<boolean>(() => {
+    try {
+      const active = localStorage.getItem('omni_active_session_id');
+      const saved = localStorage.getItem('omni_sessions_cache');
+      const parsed = saved ? JSON.parse(saved) : [];
+      const initialId = active || (parsed.length > 0 ? parsed[0].session_id : null);
+      if (!initialId) return false;
+      const cached = localStorage.getItem(`omni_msgs_${initialId}`);
+      const msgs = cached ? JSON.parse(cached) : [];
+      return msgs.length === 0;
+    } catch {
+      return false;
+    }
+  });
+
+  const skipNextMessageLoadRef = useRef<string | null>(null);
+  const previousUserIdRef = useRef<string | null>(null);
+
+  // Sync sessions cache with localStorage on every update (including immediate deletions)
+  useEffect(() => {
+    try {
+      localStorage.setItem('omni_sessions_cache', JSON.stringify(sessions));
+    } catch {}
+  }, [sessions]);
+
+  // Persist active session ID across page refreshes
+  useEffect(() => {
+    try {
+      if (currentSessionId) {
+        localStorage.setItem('omni_active_session_id', currentSessionId);
+      } else {
+        localStorage.removeItem('omni_active_session_id');
+      }
+    } catch {}
+  }, [currentSessionId]);
 
   // Model & Inference Settings
   const [selectedModel, setSelectedModel] = useState<string>('GPT-OSS 120B');
@@ -85,6 +187,7 @@ export default function App() {
   const {
     documents,
     stats,
+    isLoading: isDocsLoading,
     isUploading,
     refreshVault,
     uploadFiles,
@@ -106,21 +209,58 @@ export default function App() {
     try {
       const sess = await api.getSessions();
       setSessions(sess);
-      setCurrentSessionId(prev => (sess.length > 0 && !prev ? sess[0].session_id : prev));
+      try {
+        localStorage.setItem('omni_sessions_cache', JSON.stringify(sess));
+      } catch {}
+      setCurrentSessionId(prev => {
+        if (prev && sess.some(s => s.session_id === prev)) {
+          return prev;
+        }
+        return prev || (sess.length > 0 ? sess[0].session_id : null);
+      });
     } catch (e) {
       console.error("Error loading sessions:", e);
+    } finally {
+      setIsLoadingSessions(false);
     }
   }, []);
 
-  // Fetch Messages for active session
+  // Fetch Messages for active session (with instant cache hydration)
   const loadMessages = useCallback(async (sessionId: string) => {
+    if (isStreaming) return;
+    const cached = getCachedMessages(sessionId);
+    if (cached.length > 0) {
+      setMessages(cached);
+      setIsLoadingMessages(false);
+    } else {
+      setIsLoadingMessages(true);
+    }
     try {
       const msgs = await api.getMessages(sessionId);
       setMessages(msgs);
+      try {
+        localStorage.setItem(`omni_msgs_${sessionId}`, JSON.stringify(msgs));
+      } catch {}
     } catch (e) {
       console.error("Error loading messages:", e);
+    } finally {
+      setIsLoadingMessages(false);
     }
-  }, []);
+  }, [isStreaming]);
+
+  // Instant switch between sessions
+  const handleSelectSession = useCallback((sessionId: string) => {
+    if (sessionId === currentSessionId) return;
+    setCurrentSessionId(sessionId);
+    const cached = getCachedMessages(sessionId);
+    if (cached.length > 0) {
+      setMessages(cached);
+      setIsLoadingMessages(false);
+    } else {
+      setMessages([]);
+      setIsLoadingMessages(true);
+    }
+  }, [currentSessionId]);
 
   // Supabase Auth Integration (registered once on mount)
   useEffect(() => {
@@ -133,42 +273,40 @@ export default function App() {
           return null;
         }
       });
-      const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Proactive initial session sync
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user?.id) {
+          previousUserIdRef.current = session.user.id;
+        }
+        if (session?.access_token) {
+          setCachedToken(session.access_token);
+          refreshVault();
+          loadSessions();
+        }
+      });
+      const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'INITIAL_SESSION') return; // Handled by proactive initial sync
+        const currentUserId = session?.user?.id ?? null;
         const token = session?.access_token ?? null;
         setCachedToken(token);
         if (session) {
           setAuthModalOpen(false);
         }
-        setCurrentSessionId(null);
-        setMessages([]);
-        refreshVault();
-        loadSessions();
+        // Only wipe state if authenticated user ID actually changed (e.g. login or logout)
+        if (currentUserId !== previousUserIdRef.current) {
+          previousUserIdRef.current = currentUserId;
+          setCurrentSessionId(null);
+          setMessages([]);
+          try {
+            localStorage.removeItem('omni_active_session_id');
+          } catch {}
+          refreshVault();
+          loadSessions();
+        }
       });
       return () => listener.subscription.unsubscribe();
     }
   }, []); // Run once on mount
-
-  // Ephemeral Guest Lifecycle: cleanup guest docs, vectors, chats and graph on exit
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      // If user is not logged in with Supabase token, trigger guest cleanup
-      const guestId = sessionStorage.getItem('omni_guest_session_id');
-      const hasAuth = !!supabase && !!localStorage.getItem('sb-' + (supabase as any)?.supabaseUrl?.split('//')[1]?.split('.')[0] + '-auth-token');
-      if (guestId && guestId.startsWith('guest_') && !hasAuth) {
-        const cleanupUrl = `${API_BASE}/api/guest/cleanup?guest_id=${encodeURIComponent(guestId)}`;
-        if (navigator.sendBeacon) {
-          navigator.sendBeacon(cleanupUrl);
-        } else {
-          fetch(cleanupUrl, { method: 'POST', keepalive: true }).catch(() => {});
-        }
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, []);
 
   useEffect(() => {
     loadSessions();
@@ -176,38 +314,63 @@ export default function App() {
 
   useEffect(() => {
     if (currentSessionId) {
+      if (skipNextMessageLoadRef.current === currentSessionId) {
+        skipNextMessageLoadRef.current = null;
+        return;
+      }
       loadMessages(currentSessionId);
     }
-  }, [currentSessionId, loadMessages]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSessionId]);
 
-  // Create New Thread
-  const handleNewChat = async () => {
+  // Create New Thread (Instant local reset - creates remote thread on first prompt)
+  const handleNewChat = () => {
+    setCurrentSessionId(null);
+    setMessages([]);
     try {
-      const newSess = await api.createSession('New chat');
-      await loadSessions();
-      setCurrentSessionId(newSess.session_id);
-      setMessages([]);
-      setActiveTab('chats');
-      showToast("Started new chat");
-    } catch (e) {
-      console.error("Error creating session:", e);
-    }
+      localStorage.removeItem('omni_active_session_id');
+    } catch {}
+    setActiveTab('chats');
+    showToast("Started new chat");
   };
 
-  // Delete Thread
+  // Delete Thread (Optimistic UI with Rollback)
   const handleDeleteSession = async (sessionId: string) => {
+    // Snapshot state for rollback
+    const previousSessions = sessions;
+    const previousSessionId = currentSessionId;
+
     try {
-      await api.deleteSession(sessionId);
-      const remaining = sessions.filter(s => s.session_id !== sessionId);
-      setSessions(remaining);
-      showToast("Thread deleted");
+      localStorage.removeItem(`omni_msgs_${sessionId}`);
+    } catch {}
+
+    // Optimistically remove session immediately and persist to cache
+    const remaining = sessions.filter(s => s.session_id !== sessionId);
+    setSessions(remaining);
+    try {
+      localStorage.setItem('omni_sessions_cache', JSON.stringify(remaining));
+    } catch {}
+    showToast("Thread deleted");
+
+    if (currentSessionId === sessionId) {
       if (remaining.length > 0) {
-        setCurrentSessionId(remaining[0].session_id);
+        handleSelectSession(remaining[0].session_id);
       } else {
         handleNewChat();
       }
+    }
+
+    try {
+      await api.deleteSession(sessionId);
     } catch (e) {
       console.error("Error deleting session:", e);
+      // Rollback on failure
+      setSessions(previousSessions);
+      setCurrentSessionId(previousSessionId);
+      try {
+        localStorage.setItem('omni_sessions_cache', JSON.stringify(previousSessions));
+      } catch {}
+      showToast("✗ Failed to delete thread");
     }
   };
 
@@ -245,21 +408,11 @@ export default function App() {
     }
   };
 
-  // Handle Send Prompt with SSE Streaming
+  // Handle Send Prompt with SSE Streaming (Optimistic UI)
   const handleSendPrompt = async (text: string = inputPrompt) => {
     if (!text.trim() && attachedFiles.length === 0) return;
 
-    if (!currentSessionId) {
-      try {
-        const newSess = await api.createSession('New chat');
-        await loadSessions();
-        setCurrentSessionId(newSess.session_id);
-      } catch (e) {
-        showToast("Error creating chat session");
-        return;
-      }
-    }
-
+    // 1. Prepare actual prompt content
     let actualPrompt = text.trim();
     if (referencedVaultDocs.length > 0) {
       const refHeader = `[Focus explicitly on referenced Knowledge Vault documents: ${referencedVaultDocs.join(', ')}]\n\n`;
@@ -269,23 +422,68 @@ export default function App() {
       actualPrompt = "Summarize the attached files.";
     }
 
-    if (attachedFiles.length > 0) {
-      await uploadFiles(attachedFiles);
-      setAttachedFiles([]);
+    // 2. Instantly clear input prompt & attached files (Zero delay)
+    const filesToUpload = [...attachedFiles];
+    setInputPrompt('');
+    setAttachedFiles([]);
+
+    // 3. Ensure an active session exists or create optimistic session immediately
+    let activeSessId = currentSessionId;
+    if (!activeSessId) {
+      // Generate standard RFC4122 UUID so Postgres and client always agree
+      activeSessId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+      });
+      skipNextMessageLoadRef.current = activeSessId;
+      const sessionTitle = actualPrompt.slice(0, 32).trim() || 'New chat';
+      const optimisticSession: ChatSession = {
+        session_id: activeSessId,
+        title: sessionTitle,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        message_count: 1
+      };
+      setSessions(prev => [optimisticSession, ...prev]);
+      setCurrentSessionId(activeSessId);
+
+      // Create remote session with this exact ID (no swapping!)
+      api.createSession(sessionTitle, activeSessId).catch(err => {
+        console.warn("Could not proactively create remote session:", err);
+      });
+    } else {
+      // Optimistically update session title in sidebar if it was generic
+      const truncatedTitle = actualPrompt.slice(0, 32).trim();
+      if (truncatedTitle) {
+        setSessions(prev => 
+          prev.map(s => {
+            if (s.session_id === activeSessId && (s.title === 'New chat' || s.title === 'Untitled chat' || !s.title)) {
+              return { ...s, title: truncatedTitle };
+            }
+            return s;
+          })
+        );
+      }
     }
 
-    setInputPrompt('');
-    setIsStreaming(true);
-
+    // 4. Instantly append user message and streaming assistant placeholder
     const userMsg: ChatMessage = { role: 'user', content: actualPrompt };
     const tempAssistantMsg: ChatMessage = { role: 'assistant', content: '', contexts: null };
     setMessages(prev => [...prev, userMsg, tempAssistantMsg]);
+    setIsStreaming(true);
+
+    // 5. If files were attached, initiate ingestion concurrently
+    if (filesToUpload.length > 0) {
+      uploadFiles(filesToUpload);
+    }
 
     try {
       const token = await getAuthToken();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token && token !== 'null' && token !== 'undefined') {
         headers['Authorization'] = `Bearer ${token}`;
+      } else {
+        headers['X-Guest-Id'] = getGuestSessionId();
       }
 
       const customInstructions = localStorage.getItem('omni_custom_instructions') || '';
@@ -294,7 +492,7 @@ export default function App() {
         method: 'POST',
         headers,
         body: JSON.stringify({ 
-          session_id: currentSessionId, 
+          session_id: activeSessId, 
           prompt: actualPrompt, 
           model: selectedModel,
           custom_instructions: customInstructions,
@@ -367,6 +565,14 @@ export default function App() {
         });
       }
 
+      // Persist completed conversation into local cache for instant retrieval
+      setMessages(prev => {
+        try {
+          localStorage.setItem(`omni_msgs_${activeSessId}`, JSON.stringify(prev));
+        } catch {}
+        return prev;
+      });
+
       loadSessions();
     } catch (e: any) {
       console.error("Stream error:", e);
@@ -401,7 +607,7 @@ export default function App() {
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         sessions={sessions}
         currentSessionId={currentSessionId}
-        onSelectSession={(id) => setCurrentSessionId(id)}
+        onSelectSession={handleSelectSession}
         onNewChat={handleNewChat}
         onDeleteSession={handleDeleteSession}
         activeTab={activeTab}
@@ -412,6 +618,8 @@ export default function App() {
         onOpenAuth={() => setAuthModalOpen(true)}
         documentsCount={documents.length || stats.files_count}
         totalChunksCount={stats.total_chunks}
+        isLoadingSessions={isLoadingSessions}
+        isLoadingDocuments={isDocsLoading && documents.length === 0}
         showToast={showToast}
       />
 
@@ -434,8 +642,10 @@ export default function App() {
             {/* CHATS TAB */}
             {(activeTab === 'chats' || activeTab === 'chats_list') && (
               <ChatCanvas
+                currentSessionId={currentSessionId}
                 messages={messages}
                 isStreaming={isStreaming}
+                isLoadingMessages={isLoadingMessages}
                 inputPrompt={inputPrompt}
                 setInputPrompt={setInputPrompt}
                 attachedFiles={attachedFiles}

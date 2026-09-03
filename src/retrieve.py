@@ -85,8 +85,11 @@ def compute_reciprocal_rank_fusion(
     return fused_candidates
 
 
-def hybrid_search(query: str, k: int = 5, user_id: str | None = None, limit: int | None = None, **kwargs) -> list[dict]:
+def hybrid_search(query: str, k: int = 5, user_id: str | None = None, limit: int | None = None, active_filenames: list[str] | None = None, **kwargs) -> list[dict]:
     """Executes dense vector search and BM25 hybrid reciprocal rank fusion with Cross-Encoder reranking."""
+    if active_filenames is not None and len(active_filenames) == 0:
+        return []
+
     if limit is not None:
         k = limit
     candidate_k = max(k * 2, 8)
@@ -167,11 +170,15 @@ def hybrid_search(query: str, k: int = 5, user_id: str | None = None, limit: int
     # Stage 3: Multi-Hop Knowledge Graph Traversal & Provenance Fusion
     try:
         from src.graph_retrieve import traverse_subgraph
-        from src.db import get_collection_stats
-        active_files = get_collection_stats().get("files", [])
-        graph_res = traverse_subgraph(query, user_id=user_id, active_filenames=active_files)
-        if graph_res.get("contexts"):
-            fused_candidates = graph_res["contexts"][:2] + fused_candidates
+        active_files = active_filenames
+        if active_files is None:
+            from src.db import get_collection_stats
+            active_files = get_collection_stats(user_id=user_id).get("files", [])
+            
+        if active_files:
+            graph_res = traverse_subgraph(query, user_id=user_id, active_filenames=active_files)
+            if graph_res.get("contexts"):
+                fused_candidates = graph_res["contexts"][:2] + fused_candidates
     except Exception as g_exc:
         pass
 

@@ -46,44 +46,37 @@ export const ENTITY_PALETTES: Record<string, { bg: string; border: string; label
   Component: { bg: '#6366F1', border: '#4F46E5', label: 'Component' },
 };
 
-const COMMUNITY_FALLBACK_COLORS = [
-  '#FB923C', '#0284C7', '#8B5CF6', '#10B981', '#06B6D4', 
-  '#F43F5E', '#F59E0B', '#6366F1', '#EC4899', '#14B8A6'
-];
-
-export const getNodeStyle = (type?: string, communityId: number = 0) => {
+export const getNodeStyle = (type?: string, _communityId: number = 0) => {
   const norm = (type || 'Concept').trim();
   for (const [key, val] of Object.entries(ENTITY_PALETTES)) {
     if (key.toLowerCase() === norm.toLowerCase()) {
       return val;
     }
   }
-  // Deterministic open-domain HSL pastel generator for arbitrary domain concepts
   let hash = 0;
   for (let i = 0; i < norm.length; i++) {
     hash = (hash << 5) - hash + norm.charCodeAt(i);
     hash |= 0;
   }
   const hue = Math.abs(hash) % 360;
-  const bg = `hsl(${hue}, 75%, 48%)`;
-  const border = `hsl(${hue}, 85%, 38%)`;
-  return { bg, border, label: norm };
+  return { 
+    bg: `hsl(${hue}, 70%, 48%)`, 
+    border: `hsl(${hue}, 80%, 38%)`, 
+    label: norm 
+  };
 };
 
 interface KnowledgeGraphViewProps {
   onInspectDoc?: (doc: { filename: string; page?: number; content?: string }) => void;
-  className?: string;
   vaultVersion?: number;
 }
 
-export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
-  onInspectDoc,
-  className = '',
-  vaultVersion,
-}) => {
+export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ onInspectDoc, vaultVersion = 0 }) => {
   const { theme, currentConfig } = useTheme();
-  const isDark = currentConfig?.category === 'Dark' || theme.includes('dark');
+  const isDark = theme === 'dark';
+  const themeAccent = currentConfig?.previewColors?.accent || '#0284C7';
 
+  // Data State
   const [graphData, setGraphData] = useState<KnowledgeGraphData>({
     nodes: [],
     links: [],
@@ -92,60 +85,75 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
   });
   const [loading, setLoading] = useState<boolean>(true);
   const [building, setBuilding] = useState<boolean>(false);
+
+  // Filter & Search State
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedType, setSelectedType] = useState<string>('All');
   const [selectedDoc, setSelectedDoc] = useState<string>('All');
+  const [selectedType, setSelectedType] = useState<string>('All');
+  const [filterCommunity, setFilterCommunity] = useState<number | null>(null);
+
+  // Inspection Drawers & Modals
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [selectedLink, setSelectedLink] = useState<GraphLink | null>(null);
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [insightsOpen, setInsightsOpen] = useState<boolean>(false);
-  const [filterCommunity, setFilterCommunity] = useState<number | null>(null);
 
-  // Customization Settings
+  // View Settings
   const [showEdgeLabels, setShowEdgeLabels] = useState<boolean>(true);
   const [showLabels, setShowLabels] = useState<boolean>(true);
   const [physicsEnabled, setPhysicsEnabled] = useState<boolean>(true);
+  const [docDropdownOpen, setDocDropdownOpen] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
 
+  // Canvas References
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const nodesRef = useRef<GraphNode[]>([]);
   const linksRef = useRef<GraphLink[]>([]);
   const animFrameRef = useRef<number>(0);
+  const alphaRef = useRef<number>(1.0); // Simulation temperature / cooling
 
+  // Camera & Interaction
   const transformRef = useRef<{ x: number; y: number; k: number }>({ x: 0, y: 0, k: 1 });
   const isDraggingCanvasRef = useRef<boolean>(false);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const draggedNodeRef = useRef<GraphNode | null>(null);
 
-  // Fetch Knowledge Graph with Strict Link Deduplication
+  // Load Graph Data
   const loadGraph = useCallback(async () => {
     try {
       setLoading(true);
       const data = await api.getGraph();
       
-      const width = 800;
-      const height = 600;
+      const width = canvasRef.current?.clientWidth || 800;
+      const height = canvasRef.current?.clientHeight || 600;
+      
+      // Retain previous coordinates if nodes existed, otherwise distribute evenly
+      const existingPos = new Map(nodesRef.current.map(n => [n.id, { x: n.x, y: n.y }]));
+      
       const initializedNodes = (data.nodes || []).map((n: GraphNode, i: number) => {
+        const prev = existingPos.get(n.id);
+        if (prev && prev.x !== undefined && prev.y !== undefined) {
+          return { ...n, x: prev.x, y: prev.y, vx: 0, vy: 0 };
+        }
         const angle = (i / Math.max(1, data.nodes.length)) * Math.PI * 2;
-        const radius = 130 + (n.community_id * 30) + Math.random() * 70;
+        const radius = 100 + (n.community_id * 25) + ((i % 5) * 20);
         return {
           ...n,
           x: width / 2 + Math.cos(angle) * radius,
           y: height / 2 + Math.sin(angle) * radius,
-          vx: (Math.random() - 0.5) * 1.5,
-          vy: (Math.random() - 0.5) * 1.5,
+          vx: 0,
+          vy: 0,
         };
       });
 
-      // Strict Frontend Link Deduplication
+      // Deduplicate Links
       const seenPair = new Set<string>();
       const dedupedLinks: GraphLink[] = [];
-
       for (const l of (data.links || [])) {
         const s = typeof l.source === 'object' ? (l.source as any).id : String(l.source);
         const t = typeof l.target === 'object' ? (l.target as any).id : String(l.target);
         const relType = (l.type || '').toUpperCase().trim();
         const pairKey = `${s < t ? s : t}--${s < t ? t : s}--${relType}`;
-
         if (!seenPair.has(pairKey)) {
           seenPair.add(pairKey);
           dedupedLinks.push(l);
@@ -154,6 +162,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
 
       nodesRef.current = initializedNodes;
       linksRef.current = dedupedLinks;
+      alphaRef.current = 1.0; // Heat simulation for new layout
 
       setGraphData({
         nodes: initializedNodes,
@@ -176,17 +185,17 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
     loadGraph();
   }, [loadGraph, vaultVersion]);
 
+  // Trigger Rebuild
   const handleRebuild = async () => {
     try {
       setBuilding(true);
       await api.buildGraph(true);
-      
-      let attempts = 0;
-      const interval = setInterval(async () => {
-        attempts++;
+      let checks = 0;
+      const poll = setInterval(async () => {
+        checks++;
         await loadGraph();
-        if (attempts >= 6) {
-          clearInterval(interval);
+        if (checks >= 4) {
+          clearInterval(poll);
           setBuilding(false);
         }
       }, 2500);
@@ -196,6 +205,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
     }
   };
 
+  // Filter calculations
   const sourceDocs = useMemo(() => {
     const docs = new Set<string>(['All']);
     graphData.nodes.forEach(n => {
@@ -217,7 +227,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
     const set = new Set<string>();
     
     nodesRef.current.forEach((n) => {
-      const matchType = selectedType === 'All' || n.type?.toLowerCase() === selectedType.toLowerCase() || (selectedType === 'Entity' && (!n.type || n.type === 'Concept' || n.type === 'Entity'));
+      const matchType = selectedType === 'All' || n.type?.toLowerCase() === selectedType.toLowerCase();
       const matchQuery = !q || n.name.toLowerCase().includes(q) || (n.description || '').toLowerCase().includes(q);
       const matchCommunity = filterCommunity === null || n.community_id === filterCommunity;
       const matchDoc = selectedDoc === 'All' || (n.source_docs || []).some(d => {
@@ -230,7 +240,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
       }
     });
 
-    // Also include connected nodes for links belonging to selected doc
     if (selectedDoc !== 'All') {
       linksRef.current.forEach(l => {
         const linkDoc = (l.source_doc || '').trim().toLowerCase();
@@ -246,10 +255,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
     return set;
   }, [graphData.nodes, graphData.links, searchQuery, selectedType, selectedDoc, filterCommunity]);
 
-  const themeAccent = currentConfig?.previewColors?.accent || '#0284C7';
-  const [docDropdownOpen, setDocDropdownOpen] = useState(false);
-  const [searchFocused, setSearchFocused] = useState(false);
-
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const q = searchQuery.toLowerCase().trim();
@@ -257,22 +262,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
       .filter(n => n.name.toLowerCase().includes(q) || (n.type && n.type.toLowerCase().includes(q)))
       .slice(0, 6);
   }, [graphData.nodes, searchQuery]);
-
-  const centerOnNode = useCallback((node: GraphNode) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const centerX = canvas.clientWidth / 2;
-    const centerY = canvas.clientHeight / 2;
-    const k = 1.4;
-    transformRef.current = {
-      x: centerX - (node.x || 0) * k,
-      y: centerY - (node.y || 0) * k,
-      k: k
-    };
-    setSelectedNode(node);
-    setSelectedLink(null);
-    setSearchFocused(false);
-  }, []);
 
   const presentEntityTypes = useMemo(() => {
     const types = new Map<string, { bg: string; label: string }>();
@@ -289,7 +278,78 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
     }));
   }, [graphData.nodes]);
 
-  // Main Canvas Rendering Engine
+  const centerOnNode = useCallback((node: GraphNode) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const centerX = canvas.clientWidth / 2;
+    const centerY = canvas.clientHeight / 2;
+    const k = 1.35;
+    transformRef.current = {
+      x: centerX - (node.x || 0) * k,
+      y: centerY - (node.y || 0) * k,
+      k: k
+    };
+    setSelectedNode(node);
+    setSelectedLink(null);
+    setSearchFocused(false);
+  }, []);
+
+  // Screen to World coordinates
+  const screenToWorld = useCallback((screenX: number, screenY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const transform = transformRef.current;
+    return {
+      x: (screenX - rect.left - transform.x) / transform.k,
+      y: (screenY - rect.top - transform.y) / transform.k,
+    };
+  }, []);
+
+  // Camera Controls
+  const handleZoom = (factor: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const centerX = canvas.clientWidth / 2;
+    const centerY = canvas.clientHeight / 2;
+    const t = transformRef.current;
+    const newK = Math.max(0.2, Math.min(4.0, t.k * factor));
+    t.x = centerX - (centerX - t.x) * (newK / t.k);
+    t.y = centerY - (centerY - t.y) * (newK / t.k);
+    t.k = newK;
+  };
+
+  const handleResetCamera = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const nodes = nodesRef.current;
+    if (nodes.length === 0) {
+      transformRef.current = { x: 0, y: 0, k: 1 };
+      return;
+    }
+    const xs = nodes.map(n => n.x || 0);
+    const ys = nodes.map(n => n.y || 0);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const spanX = Math.max(100, maxX - minX);
+    const spanY = Math.max(100, maxY - minY);
+    const pad = 120;
+    const scaleX = (canvas.clientWidth - pad * 2) / spanX;
+    const scaleY = (canvas.clientHeight - pad * 2) / spanY;
+    const k = Math.max(0.4, Math.min(1.4, Math.min(scaleX, scaleY)));
+    const midX = (minX + maxX) / 2;
+    const midY = (minY + maxY) / 2;
+    transformRef.current = {
+      x: canvas.clientWidth / 2 - midX * k,
+      y: canvas.clientHeight / 2 - midY * k,
+      k,
+    };
+    alphaRef.current = 0.4;
+  };
+
+  // Convergent Kinetic Simulation & High-DPI Rendering
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -304,42 +364,42 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
       const dpr = window.devicePixelRatio || 1;
       canvas.width = rect.width * dpr;
       canvas.height = rect.height * dpr;
-      ctx.scale(dpr, dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     handleResize();
     window.addEventListener('resize', handleResize);
 
-    // Physics Simulation Step (Spacious MiroFish Layout)
+    // Convergent Force Simulation Step (Stable, bounded, decaying)
     const runSimulationStep = () => {
-      if (!physicsEnabled) return;
+      if (!physicsEnabled || alphaRef.current < 0.005) return;
       
       const nodes = nodesRef.current;
       const links = linksRef.current;
       const width = canvas.clientWidth || 800;
       const height = canvas.clientHeight || 600;
       const center = { x: width / 2, y: height / 2 };
-
+      const alpha = alphaRef.current;
       const nodeMap = new Map(nodes.map(n => [n.id, n]));
 
-      // 1. Gentle Centering Gravity
+      // 1. Soft Centering Gravity
       for (const n of nodes) {
         if (n === draggedNodeRef.current) continue;
         const dx = center.x - (n.x || 0);
         const dy = center.y - (n.y || 0);
-        n.vx = (n.vx || 0) + dx * 0.00025;
-        n.vy = (n.vy || 0) + dy * 0.00025;
+        n.vx = (n.vx || 0) + dx * 0.0004 * alpha;
+        n.vy = (n.vy || 0) + dy * 0.0004 * alpha;
       }
 
-      // 2. Coulomb Node Repulsion (Spacious to prevent overlaps)
+      // 2. Coulomb Node Repulsion (Clamped distance to prevent explosive forces)
       for (let i = 0; i < nodes.length; i++) {
         const a = nodes[i];
         for (let j = i + 1; j < nodes.length; j++) {
           const b = nodes[j];
           const dx = (b.x || 0) - (a.x || 0);
           const dy = (b.y || 0) - (a.y || 0);
-          const distSq = dx * dx + dy * dy + 120;
-          const dist = Math.sqrt(distSq);
-          const force = 540 / distSq;
+          const distSq = dx * dx + dy * dy;
+          const dist = Math.max(18, Math.sqrt(distSq));
+          const force = (alpha * 420) / (dist * dist);
 
           const fx = (dx / dist) * force;
           const fy = (dy / dist) * force;
@@ -355,7 +415,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
         }
       }
 
-      // 3. Link Spring Attraction (targetDist 120px for spacious legibility)
+      // 3. Link Spring Attraction
       for (const link of links) {
         const srcId = typeof link.source === 'object' ? (link.source as any).id : link.source;
         const tgtId = typeof link.target === 'object' ? (link.target as any).id : link.target;
@@ -365,9 +425,9 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
         if (src && tgt) {
           const dx = (tgt.x || 0) - (src.x || 0);
           const dy = (tgt.y || 0) - (src.y || 0);
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const targetDist = 120;
-          const force = (dist - targetDist) * 0.012;
+          const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+          const targetDist = 110;
+          const force = (dist - targetDist) * 0.015 * alpha;
 
           const fx = (dx / dist) * force;
           const fy = (dy / dist) * force;
@@ -384,7 +444,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
       }
 
       // 4. Velocity Damping & Integration
-      const damping = 0.86;
+      const damping = 0.84;
       for (const n of nodes) {
         if (n === draggedNodeRef.current) continue;
         n.vx = (n.vx || 0) * damping;
@@ -392,9 +452,12 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
         n.x = (n.x || 0) + (n.vx || 0);
         n.y = (n.y || 0) + (n.vy || 0);
       }
+
+      // Thermal Decay (gradually cool down and settle completely)
+      alphaRef.current *= 0.985;
     };
 
-    // Canvas Render Function: Pixel-Perfect MiroFish Style with Sufficient Curves & Theme Colors
+    // Render Canvas Frame
     const render = () => {
       if (!isRunning) return;
       runSimulationStep();
@@ -408,18 +471,18 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
       ctx.translate(transform.x, transform.y);
       ctx.scale(transform.k, transform.k);
 
-      // MiroFish Subtle Dot Grid
-      const gridSize = 42;
+      // Subtle Dot Grid
+      const gridSize = 40;
       const startX = Math.floor((-transform.x / transform.k) / gridSize) * gridSize - gridSize;
       const endX = startX + (width / transform.k) + gridSize * 2;
       const startY = Math.floor((-transform.y / transform.k) / gridSize) * gridSize - gridSize;
       const endY = startY + (height / transform.k) + gridSize * 2;
       
-      ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.06)';
+      ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)';
       for (let gx = startX; gx < endX; gx += gridSize) {
         for (let gy = startY; gy < endY; gy += gridSize) {
           ctx.beginPath();
-          ctx.arc(gx, gy, 0.9, 0, Math.PI * 2);
+          ctx.arc(gx, gy, 0.85, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -429,11 +492,9 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
       const nodeMap = new Map(nodes.map(n => [n.id, n]));
       const isFilteringActive = selectedDoc !== 'All' || selectedType !== 'All' || filterCommunity !== null;
 
-      // 1. Draw Links with Sufficient Elegant Curves
-      const highlightedLinks: Array<{ link: GraphLink; src: GraphNode; tgt: GraphNode; ctrlX: number; ctrlY: number; labelX: number; labelY: number; dist: number }> = [];
-
-      for (let idx = 0; idx < links.length; idx++) {
-        const link = links[idx];
+      // 1. Draw Links
+      for (let i = 0; i < links.length; i++) {
+        const link = links[i];
         const srcId = typeof link.source === 'object' ? (link.source as any).id : link.source;
         const tgtId = typeof link.target === 'object' ? (link.target as any).id : link.target;
         const src = nodeMap.get(srcId);
@@ -442,201 +503,121 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
         if (!src || !tgt) continue;
         if (isFilteringActive && (!activeNodeIds.has(src.id) || !activeNodeIds.has(tgt.id))) continue;
 
-        const isDirectlySelectedLink = selectedLink && (
+        const isDirectlySelected = selectedLink && (
           (selectedLink.id && link.id && selectedLink.id === link.id) ||
           ((typeof selectedLink.source === 'object' ? (selectedLink.source as any).id : selectedLink.source) === srcId &&
            (typeof selectedLink.target === 'object' ? (selectedLink.target as any).id : selectedLink.target) === tgtId)
         );
-
         const isConnectedToSelectedNode = selectedNode && (src.id === selectedNode.id || tgt.id === selectedNode.id);
-        const isHighlighted = isDirectlySelectedLink || isConnectedToSelectedNode;
+        const isHighlighted = isDirectlySelected || isConnectedToSelectedNode;
 
-        const midX = ((src.x || 0) + (tgt.x || 0)) / 2;
-        const midY = ((src.y || 0) + (tgt.y || 0)) / 2;
-        const dx = (tgt.x || 0) - (src.x || 0);
-        const dy = (tgt.y || 0) - (src.y || 0);
-        const dist = Math.hypot(dx, dy) || 1;
-        const normalX = -dy / dist;
-        const normalY = dx / dist;
+        const x1 = src.x || 0;
+        const y1 = src.y || 0;
+        const x2 = tgt.x || 0;
+        const y2 = tgt.y || 0;
+        const midX = (x1 + x2) / 2;
+        const midY = (y1 + y2) / 2;
+        const dist = Math.hypot(x2 - x1, y2 - y1) || 1;
 
-        // Sufficient smooth curvature
-        const curveFactor = Math.min(30, Math.max(16, dist * 0.14));
-        const curveSign = idx % 2 === 0 ? 1 : -1;
-        const ctrlX = midX + normalX * curveFactor * curveSign;
-        const ctrlY = midY + normalY * curveFactor * curveSign;
-
-        // Exact midpoint on quadratic bezier curve
-        const labelX = 0.25 * (src.x || 0) + 0.5 * ctrlX + 0.25 * (tgt.x || 0);
-        const labelY = 0.25 * (src.y || 0) + 0.5 * ctrlY + 0.25 * (tgt.y || 0);
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
 
         if (isHighlighted) {
-          highlightedLinks.push({ link, src, tgt, ctrlX, ctrlY, labelX, labelY, dist });
-          continue;
+          ctx.strokeStyle = themeAccent;
+          ctx.lineWidth = 1.6;
+          ctx.globalAlpha = 0.95;
+        } else {
+          ctx.strokeStyle = isDark ? 'rgba(148, 163, 184, 0.28)' : 'rgba(203, 213, 225, 0.85)';
+          ctx.lineWidth = 1.0;
+          ctx.globalAlpha = 0.75;
         }
-
-        // Standard MiroFish Smooth Curved Line (Subtle & Light)
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(src.x || 0, src.y || 0);
-        ctx.quadraticCurveTo(ctrlX, ctrlY, tgt.x || 0, tgt.y || 0);
-        ctx.strokeStyle = isDark ? 'rgba(148, 163, 184, 0.25)' : 'rgba(203, 213, 225, 0.75)';
-        ctx.lineWidth = 0.8;
-        ctx.globalAlpha = 0.9;
         ctx.stroke();
 
-        // Unclicked Edge Label Badge (Light Minimalist Pill)
-        if (showEdgeLabels && transform.k > 0.45 && dist > 45) {
-          const text = (link.type || '').toUpperCase().trim();
-          ctx.font = '500 8px "JetBrains Mono", Inter, monospace';
-          const textMetrics = ctx.measureText(text);
-          const pad = 3.5;
-          const boxW = textMetrics.width + pad * 2;
-          const boxH = 12;
-          
-          ctx.fillStyle = isDark ? 'rgba(15, 23, 42, 0.90)' : 'rgba(255, 255, 255, 0.95)';
+        // Edge Label Badge
+        if (showEdgeLabels && (isHighlighted || (transform.k > 0.5 && dist > 45))) {
+          const text = (link.type || 'RELATES_TO').toUpperCase().trim();
+          ctx.font = isHighlighted ? '600 8.5px "JetBrains Mono", monospace' : '500 8px "JetBrains Mono", monospace';
+          const textWidth = ctx.measureText(text).width;
+          const pad = 4;
+          const boxW = textWidth + pad * 2;
+          const boxH = 13;
+
+          ctx.fillStyle = isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.96)';
           ctx.beginPath();
-          ctx.roundRect(labelX - boxW / 2, labelY - boxH / 2, boxW, boxH, 3);
+          ctx.roundRect(midX - boxW / 2, midY - boxH / 2, boxW, boxH, 3.5);
           ctx.fill();
 
-          ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)';
-          ctx.lineWidth = 0.5;
-          ctx.stroke();
-
-          ctx.fillStyle = isDark ? '#94A3B8' : '#64748B';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(text, labelX, labelY);
-        }
-        ctx.restore();
-      }
-
-      // 2. Draw Highlighted Edges for Clicked Node / Clicked Link (Soft, Elegant Accent)
-      for (const { link, src, tgt, ctrlX, ctrlY, labelX, labelY, dist } of highlightedLinks) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(src.x || 0, src.y || 0);
-        ctx.quadraticCurveTo(ctrlX, ctrlY, tgt.x || 0, tgt.y || 0);
-        ctx.strokeStyle = themeAccent;
-        ctx.lineWidth = 1.35;
-        ctx.globalAlpha = 0.85;
-        ctx.stroke();
-
-        // Highlighted Edge Label Badge (Soft & Light Border)
-        if (showEdgeLabels && transform.k > 0.4 && dist > 40) {
-          const text = (link.type || '').toUpperCase().trim();
-          ctx.font = '500 8.5px "JetBrains Mono", Inter, monospace';
-          const textMetrics = ctx.measureText(text);
-          const pad = 4.5;
-          const boxW = textMetrics.width + pad * 2;
-          const boxH = 14;
-          
-          ctx.fillStyle = isDark ? 'rgba(15, 23, 42, 0.96)' : '#ffffff';
-          ctx.beginPath();
-          ctx.roundRect(labelX - boxW / 2, labelY - boxH / 2, boxW, boxH, 3.5);
-          ctx.fill();
-
-          // Soft, non-harsh micro-border
-          ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)';
+          ctx.strokeStyle = isHighlighted ? themeAccent : (isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)');
           ctx.lineWidth = 0.6;
           ctx.stroke();
 
-          ctx.fillStyle = themeAccent;
+          ctx.fillStyle = isHighlighted ? themeAccent : (isDark ? '#94A3B8' : '#64748B');
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(text, labelX, labelY);
+          ctx.fillText(text, midX, midY);
         }
+
         ctx.restore();
       }
 
-      // 3. Draw Nodes (MiroFish Flat Pastel Dots & Theme-Compatible Selection)
+      // 2. Draw Nodes
       for (const node of nodes) {
         if (isFilteringActive && !activeNodeIds.has(node.id)) continue;
 
         const isSelected = selectedNode?.id === node.id;
         const isHovered = hoveredNode?.id === node.id;
-        const isConnectedToSelected = (selectedNode && links.some(l => {
+        const isConnectedToSelected = selectedNode && links.some(l => {
           const sId = typeof l.source === 'object' ? (l.source as any).id : l.source;
           const tId = typeof l.target === 'object' ? (l.target as any).id : l.target;
           return (sId === selectedNode.id && tId === node.id) || (tId === selectedNode.id && sId === node.id);
-        })) || (selectedLink && (
-          (typeof selectedLink.source === 'object' ? (selectedLink.source as any).id : selectedLink.source) === node.id ||
-          (typeof selectedLink.target === 'object' ? (selectedLink.target as any).id : selectedLink.target) === node.id
-        ));
+        });
 
         const nodeStyle = getNodeStyle(node.type, node.community_id);
-        const baseRadius = 5.2 + Math.min(2.5, (node.degree || 1) * 0.35);
-        const radius = isSelected ? baseRadius + 1.8 : isConnectedToSelected ? baseRadius + 0.5 : baseRadius;
+        const baseRadius = 5.5 + Math.min(3.0, (node.degree || 1) * 0.4);
+        const radius = isSelected ? baseRadius + 2.5 : isHovered ? baseRadius + 1.2 : baseRadius;
 
         ctx.save();
-        ctx.globalAlpha = 1.0;
 
-        // Solid Pastel Node Circle (Theme Compatible when selected)
+        // Active Theme Glow for Selected Node
+        if (isSelected) {
+          ctx.beginPath();
+          ctx.arc(node.x || 0, node.y || 0, radius + 5, 0, Math.PI * 2);
+          ctx.fillStyle = `${themeAccent}25`;
+          ctx.fill();
+        }
+
+        // Main Node Body
         ctx.beginPath();
         ctx.arc(node.x || 0, node.y || 0, radius, 0, Math.PI * 2);
         ctx.fillStyle = isSelected ? themeAccent : nodeStyle.bg;
         ctx.fill();
 
-        // Active / Hovered / Default Border adhering directly to the node (Tight & Sticking to Perimeter)
-        if (isSelected) {
-          // Inner crisp white ring directly on perimeter
-          ctx.strokeStyle = '#FFFFFF';
-          ctx.lineWidth = 1.0;
-          ctx.stroke();
+        // Crisp Border
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = isSelected ? 1.8 : 1.2;
+        ctx.stroke();
 
-          // Tight theme-compatible border sticking directly to the node (no spacing/gap)
-          ctx.beginPath();
-          ctx.arc(node.x || 0, node.y || 0, radius + 0.3, 0, Math.PI * 2);
-          ctx.strokeStyle = themeAccent;
-          ctx.lineWidth = 1.8;
-          ctx.stroke();
-        } else if (isHovered) {
-          ctx.strokeStyle = '#FFFFFF';
-          ctx.lineWidth = 1.0;
-          ctx.stroke();
-
-          // Tightly adhering soft hover border
-          ctx.beginPath();
-          ctx.arc(node.x || 0, node.y || 0, radius + 0.3, 0, Math.PI * 2);
-          ctx.strokeStyle = nodeStyle.border;
-          ctx.lineWidth = 1.4;
-          ctx.stroke();
-        } else if (isConnectedToSelected) {
-          ctx.strokeStyle = '#FFFFFF';
-          ctx.lineWidth = 1.0;
-          ctx.stroke();
-
-          ctx.beginPath();
-          ctx.arc(node.x || 0, node.y || 0, radius + 0.3, 0, Math.PI * 2);
-          ctx.strokeStyle = `${nodeStyle.bg}AA`;
-          ctx.lineWidth = 1.2;
-          ctx.stroke();
-        } else {
-          // Clean White Border
-          ctx.strokeStyle = '#FFFFFF';
-          ctx.lineWidth = 1.0;
-          ctx.stroke();
-        }
-
-        // Node Label Beside the Dot (Clean, No Blurry White Paint Clouds)
+        // Node Label
         if (showLabels && (transform.k > 0.45 || isHovered || isSelected || isConnectedToSelected)) {
-          const displayName = node.name.length > 12 ? node.name.slice(0, 11) + '...' : node.name;
-          ctx.font = `${(isSelected) ? 'bold 11px' : (isHovered) ? '600 10.5px' : '500 10px'} "JetBrains Mono", Inter, -apple-system, sans-serif`;
+          const displayName = node.name.length > 14 ? node.name.slice(0, 13) + '…' : node.name;
+          ctx.font = `${isSelected ? 'bold 11px' : isHovered ? '600 10.5px' : '500 10px'} "JetBrains Mono", -apple-system, sans-serif`;
           
-          const labelX = (node.x || 0) + radius + (isSelected ? 5.5 : 4.5);
-          const labelY = (node.y || 0) + 0.5;
+          const labelX = (node.x || 0) + radius + 5;
+          const labelY = (node.y || 0);
 
-          // Subtle, clean contrast stroke
+          // Dark / Light Halo
           ctx.lineJoin = 'round';
-          ctx.miterLimit = 2;
-          ctx.strokeStyle = isDark ? 'rgba(15, 23, 42, 0.90)' : 'rgba(255, 255, 255, 0.92)';
-          ctx.lineWidth = 2.4;
+          ctx.strokeStyle = isDark ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.95)';
+          ctx.lineWidth = 2.6;
           ctx.strokeText(displayName, labelX, labelY);
 
-          // Solid theme-friendly label text
+          // Label Text
           ctx.fillStyle = isSelected 
             ? themeAccent 
             : isHovered 
-              ? (isDark ? '#F8FAFC' : '#0F172A')
+              ? (isDark ? '#FFFFFF' : '#0F172A') 
               : (isDark ? '#E2E8F0' : '#1E293B');
           ctx.textAlign = 'left';
           ctx.textBaseline = 'middle';
@@ -659,7 +640,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
     };
   }, [activeNodeIds, selectedNode, selectedLink, hoveredNode, showLabels, showEdgeLabels, physicsEnabled, isDark, themeAccent, selectedDoc, selectedType, filterCommunity]);
 
-  // Non-passive wheel event listener to allow preventDefault for smooth zoom without browser console error
+  // Smooth Non-Passive Wheel Zoom with cursor anchoring
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -686,39 +667,8 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
     };
   }, []);
 
-  // Auto-focus camera when filtering by document or entity type
-  useEffect(() => {
-    if (selectedDoc === 'All' && selectedType === 'All' && filterCommunity === null) return;
-    if (!canvasRef.current || activeNodeIds.size === 0) return;
-    
-    const matchingNodes = nodesRef.current.filter(n => activeNodeIds.has(n.id));
-    if (matchingNodes.length > 0) {
-      const avgX = matchingNodes.reduce((acc, n) => acc + (n.x || 0), 0) / matchingNodes.length;
-      const avgY = matchingNodes.reduce((acc, n) => acc + (n.y || 0), 0) / matchingNodes.length;
-      const canvas = canvasRef.current;
-      const centerX = canvas.clientWidth / 2;
-      const centerY = canvas.clientHeight / 2;
-      transformRef.current = {
-        x: centerX - avgX * 1.15,
-        y: centerY - avgY * 1.15,
-        k: 1.15
-      };
-    }
-  }, [selectedDoc, selectedType, filterCommunity, activeNodeIds]);
-
-  const screenToWorld = useCallback((screenX: number, screenY: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
-    const transform = transformRef.current;
-    return {
-      x: (screenX - rect.left - transform.x) / transform.k,
-      y: (screenY - rect.top - transform.y) / transform.k,
-    };
-  }, []);
-
+  // Mouse Interaction Handlers
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    // Close open dropdowns on canvas click
     if (docDropdownOpen) setDocDropdownOpen(false);
     if (searchFocused) setSearchFocused(false);
 
@@ -730,17 +680,18 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
       if (isFilteringActive && !activeNodeIds.has(n.id)) return false;
       const dx = (n.x || 0) - world.x;
       const dy = (n.y || 0) - world.y;
-      return dx * dx + dy * dy < 280;
+      return dx * dx + dy * dy < 260;
     });
 
     if (clickedNode) {
       draggedNodeRef.current = clickedNode;
       setSelectedNode(clickedNode);
       setSelectedLink(null);
+      alphaRef.current = 0.25; // Reheat physics smoothly
       return;
     }
 
-    // 2. Check Edge / Relationship Label Click (MiroFish Relationship View)
+    // 2. Check Edge Click (Perpendicular segment distance)
     const nodeMap = new Map(nodesRef.current.map(n => [n.id, n]));
     const clickedLink = linksRef.current.find((link) => {
       const srcId = typeof link.source === 'object' ? (link.source as any).id : link.source;
@@ -750,21 +701,14 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
       const tgt = nodeMap.get(tgtId);
       if (!src || !tgt) return false;
 
-      // Check distance to midpoint / label
-      const midX = ((src.x || 0) + (tgt.x || 0)) / 2;
-      const midY = ((src.y || 0) + (tgt.y || 0)) / 2;
-      const dMidSq = (midX - world.x) * (midX - world.x) + (midY - world.y) * (midY - world.y);
-      if (dMidSq < 320) return true;
-
-      // Distance to line segment
       const x1 = src.x || 0, y1 = src.y || 0, x2 = tgt.x || 0, y2 = tgt.y || 0;
       const l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
       if (l2 === 0) return false;
       const t = Math.max(0, Math.min(1, ((world.x - x1) * (x2 - x1) + (world.y - y1) * (y2 - y1)) / l2));
       const projX = x1 + t * (x2 - x1);
       const projY = y1 + t * (y2 - y1);
-      const dSegSq = (world.x - projX) * (world.x - projX) + (world.y - projY) * (world.y - projY);
-      return dSegSq < 55;
+      const dSq = (world.x - projX) * (world.x - projX) + (world.y - projY) * (world.y - projY);
+      return dSq < 64; // Within 8px of link segment
     });
 
     if (clickedLink) {
@@ -773,37 +717,42 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
       return;
     }
 
-    // 3. Canvas Drag
+    // 3. Canvas Pan
     isDraggingCanvasRef.current = true;
-    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    dragStartRef.current = { x: e.clientX - transformRef.current.x, y: e.clientY - transformRef.current.y };
     setSelectedNode(null);
     setSelectedLink(null);
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const world = screenToWorld(e.clientX, e.clientY);
-    const isFilteringActive = selectedDoc !== 'All' || selectedType !== 'All' || filterCommunity !== null;
 
+    // Node Dragging
     if (draggedNodeRef.current) {
       draggedNodeRef.current.x = world.x;
       draggedNodeRef.current.y = world.y;
       draggedNodeRef.current.vx = 0;
       draggedNodeRef.current.vy = 0;
-    } else if (isDraggingCanvasRef.current) {
-      const dx = e.clientX - dragStartRef.current.x;
-      const dy = e.clientY - dragStartRef.current.y;
-      transformRef.current.x += dx;
-      transformRef.current.y += dy;
-      dragStartRef.current = { x: e.clientX, y: e.clientY };
-    } else {
-      const hoverNode = nodesRef.current.find((n) => {
-        if (isFilteringActive && !activeNodeIds.has(n.id)) return false;
-        const dx = (n.x || 0) - world.x;
-        const dy = (n.y || 0) - world.y;
-        return dx * dx + dy * dy < 250;
-      });
-      setHoveredNode(hoverNode || null);
+      alphaRef.current = 0.2;
+      return;
     }
+
+    // Canvas Panning
+    if (isDraggingCanvasRef.current) {
+      transformRef.current.x = e.clientX - dragStartRef.current.x;
+      transformRef.current.y = e.clientY - dragStartRef.current.y;
+      return;
+    }
+
+    // Node Hovering
+    const isFilteringActive = selectedDoc !== 'All' || selectedType !== 'All' || filterCommunity !== null;
+    const found = nodesRef.current.find((n) => {
+      if (isFilteringActive && !activeNodeIds.has(n.id)) return false;
+      const dx = (n.x || 0) - world.x;
+      const dy = (n.y || 0) - world.y;
+      return dx * dx + dy * dy < 220;
+    });
+    setHoveredNode(found || null);
   };
 
   const handleMouseUp = () => {
@@ -811,34 +760,17 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
     isDraggingCanvasRef.current = false;
   };
 
-  const handleZoom = (factor: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const t = transformRef.current;
-    const centerX = canvas.clientWidth / 2;
-    const centerY = canvas.clientHeight / 2;
-    const newK = Math.max(0.2, Math.min(4.0, t.k * factor));
-
-    t.x = centerX - (centerX - t.x) * (newK / t.k);
-    t.y = centerY - (centerY - t.y) * (newK / t.k);
-    t.k = newK;
-  };
-
-  const handleResetCamera = () => {
-    transformRef.current = { x: 0, y: 0, k: 1 };
-  };
-
   return (
-    <div className={`relative w-full h-full flex flex-col bg-[var(--bg-main)] overflow-hidden select-none ${className}`}>
-      {/* Top HUD Control Bar (Spacious, High-End Scale) */}
+    <div className="relative w-full h-full flex flex-col bg-[var(--bg-main)] overflow-hidden select-none">
+      {/* Top Floating Control Bar */}
       <div className="absolute top-5 left-5 right-5 z-20 flex flex-wrap items-center justify-between gap-3 pointer-events-none">
-        {/* Left: Search Bar with Suggestions & Custom Docs Selector */}
+        {/* Left: Search & Document Selector */}
         <div className="flex items-center gap-3 pointer-events-auto">
-          {/* Interactive Search Pill */}
+          {/* Search Pill */}
           <div className="relative">
             <div className="relative flex items-center">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10 pointer-events-none flex items-center justify-center text-[var(--text-muted)]">
-                <Search size={16} />
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10 pointer-events-none text-[var(--text-muted)]">
+                <Search size={15} />
               </div>
               <input
                 type="text"
@@ -849,7 +781,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
                   setSearchQuery(e.target.value);
                   setSearchFocused(true);
                 }}
-                className="h-11 pl-11 pr-10 w-60 sm:w-80 rounded-full bg-[var(--bg-card)] border border-[var(--border-color)] text-[13.5px] text-[var(--text-main)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-primary)]/20 shadow-md transition-all font-normal"
+                className="h-10 pl-10 pr-9 w-56 sm:w-72 rounded-full bg-[var(--bg-card)] border border-[var(--border-color)] text-[13px] text-[var(--text-main)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--accent-primary)] focus:ring-2 focus:ring-[var(--accent-primary)]/20 shadow-sm transition-all"
               />
               {searchQuery && (
                 <button
@@ -858,17 +790,17 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
                     setSearchQuery('');
                     setSearchFocused(false);
                   }}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 z-10 p-1 rounded-full text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 z-10 p-1 rounded-full text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
                 >
-                  <X size={14} />
+                  <X size={13} />
                 </button>
               )}
             </div>
 
-            {/* Search Suggestions Dropdown */}
+            {/* Suggestions Dropdown */}
             {searchFocused && searchResults.length > 0 && (
-              <div className="absolute left-0 mt-2.5 w-88 p-2 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-2xl z-50 flex flex-col gap-1 text-[13px] animate-in fade-in slide-in-from-top-2 duration-150">
-                <div className="px-3.5 py-1.5 text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
+              <div className="absolute left-0 mt-2 w-80 p-2 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-2xl z-50 flex flex-col gap-1 text-[13px] animate-in fade-in duration-100">
+                <div className="px-3 py-1 text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
                   Matching Entities ({searchResults.length})
                 </div>
                 {searchResults.map((node) => {
@@ -878,17 +810,13 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
                       key={node.id}
                       type="button"
                       onClick={() => centerOnNode(node)}
-                      className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl hover:bg-[var(--bg-hover)] text-left transition-colors cursor-pointer group"
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-[var(--bg-hover)] text-left transition-colors cursor-pointer"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="w-3 h-3 rounded-full flex-shrink-0 shadow-xs" style={{ backgroundColor: style.bg }} />
-                        <span className="font-medium text-[13px] text-[var(--text-main)] truncate group-hover:text-[var(--accent-primary)] transition-colors">
-                          {node.name}
-                        </span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: style.bg }} />
+                        <span className="truncate font-medium text-[var(--text-main)]">{node.name}</span>
                       </div>
-                      <span className="text-[11px] text-[var(--text-muted)] px-2 py-0.5 rounded-md bg-[var(--bg-sidebar)] flex-shrink-0 font-mono">
-                        {node.type || 'Entity'}
-                      </span>
+                      <span className="text-[11px] font-mono text-[var(--text-muted)]">{node.type}</span>
                     </button>
                   );
                 })}
@@ -896,106 +824,86 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
             )}
           </div>
 
-          {/* Custom Document Selector Dropdown */}
-          {sourceDocs.length > 2 && (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setDocDropdownOpen(!docDropdownOpen)}
-                className={`h-11 flex items-center gap-2.5 px-4 rounded-full bg-[var(--bg-card)] border text-[13.5px] font-medium shadow-md transition-all cursor-pointer ${
-                  docDropdownOpen 
-                    ? 'border-[var(--accent-primary)] text-[var(--accent-primary)] ring-2 ring-[var(--accent-primary)]/20' 
-                    : 'border-[var(--border-color)] text-[var(--text-main)] hover:border-[var(--accent-primary)]/40 hover:bg-[var(--bg-hover)]'
-                }`}
-                title="Filter by vault document"
-              >
-                <FolderOpen size={16} className="text-[var(--accent-primary)] flex-shrink-0" />
-                <span className="max-w-[150px] truncate">
-                  {selectedDoc === 'All' ? 'All Vault Docs' : selectedDoc}
-                </span>
-                <ChevronDown size={14} className={`text-[var(--text-muted)] transition-transform duration-200 ${docDropdownOpen ? 'rotate-180 text-[var(--accent-primary)]' : ''}`} />
-              </button>
+          {/* Document Filter Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setDocDropdownOpen(!docDropdownOpen)}
+              className="h-10 flex items-center gap-2 px-3.5 rounded-full bg-[var(--bg-card)] border border-[var(--border-color)] text-[13px] font-medium text-[var(--text-main)] hover:border-[var(--accent-primary)] hover:bg-[var(--bg-hover)] shadow-sm transition-all cursor-pointer"
+            >
+              <FolderOpen size={14} className="text-[var(--accent-primary)]" />
+              <span className="max-w-[140px] sm:max-w-[200px] truncate">
+                {selectedDoc === 'All' ? 'All Documents' : selectedDoc}
+              </span>
+              <ChevronDown size={14} className="text-[var(--text-muted)]" />
+            </button>
 
-              {docDropdownOpen && (
-                <div className="absolute left-0 mt-2.5 w-64 max-h-64 overflow-y-auto p-2 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-2xl z-50 flex flex-col gap-1 text-[13px] animate-in fade-in slide-in-from-top-2 duration-150">
-                  <div className="px-3.5 py-1.5 text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
-                    Filter By Document
-                  </div>
-                  {sourceDocs.map((doc) => {
-                    const isDocSelected = selectedDoc === doc;
-                    return (
-                      <button
-                        key={doc}
-                        type="button"
-                        onClick={() => {
-                          setSelectedDoc(doc);
-                          setDocDropdownOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
-                          isDocSelected 
-                            ? 'bg-[var(--accent-subtle)] text-[var(--accent-primary)] font-bold' 
-                            : 'text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 truncate">
-                          {doc === 'All' ? (
-                            <FolderOpen size={15} className="text-[var(--accent-primary)] flex-shrink-0" />
-                          ) : (
-                            <FileText size={15} className="text-[var(--text-muted)] flex-shrink-0" />
-                          )}
-                          <span className="truncate">{doc === 'All' ? 'All Vault Docs' : doc}</span>
-                        </div>
-                        {isDocSelected && <Check size={14} className="text-[var(--accent-primary)] flex-shrink-0" />}
-                      </button>
-                    );
-                  })}
+            {docDropdownOpen && (
+              <div className="absolute left-0 mt-2 w-72 max-h-80 overflow-y-auto p-2 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-2xl z-50 flex flex-col gap-1 text-[13px] animate-in fade-in duration-100">
+                <div className="px-3 py-1.5 text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                  Filter by Document
                 </div>
-              )}
-            </div>
-          )}
+                {sourceDocs.map((docName) => (
+                  <button
+                    key={docName}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDoc(docName);
+                      setDocDropdownOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
+                      selectedDoc === docName ? 'bg-[var(--accent-subtle)] text-[var(--accent-primary)] font-medium' : 'hover:bg-[var(--bg-hover)] text-[var(--text-main)]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText size={14} className={selectedDoc === docName ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'} />
+                      <span className="truncate text-xs">{docName === 'All' ? 'All Documents (Entire Vault)' : docName}</span>
+                    </div>
+                    {selectedDoc === docName && <Check size={14} />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Right: Show Edge Labels Pill Toggle (Theme Compatible), Insights, Refresh */}
-        <div className="flex items-center gap-3 pointer-events-auto">
-          {/* Show Edge Labels Pill Toggler (Theme Compatible Active Color) */}
+        {/* Right: Edge Labels, Insights, Rebuild */}
+        <div className="flex items-center gap-2.5 pointer-events-auto">
+          {/* Toggle Edge Labels */}
           <button
             type="button"
-            onClick={() => setShowEdgeLabels(prev => !prev)}
-            className="h-11 flex items-center gap-3 px-4 rounded-full bg-[var(--bg-card)] border border-[var(--border-color)] shadow-md hover:border-[var(--accent-primary)]/40 hover:bg-[var(--bg-hover)] transition-all cursor-pointer select-none"
-            title="Toggle edge label visibility"
+            onClick={() => setShowEdgeLabels(!showEdgeLabels)}
+            className={`h-10 flex items-center gap-2 px-3.5 rounded-full border text-[12.5px] font-medium transition-all shadow-sm cursor-pointer ${
+              showEdgeLabels
+                ? 'bg-[var(--bg-card)] border-[var(--accent-primary)] text-[var(--accent-primary)]'
+                : 'bg-[var(--bg-card)] border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-main)]'
+            }`}
           >
-            <div 
-              className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors duration-200 ease-in-out ${showEdgeLabels ? '' : 'bg-slate-300 dark:bg-slate-700'}`}
-              style={{ backgroundColor: showEdgeLabels ? themeAccent : undefined }}
-            >
-              <div className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform duration-200 ease-in-out ${showEdgeLabels ? 'translate-x-4' : 'translate-x-0'}`} />
-            </div>
-            <span className="text-[13.5px] font-medium text-[var(--text-main)] whitespace-nowrap">
-              Show Edge Labels
-            </span>
+            {showEdgeLabels ? <Eye size={14} /> : <EyeOff size={14} />}
+            <span className="hidden sm:inline">Edge Labels</span>
           </button>
 
-          {/* Community Insights Modal Trigger */}
+          {/* Insights Trigger */}
           <button
             type="button"
             onClick={() => setInsightsOpen(true)}
-            className="h-11 flex items-center gap-2.5 px-4 rounded-full bg-[var(--bg-card)] border border-[var(--border-color)] text-[13.5px] font-medium text-[var(--text-main)] hover:border-[var(--accent-primary)] hover:bg-[var(--bg-hover)] shadow-md transition-all cursor-pointer"
+            className="h-10 flex items-center gap-2 px-3.5 rounded-full bg-[var(--bg-card)] border border-[var(--border-color)] text-[12.5px] font-medium text-[var(--text-main)] hover:border-[var(--accent-primary)] hover:bg-[var(--bg-hover)] shadow-sm transition-all cursor-pointer"
           >
-            <Sparkles size={16} className="text-[var(--accent-primary)]" />
+            <Sparkles size={15} className="text-[var(--accent-primary)]" />
             <span className="hidden sm:inline">Insights</span>
-            <span className="px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-primary)] font-mono text-[11px] font-bold">
+            <span className="px-1.5 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-primary)] font-mono text-[10.5px] font-bold">
               {graphData.communities.length}
             </span>
           </button>
 
-          {/* Rebuild Graph Trigger */}
+          {/* Rebuild Trigger */}
           <button
             type="button"
             onClick={handleRebuild}
             disabled={building}
-            className="h-11 flex items-center gap-2.5 px-5 rounded-full bg-[var(--accent-primary)] text-white text-[13.5px] font-semibold hover:opacity-90 shadow-md hover:shadow-lg transition-all cursor-pointer disabled:opacity-50 active:scale-98"
+            className="h-10 flex items-center gap-2 px-4 rounded-full bg-[var(--accent-primary)] text-white text-[12.5px] font-semibold hover:opacity-90 shadow-sm transition-all cursor-pointer disabled:opacity-50"
           >
-            <RefreshCw size={15} className={building ? 'animate-spin' : ''} />
+            <RefreshCw size={14} className={building ? 'animate-spin' : ''} />
             <span>{building ? 'Building...' : 'Refresh'}</span>
           </button>
         </div>
@@ -1003,31 +911,54 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
 
       {/* Main Canvas Stage */}
       <div className="flex-1 relative w-full h-full cursor-grab active:cursor-grabbing">
-        {loading ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-            <OrbitingOrbLoader size="lg" />
-            <span className="text-xs text-[var(--text-muted)] font-mono">
-              Loading Knowledge Graph...
-            </span>
+        {loading || (building && graphData.nodes.length === 0) ? (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-[var(--bg-main)]/65 backdrop-blur-xs select-none animate-in fade-in duration-200">
+            <div className="relative flex items-center justify-center">
+              <div className="absolute w-24 h-24 rounded-full bg-[var(--accent-primary)]/15 blur-xl animate-pulse pointer-events-none" />
+              <OrbitingOrbLoader size="lg" />
+            </div>
+            <div className="flex flex-col items-center gap-1.5 text-center">
+              <span className="text-[13px] font-medium text-[var(--text-main)] tracking-wide flex items-center gap-1.5">
+                <span>{building ? 'Building Knowledge Graph' : 'Loading Knowledge Graph'}</span>
+                <span className="inline-flex gap-1 items-center">
+                  <span className="w-1 h-1 rounded-full bg-[var(--accent-primary)] animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1 h-1 rounded-full bg-[var(--accent-primary)] animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1 h-1 rounded-full bg-[var(--accent-primary)] animate-bounce" style={{ animationDelay: '300ms' }} />
+                </span>
+              </span>
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                {building ? 'Synthesizing entities and cross-document links...' : 'Loading interactive network visualization...'}
+              </span>
+            </div>
           </div>
         ) : graphData.nodes.length === 0 ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-center mb-3 text-[var(--accent-primary)] shadow-sm">
-              <Network size={24} />
+            <div className="w-14 h-14 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-center mb-3 text-[var(--accent-primary)] shadow-sm">
+              <Network size={26} />
             </div>
             <h3 className="font-bold text-sm text-[var(--text-main)] mb-1">Knowledge Graph is Empty</h3>
             <p className="text-xs text-[var(--text-muted)] max-w-sm mb-4">
-              Upload documents into your Knowledge Vault, then click "Refresh" to extract pastel entities and relationships.
+              Upload documents into your Knowledge Vault, then click "Build Knowledge Graph" to extract entities and cross-document relationships.
             </p>
             <button
               onClick={handleRebuild}
               disabled={building}
-              className="px-4 py-2 rounded-xl bg-[var(--accent-primary)] text-white text-xs font-semibold hover:opacity-90 transition-opacity shadow-md cursor-pointer"
+              className="px-5 py-2.5 rounded-xl bg-[var(--accent-primary)] text-white text-xs font-semibold hover:opacity-90 transition-all shadow-md cursor-pointer disabled:opacity-50 active:scale-98 flex items-center gap-2"
             >
-              {building ? 'Building Graph...' : 'Build Knowledge Graph Now'}
+              <Sparkles size={14} />
+              <span>{building ? 'Building Graph...' : 'Build Knowledge Graph Now'}</span>
             </button>
           </div>
         ) : null}
+
+        {building && graphData.nodes.length > 0 && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 px-5 py-2 rounded-full bg-[var(--bg-card)]/95 border border-[var(--border-color)] shadow-xl backdrop-blur-md flex items-center gap-2.5 animate-pulse pointer-events-none">
+            <RefreshCw size={13} className="animate-spin text-[var(--accent-primary)]" />
+            <span className="text-xs font-medium text-[var(--text-main)]">
+              Synthesizing Knowledge Graph updates...
+            </span>
+          </div>
+        )}
 
         <canvas
           ref={canvasRef}
@@ -1037,43 +968,43 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
           className="w-full h-full block"
         />
 
-        {/* MiroFish-Style Floating Entity Types Legend (Dynamic: Only Present Entity Types) */}
+        {/* Entity Types Legend */}
         {presentEntityTypes.length > 0 && (
-          <div className="absolute bottom-4 left-4 z-20 p-3.5 sm:p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-xl flex flex-col gap-2.5 pointer-events-auto max-w-[calc(100vw-32px)]">
+          <div className="absolute bottom-4 left-4 z-20 p-3 sm:p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-lg flex flex-col gap-2 pointer-events-auto max-w-[calc(100vw-32px)]">
             <div 
-              className="text-[11px] font-bold tracking-wider uppercase flex items-center justify-between gap-3"
+              className="text-[10.5px] font-bold tracking-wider uppercase flex items-center justify-between gap-3"
               style={{ color: themeAccent }}
             >
-              <span>ENTITY TYPES</span>
+              <span>Entity Types</span>
               {selectedType !== 'All' && (
                 <button
                   onClick={() => setSelectedType('All')}
-                  className="text-[9px] text-[var(--text-muted)] hover:text-[var(--accent-primary)] lowercase underline cursor-pointer"
+                  className="text-[9.5px] text-[var(--text-muted)] hover:text-[var(--accent-primary)] lowercase underline cursor-pointer"
                 >
                   (reset)
                 </button>
               )}
             </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-[var(--text-main)] font-medium max-w-md">
+            <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-xs text-[var(--text-main)] font-medium max-w-sm sm:max-w-md">
               {presentEntityTypes.map((t) => {
                 const isTypeActive = selectedType === t.name;
                 return (
                   <button
                     key={t.name}
                     onClick={() => setSelectedType(isTypeActive ? 'All' : t.name)}
-                    className={`flex items-center gap-2 transition-all cursor-pointer ${
+                    className={`flex items-center gap-1.5 transition-all cursor-pointer ${
                       isTypeActive 
                         ? 'opacity-100 font-bold scale-105' 
                         : selectedType === 'All' 
-                          ? 'opacity-90 hover:opacity-100' 
+                          ? 'opacity-85 hover:opacity-100' 
                           : 'opacity-40'
                     }`}
                   >
                     <span 
-                      className="w-2.5 h-2.5 rounded-full shadow-sm flex-shrink-0" 
+                      className="w-2.5 h-2.5 rounded-full shadow-xs flex-shrink-0" 
                       style={{ backgroundColor: t.bg }} 
                     />
-                    <span className="text-[12px]">{t.name}</span>
+                    <span className="text-[11.5px]">{t.name}</span>
                   </button>
                 );
               })}
@@ -1081,63 +1012,66 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
           </div>
         )}
 
-        {/* Floating Zoom & Controls HUD (Sleek Horizontal Glassmorphic Dock) */}
-        <div className="absolute bottom-5 right-5 z-20 flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border-color)] p-1.5 rounded-full shadow-2xl pointer-events-auto">
+        {/* Floating Zoom & Controls HUD */}
+        <div className="absolute bottom-4 right-4 z-20 flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border-color)] p-1 rounded-full shadow-xl pointer-events-auto">
           <button
             type="button"
             onClick={() => handleZoom(1.2)}
-            className="w-9 h-9 flex items-center justify-center rounded-full text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"
+            className="w-8 h-8 flex items-center justify-center rounded-full text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"
             title="Zoom In"
           >
-            <ZoomIn size={16} />
+            <ZoomIn size={15} />
           </button>
           <button
             type="button"
             onClick={() => handleZoom(0.8)}
-            className="w-9 h-9 flex items-center justify-center rounded-full text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"
+            className="w-8 h-8 flex items-center justify-center rounded-full text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"
             title="Zoom Out"
           >
-            <ZoomOut size={16} />
+            <ZoomOut size={15} />
           </button>
           <button
             type="button"
             onClick={handleResetCamera}
-            className="w-9 h-9 flex items-center justify-center rounded-full text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"
+            className="w-8 h-8 flex items-center justify-center rounded-full text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer"
             title="Center View"
           >
-            <Maximize2 size={16} />
+            <Maximize2 size={15} />
           </button>
           
-          <div className="w-px h-5 bg-[var(--border-color)] mx-1" />
+          <div className="w-px h-4 bg-[var(--border-color)] mx-0.5" />
           
           <button
             type="button"
             onClick={() => setShowLabels(!showLabels)}
-            className={`w-9 h-9 flex items-center justify-center rounded-full transition-all cursor-pointer ${
+            className={`w-8 h-8 flex items-center justify-center rounded-full transition-all cursor-pointer ${
               showLabels 
-                ? 'bg-[var(--accent-subtle)] text-[var(--accent-primary)] shadow-2xs font-bold' 
+                ? 'bg-[var(--accent-subtle)] text-[var(--accent-primary)] font-bold' 
                 : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
             }`}
             title={showLabels ? "Hide Node Labels" : "Show Node Labels"}
           >
-            {showLabels ? <Eye size={16} /> : <EyeOff size={16} />}
+            {showLabels ? <Eye size={15} /> : <EyeOff size={15} />}
           </button>
           <button
             type="button"
-            onClick={() => setPhysicsEnabled(!physicsEnabled)}
-            className={`w-9 h-9 flex items-center justify-center rounded-full transition-all cursor-pointer ${
+            onClick={() => {
+              setPhysicsEnabled(!physicsEnabled);
+              if (!physicsEnabled) alphaRef.current = 0.8;
+            }}
+            className={`w-8 h-8 flex items-center justify-center rounded-full transition-all cursor-pointer ${
               physicsEnabled 
-                ? 'bg-[var(--accent-subtle)] text-[var(--accent-primary)] shadow-2xs' 
+                ? 'bg-[var(--accent-subtle)] text-[var(--accent-primary)]' 
                 : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
             }`}
             title={physicsEnabled ? "Pause Physics Simulation" : "Resume Physics Simulation"}
           >
-            {physicsEnabled ? <Pause size={16} /> : <Play size={16} />}
+            {physicsEnabled ? <Pause size={15} /> : <Play size={15} />}
           </button>
         </div>
       </div>
 
-      {/* Slide-out Node Details Inspector (MiroFish Style) */}
+      {/* Node Details Inspector */}
       {selectedNode && (
         <EntityDetailDrawer
           entity={selectedNode}
@@ -1152,7 +1086,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
         />
       )}
 
-      {/* Slide-out Relationship Details Inspector (MiroFish Style) */}
+      {/* Relationship Details Inspector */}
       {selectedLink && (
         <RelationshipDetailDrawer
           link={selectedLink}

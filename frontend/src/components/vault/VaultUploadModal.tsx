@@ -112,6 +112,16 @@ export const VaultUploadModal: React.FC<VaultUploadModalProps> = ({
       return next;
     });
 
+    // Optimistically insert document into the table immediately with indexing status
+    const sizeMb = parseFloat((file.size / (1024 * 1024)).toFixed(2));
+    onAddDocument?.({
+      filename: file.name,
+      size_mb: sizeMb,
+      pages: 1,
+      indexed: false,
+      status: 'indexing',
+    });
+
     try {
       // Connect to backend stream for real stage-by-stage progress (extraction, chunking, embeddings, indexing)
       await api.uploadSingleDocumentStream(file, (event) => {

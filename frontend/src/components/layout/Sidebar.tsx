@@ -23,6 +23,8 @@ interface SidebarProps {
   onOpenAuth?: () => void;
   documentsCount?: number;
   totalChunksCount?: number;
+  isLoadingSessions?: boolean;
+  isLoadingDocuments?: boolean;
   showToast: (msg: string) => void;
 }
 
@@ -42,6 +44,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenAuth,
   documentsCount = 0,
   totalChunksCount = 0,
+  isLoadingSessions = false,
+  isLoadingDocuments = false,
   showToast,
 }) => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -140,7 +144,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }`}
             onClick={() => handleMobileTabSelect(() => onSelectTab('chats'))}
           >
-            <MessageSquare size={17} />
+            <MessageSquare size={17} className={activeTab === 'chats' || activeTab === 'chats_list' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'} />
             <span>Chats</span>
           </button>
 
@@ -152,12 +156,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }`}
             onClick={() => handleMobileTabSelect(() => onSelectTab('projects'))}
           >
-            <Folder size={17} className={activeTab === 'projects' ? 'text-[var(--accent-primary)]' : ''} />
+            <Folder size={17} className={activeTab === 'projects' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'} />
             <span>Projects</span>
           </button>
 
           <button 
-            className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer ${
+            className={`flex items-center justify-between px-3.5 h-10 rounded-xl text-sm font-medium transition-colors text-left cursor-pointer ${
               activeTab === 'vault' 
                 ? 'bg-[var(--bg-card)] text-[var(--text-main)] shadow-sm' 
                 : 'text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)]'
@@ -165,15 +169,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => handleMobileTabSelect(() => onSelectTab('vault'))}
             title={`${documentsCount} document(s) · ${totalChunksCount} indexed chunk(s)`}
           >
-            <div className="flex items-center gap-3">
-              <Database size={17} className="text-[var(--accent-primary)]" />
-              <span>Knowledge Vault</span>
+            <div className="flex items-center gap-3 min-w-0">
+              <Database size={17} className={`${activeTab === 'vault' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'} flex-shrink-0`} />
+              <span className="truncate">Knowledge Vault</span>
             </div>
-            {documentsCount > 0 && (
-              <span className="text-[11.5px] px-2 py-0.5 rounded-full bg-[var(--bg-input)] text-[var(--text-main)] font-mono font-medium border border-[var(--border-color)]">
-                {documentsCount}
-              </span>
-            )}
+            <div className="flex items-center justify-end min-w-[28px] h-5 flex-shrink-0">
+              {isLoadingDocuments ? (
+                <div className="w-5 h-3.5 rounded-full bg-[var(--border-color)]/70 animate-pulse" />
+              ) : documentsCount > 0 ? (
+                <span className="text-[11.5px] px-2 py-0.5 rounded-full bg-[var(--bg-input)] text-[var(--text-main)] font-mono font-medium border border-[var(--border-color)]">
+                  {documentsCount}
+                </span>
+              ) : null}
+            </div>
           </button>
 
           <button 
@@ -186,7 +194,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             title="Interactive Knowledge Graph & Community Clusters"
           >
             <div className="flex items-center gap-3">
-              <Network size={17} className={activeTab === 'graph' ? 'text-[var(--accent-primary)]' : ''} />
+              <Network size={17} className={activeTab === 'graph' ? 'text-[var(--accent-primary)]' : 'text-[var(--text-muted)]'} />
               <span>Knowledge Graph</span>
             </div>
           </button>
@@ -198,7 +206,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div className="px-2.5 overflow-y-auto max-h-[calc(100vh-340px)] flex flex-col gap-1">
-          {sessions.length === 0 ? (
+          {isLoadingSessions && sessions.length === 0 ? (
+            <div className="flex flex-col gap-1 py-1 px-1">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl animate-pulse">
+                  <div className="w-3.5 h-3.5 rounded-md bg-[var(--border-color)]/40 flex-shrink-0" />
+                  <div
+                    className="h-3 rounded-md bg-[var(--border-color)]/50"
+                    style={{ width: `${50 + (i % 3) * 20}%` }}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : sessions.length === 0 ? (
             <div className="px-4 py-5 text-sm text-[var(--text-dark)] text-center">
               No previous chats
             </div>

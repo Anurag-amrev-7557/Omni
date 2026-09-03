@@ -1,0 +1,75 @@
+---
+description: Prevention rule for cloud CORS preflight failures (Vercel to Render) and container memory limit (512MB) exhaustion
+globs: ["src/**/*.py", "frontend/src/services/api.ts", "frontend/src/hooks/**/*.ts"]
+alwaysApply: true
+---
+
+# 🚨 Cloud CORS & Container Memory Leak Prevention
+
+### 1. Cross-Origin Resource Sharing (CORS) Preflight Failures
+
+#### Problem
+In deployed environments (e.g. Vercel frontend calling Render backend), browser requests fail with:
+```
+Access to fetch at 'https://backend.onrender.com/api/documents' from origin 'https://app.vercel.app' 
+has been blocked by CORS policy: Response to preflight request doesn't pass access control check: 
+No 'Access-Control-Allow-Origin' header is present on the requested resource.
+```
+
+#### Root Cause
+1. In FastAPI, `CORSMiddleware` checks `allow_origins` and `allow_origin_regex`.
+2. If `allow_origin_regex` only activates when `ENVIRONMENT != "production"`, or if `FRONTEND_URL` on Render is empty or missing subdomains, all OPTIONS preflights from `*.vercel.app` fail.
+
+#### Prevention Rule
+```python
+# ❌ WRONG - Restricting origin regex only in development
+if os.getenv("ENVIRONMENT") == "production":
+    allow_origin_regex = f"^https?://{os.getenv('FRONTEND_URL')}$"
+
+# ✅ CORRECT - Allow all Vercel preview/production domains and Render instances across all environments
+allow_origin_regex = r"^https?://([a-zA-Z0-9_-]+\.)*(vercel\.app|onrender\.com|fly\.dev)(:[0-9]+)?$|^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$"
+```
+
+---
+
+### 2. Render 512MB Container Memory Limit & Leaks
+
+#### Problem
+Render sends warnings: *"Web service exceeded its memory limits"* or terminates the service with Linux OOM (Out Of Memory).
+
+#### Root Cause
+1. **PyMuPDF Unclosed C-Handles**: `doc = pymupdf.open(...)` allocates native memory in C. If not closed inside `try ... finally: doc.close()`, memory remains un-reclaimed.
+2. **Delayed Python Garbage Collection**: Large PDF byte buffers in async tasks stay in memory across requests unless explicitly released.
+3. **Frontend Unhandled Cascading Rejections**: In frontend hooks, `throw error` inside global refresh effects creates unhandled promise rejection retry storms, flooding the backend with concurrent preflight and GET requests.
+
+#### Prevention Rule
+```python
+# ❌ WRONG - Opening document without guaranteed cleanup
+doc = pymupdf.open(file_path)
+return doc.load_page(0).get_text()
+
+# ✅ CORRECT - Guaranteed closure and explicit gc.collect() on heavy operations
+import gc
+
+doc = None
+try:
+    doc = pymupdf.open(file_path)
+    return doc.load_page(0).get_text()
+finally:
+    if doc:
+        doc.close()
+    gc.collect()
+```
+
+In Frontend:
+```typescript
+// ❌ WRONG - Throwing in background refresh hooks
+} catch (error) {
+  throw error; // Triggers component retry storms
+}
+
+// ✅ CORRECT - Log gracefully without throwing
+} catch (error) {
+  console.warn("Vault refresh note:", error);
+}
+```

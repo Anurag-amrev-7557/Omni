@@ -645,10 +645,10 @@ def delete_document_graph(filename: str, user_id: str | None = None):
     cur = conn.cursor()
 
     # Delete relations for this document across current user and default fallback
-    cur.execute("DELETE FROM graph_relations WHERE source_doc=? AND (user_id=? OR user_id='default_user')", (filename_clean, uid))
+    cur.execute("DELETE FROM graph_relations WHERE source_doc=? AND (user_id=? OR user_id='default_user' OR user_id='10d2f529-3fae-4a29-9a5e-312876700ff9' OR user_id='default')", (filename_clean, uid))
 
     # Update source_docs on entities
-    cur.execute("SELECT entity_id, source_docs FROM graph_entities WHERE user_id=? OR user_id='default_user'", (uid,))
+    cur.execute("SELECT entity_id, source_docs FROM graph_entities WHERE user_id=? OR user_id='default_user' OR user_id='10d2f529-3fae-4a29-9a5e-312876700ff9' OR user_id='default'", (uid,))
     rows = cur.fetchall()
     for r in rows:
         try:

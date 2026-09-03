@@ -5,7 +5,8 @@ import shutil
 import tempfile
 import asyncio
 import time
-from typing import Optional
+from typing import Optional, List
+from pydantic import BaseModel
 
 # --- PATH RESOLUTION & CONFIG ---
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -14,7 +15,7 @@ for _p in (ROOT_DIR, SRC_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from fastapi import FastAPI, File, UploadFile, Query, HTTPException, BackgroundTasks, Depends, Header
+from fastapi import FastAPI, File, UploadFile, Query, HTTPException, BackgroundTasks, Depends, Header, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response, JSONResponse, FileResponse
 try:
@@ -30,16 +31,16 @@ except ImportError:
             pass
 
 try:
-    from src.db import init_db, clear_collection, get_collection_stats, delete_file_from_collection, delete_user_vectors
+    from src.db import init_db, clear_collection, get_collection_stats, delete_file_from_collection, delete_files_from_collection, delete_user_vectors
     from src.ingest import ingest_file, extract_graph_for_file
     from src.generate import answer_query_stream, prepare_context_and_prompt
-    from src.chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session, delete_user_sessions
+    from src.chat_db import init_chat_db, create_session, get_all_sessions, add_message, save_message_async, get_session_messages, delete_session, delete_user_sessions
     from src.pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
 except ImportError:
-    from db import init_db, clear_collection, get_collection_stats, delete_file_from_collection, delete_user_vectors
+    from db import init_db, clear_collection, get_collection_stats, delete_file_from_collection, delete_files_from_collection, delete_user_vectors
     from ingest import ingest_file, extract_graph_for_file
     from generate import answer_query_stream, prepare_context_and_prompt
-    from chat_db import init_chat_db, create_session, get_all_sessions, add_message, get_session_messages, delete_session, delete_user_sessions
+    from chat_db import init_chat_db, create_session, get_all_sessions, add_message, save_message_async, get_session_messages, delete_session, delete_user_sessions
     from pdf_viewer import render_pdf_page_image, get_pdf_page_count, extract_pdf_page_text
 
 app = FastAPI(
@@ -64,10 +65,7 @@ app = FastAPI(
 
 def get_allowed_origins():
     """Dynamically configure CORS origins based on environment."""
-    origins = []
-    
-    # Always allow local dev
-    dev_origins = [
+    origins = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:3000",
@@ -76,32 +74,25 @@ def get_allowed_origins():
         "http://127.0.0.1:8000",
         "http://localhost:4173",
         "http://127.0.0.1:4173",
+        "https://omni-phi-jade.vercel.app",
+        "https://omni-lufq.onrender.com",
     ]
-    origins.extend(dev_origins)
     
     # Add production frontend URL if configured
     if frontend_env := os.getenv("FRONTEND_URL", "").strip():
         origins.append(frontend_env)
-        # Also support with www subdomain if not already there
-        if not frontend_env.startswith("http://www."):
+        if not frontend_env.startswith("http://www.") and not frontend_env.startswith("https://www."):
             origins.append(frontend_env.replace("https://", "https://www."))
     
-    return origins
+    return list(set(origins))
 
 def get_allowed_origin_regex():
-    """Return a more restrictive regex for production."""
-    env = os.getenv("ENVIRONMENT", "development").lower()
-    
-    if env == "production":
-        # Only allow specific production domains
-        if frontend_url := os.getenv("FRONTEND_URL", "").strip():
-            # Extract domain from FRONTEND_URL
-            domain = frontend_url.replace("https://", "").replace("http://", "").split("/")[0]
-            # Allow exact domain and www version
-            return f"^https?://(www\\.)?{domain.replace('.', '\\.')}(:[0-9]+)?$"
-    
-    # Development/staging: Allow localhost, onrender.com, vercel.app
-    return r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$|^https?://.*\.(onrender\.com|vercel\.app|fly\.dev)(:[0-9]+)?$"
+    """Permissive regex allowing all Vercel deployments, Render services, and local dev."""
+    # Matches:
+    # - https://omni-phi-jade.vercel.app and any *.vercel.app preview branches
+    # - https://omni-lufq.onrender.com and any *.onrender.com instances
+    # - http://localhost:* and http://127.0.0.1:*
+    return r"^https?://([a-zA-Z0-9_-]+\.)*(vercel\.app|onrender\.com|fly\.dev)(:[0-9]+)?$|^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$"
 
 app.add_middleware(
     CORSMiddleware,
@@ -111,6 +102,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
+    max_age=86400,
 )
 
 
@@ -125,6 +117,11 @@ async def startup_event():
             init_chat_db()
         except Exception as e:
             print(f"[WARNING] Failed to initialize chat database at startup: {e}")
+        try:
+            from src.docs_db import init_docs_db
+            init_docs_db()
+        except Exception as e:
+            print(f"[WARNING] Failed to initialize documents metadata database at startup: {e}")
         try:
             from src.graph_db import init_graph_db
             init_graph_db()
@@ -356,42 +353,45 @@ def resolve_document_path(filename: str, user_id: str | None = None) -> Optional
         print(f"[Security] Invalid user_id prevented: {e}")
         return None
     
-    # Ephemeral guest: check guest folder first, then shared samples
-    if is_ephemeral_guest(user_id):
-        guest_dir = os.path.join(UPLOADS_DIR, validated_user_id)
-        p = os.path.join(guest_dir, safe_name)
+    # 1. Check user-specific directory on local disk
+    user_dir = os.path.join(UPLOADS_DIR, validated_user_id)
+    p = os.path.join(user_dir, safe_name)
+    if os.path.exists(p) and os.path.isfile(p):
+        return p
+
+    # 2. Download from Supabase Storage for this user_id if present in cloud bucket
+    try:
+        from src.supabase_storage import download_file
+        os.makedirs(user_dir, exist_ok=True)
+        download_file(f"users/{validated_user_id}/{safe_name}", p)
         if os.path.exists(p) and os.path.isfile(p):
             return p
-        
-        # Fallback to shared sample documents
-        shared_p = os.path.join(UPLOADS_DIR, safe_name)
-        if os.path.exists(shared_p) and os.path.isfile(shared_p):
-            return shared_p
-        
-        # Fallback to data folder samples
-        data_p = os.path.join(ROOT_DIR, "data", safe_name)
-        if os.path.exists(data_p) and os.path.isfile(data_p):
-            return data_p
-        
-        return None
-    
-    # Authenticated (non-guest) user: MUST only resolve from their dedicated folder
-    if not is_guest_or_default_user(user_id):
-        user_dir = os.path.join(UPLOADS_DIR, validated_user_id)
-        p = os.path.join(user_dir, safe_name)
-        if os.path.exists(p) and os.path.isfile(p):
-            return p
-        return None
-    
-    # Default guest/shared workspace: check shared uploads and data folder
-    shared_p = os.path.join(UPLOADS_DIR, safe_name)
-    if os.path.exists(shared_p) and os.path.isfile(shared_p):
-        return shared_p
-    
-    data_p = os.path.join(ROOT_DIR, "data", safe_name)
-    if os.path.exists(data_p) and os.path.isfile(data_p):
-        return data_p
-    
+    except Exception:
+        pass
+
+    # 3. Check fallback local directories for shared/default files
+    for check_dir in [
+        os.path.join(UPLOADS_DIR, "default"),
+        os.path.join(UPLOADS_DIR, DEFAULT_LOCAL_USER),
+        UPLOADS_DIR,
+        os.path.join(ROOT_DIR, "data"),
+    ]:
+        fp = os.path.join(check_dir, safe_name)
+        if os.path.exists(fp) and os.path.isfile(fp):
+            return fp
+
+    # 4. Check fallback Supabase Storage folders (default or shared local user)
+    for fallback_uid in ["default", DEFAULT_LOCAL_USER]:
+        try:
+            from src.supabase_storage import download_file
+            fb_path = os.path.join(UPLOADS_DIR, fallback_uid, safe_name)
+            os.makedirs(os.path.join(UPLOADS_DIR, fallback_uid), exist_ok=True)
+            download_file(f"users/{fallback_uid}/{safe_name}", fb_path)
+            if os.path.exists(fb_path) and os.path.isfile(fb_path):
+                return fb_path
+        except Exception:
+            pass
+
     return None
 
 def cleanup_guest_session(guest_id: str):
@@ -477,9 +477,64 @@ def get_documents(response: Response = None, user_id: str = Depends(require_user
     if response:
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     set_current_user(user_id)
-    stats = get_collection_stats(user_id=user_id)
+    
+    # Concurrently fetch stats, Postgres records, and Supabase Storage metadata
+    import concurrent.futures
+    from src.docs_db import get_user_documents
+    from src.supabase_storage import get_user_files
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        stats_future = executor.submit(get_collection_stats, user_id=user_id)
+        db_docs_future = executor.submit(get_user_documents, user_id=user_id)
+        storage_files_future = executor.submit(get_user_files, user_id)
+
+        try:
+            stats = stats_future.result(timeout=5)
+        except Exception:
+            stats = {"total_chunks": 0, "files": []}
+
+        try:
+            db_docs = db_docs_future.result(timeout=5)
+        except Exception as e:
+            print(f"[Documents] DB lookup notice: {e}")
+            db_docs = []
+
+        try:
+            storage_files = storage_files_future.result(timeout=5)
+        except Exception:
+            storage_files = []
+
     available_files = []
     seen = set()
+
+    # 1. Primary: Load persisted document records from PostgreSQL (Neon/Supabase)
+    for doc in db_docs:
+        fname = doc["filename"]
+        if fname not in seen and not fname.startswith("."):
+            seen.add(fname)
+            available_files.append({
+                "filename": fname,
+                "size_mb": doc.get("size_mb", 0.0),
+                "pages": doc.get("pages", 1),
+                "indexed": fname in stats["files"] or doc.get("indexed", True),
+                "status": doc.get("status", "ready"),
+                "summary": doc.get("summary", "")
+            })
+
+    # 2. Supabase Storage listing for files uploaded to cloud bucket
+    for sf in storage_files:
+        fname = sf.get("name")
+        if fname and fname not in seen and not fname.startswith("."):
+            seen.add(fname)
+            metadata = sf.get("metadata", {})
+            size_mb = round(metadata.get("size", 0) / (1024 * 1024), 2)
+            available_files.append({
+                "filename": fname,
+                "size_mb": size_mb,
+                "pages": 1,
+                "indexed": fname in stats["files"],
+                "status": "ready"
+            })
     
     def process_file(fpath: str, fname: str):
         if fname not in seen and os.path.isfile(fpath) and not fname.startswith("."):
@@ -490,10 +545,11 @@ def get_documents(response: Response = None, user_id: str = Depends(require_user
                 "filename": fname,
                 "size_mb": size_mb,
                 "pages": page_count,
-                "indexed": fname in stats["files"]
+                "indexed": fname in stats["files"],
+                "status": "ready"
             })
 
-    # 1. First, list files in this specific user's folder
+    # 3. User local directory files
     user_uploads_dir = get_user_uploads_dir(user_id)
     if os.path.exists(user_uploads_dir):
         for fname in sorted(os.listdir(user_uploads_dir)):
@@ -501,7 +557,7 @@ def get_documents(response: Response = None, user_id: str = Depends(require_user
             if os.path.isfile(fpath):
                 process_file(fpath, fname)
 
-    # 2. If guest/local user, also include base demo sample documents
+    # 4. Guest / default workspace demo files
     if is_guest_or_default_user(user_id):
         base_uploads_dir = os.path.join(ROOT_DIR, "data", "uploaded_docs")
         if os.path.exists(base_uploads_dir) and base_uploads_dir != user_uploads_dir:
@@ -517,12 +573,27 @@ def get_documents(response: Response = None, user_id: str = Depends(require_user
                 if os.path.isfile(fpath):
                     process_file(fpath, fname)
 
-    # 3. Add files that were indexed into vector DB for this user
+    # 5. Add any remaining files that were indexed into vector DB for this user
     for fname in stats["files"]:
-        if fname not in seen:
+        # Filter out any internal guest-prefixed files
+        if fname.startswith("guest_") and len(fname) > 25 and "_" in fname[6:]:
+            continue
+        if fname not in seen and not fname.startswith("."):
+            seen.add(fname)
             fpath = resolve_document_path(fname, user_id=user_id)
             if fpath and os.path.exists(fpath) and os.path.isfile(fpath):
-                process_file(fpath, fname)
+                size_mb = round(os.path.getsize(fpath) / (1024 * 1024), 2)
+                page_count = get_pdf_page_count(fpath) if fname.lower().endswith(".pdf") else 1
+            else:
+                size_mb = 0.2
+                page_count = 1
+            available_files.append({
+                "filename": fname,
+                "size_mb": size_mb,
+                "pages": page_count,
+                "indexed": True,
+                "status": "ready"
+            })
 
     return {"documents": available_files}
 
@@ -568,32 +639,57 @@ async def upload_documents(files: list[UploadFile] = File(...), user_id: str = D
             
             file_start = time.time()
             
-            # Upload to Supabase Storage (persists)
+            # Upload to Supabase Storage (persists in cloud)
             supabase_path = f"users/{user_id}/{filename}"
             try:
                 upload_bytes(content, supabase_path, bucket_name="documents")
             except Exception as e:
-                errors.append(f"{filename}: Failed to upload to storage: {str(e)}")
-                continue
-            
-            # Save to temp location for ingestion
-            temp_dir = os.path.join(ROOT_DIR, "data", "temp_uploads")
-            os.makedirs(temp_dir, exist_ok=True)
-            save_path = os.path.join(temp_dir, f"{user_id}_{filename}")
-            
+                print(f"[Upload] Storage notice for {filename}: {e}")
+
+            # Save to user uploads dir
+            user_dir = get_user_uploads_dir(user_id)
+            os.makedirs(user_dir, exist_ok=True)
+            save_path = os.path.join(user_dir, filename)
             with open(save_path, "wb") as f:
                 f.write(content)
             
+            # Register in Postgres database
+            page_count = get_pdf_page_count(save_path) if filename.lower().endswith(".pdf") else 1
+            try:
+                from src.docs_db import upsert_document_record, update_document_status
+                upsert_document_record(filename, user_id=user_id, size_bytes=len(content), page_count=page_count, status="ready")
+            except Exception as dbe:
+                print(f"[Upload] DocsDB notice: {dbe}")
+
             try:
                 # Purge prior vectors for this filename to prevent duplicate accumulation
                 delete_file_from_collection(filename, user_id=user_id)
-                # Run optimized ingestion (graph extraction disabled by default for speed)
-                await asyncio.to_thread(ingest_file, save_path, user_id, extract_graph=False, generate_ai_summary=False)
+                # Run optimized ingestion
+                ingest_res = await asyncio.to_thread(
+                    ingest_file,
+                    save_path,
+                    user_id=user_id,
+                    file_bytes=content,
+                    filename=filename,
+                    extract_graph=False,
+                    generate_ai_summary=False
+                )
                 ingested_count += 1
                 elapsed = time.time() - file_start
                 processing_times.append(elapsed)
                 print(f"[Upload] ✓ Successfully ingested {filename} for user {user_id} in {elapsed:.2f}s")
                 
+                try:
+                    update_document_status(
+                        filename,
+                        user_id=user_id,
+                        status="ready",
+                        chunk_count=ingest_res.get("chunk_count", 0) if isinstance(ingest_res, dict) else 0,
+                        summary=ingest_res.get("summary") if isinstance(ingest_res, dict) else ""
+                    )
+                except Exception:
+                    pass
+
                 # Fire-and-forget background graph extraction
                 _sp, _fn, _uid = save_path, filename, user_id
                 async def _bg_graph(sp=_sp, fn=_fn, uid=_uid):
@@ -690,10 +786,10 @@ async def upload_document_stream(file: UploadFile = File(...), user_id: str = De
             yield json.dumps({"type": "error", "error": f"Failed to store file: {str(e)}", "filename": filename}) + "\n"
             return
 
-        # Save to temp location for ingestion
-        temp_dir = os.path.join(ROOT_DIR, "data", "temp_uploads")
-        os.makedirs(temp_dir, exist_ok=True)
-        save_path = os.path.join(temp_dir, f"{user_id}_{filename}")
+        # Save to user uploads directory for persistent storage & instant inspection
+        user_uploads_dir = get_user_uploads_dir(user_id)
+        os.makedirs(user_uploads_dir, exist_ok=True)
+        save_path = os.path.join(user_uploads_dir, filename)
         
         try:
             with open(save_path, "wb") as f:
@@ -703,27 +799,48 @@ async def upload_document_stream(file: UploadFile = File(...), user_id: str = De
             yield json.dumps({"type": "error", "error": f"Failed to save file: {str(e)}", "filename": filename}) + "\n"
             return
 
+        # Register in PostgreSQL database
+        page_count = get_pdf_page_count(save_path) if filename.lower().endswith(".pdf") else 1
+        try:
+            from src.docs_db import upsert_document_record
+            upsert_document_record(filename, user_id=user_id, size_bytes=len(content), page_count=page_count, status="ready")
+        except Exception as dbe:
+            print(f"[Upload-Stream] DocsDB notice: {dbe}")
+
         # Purge prior vectors to prevent duplicates
         try:
             delete_file_from_collection(filename, user_id=user_id)
         except Exception as e:
             print(f"[Upload-Stream] Warning: Could not purge old vectors: {e}")
 
-        await q.put({"type": "progress", "stage": "reading", "progress": 5, "message": "Reading file contents...", "filename": filename})
+        await q.put({"type": "progress", "stage": "reading", "progress": 15, "message": "Extracting text content...", "filename": filename})
 
         async def _run_ingest():
             """Run ingestion in thread pool to not block event loop."""
             try:
-                # Fast primary ingestion: chunking + embeddings
-                # Graph extraction runs separately as background task
-                await asyncio.to_thread(
+                # Fast primary ingestion: chunking + FastEmbed dense vectors
+                # Uses content bytes directly for instant in-memory processing
+                ingest_res = await asyncio.to_thread(
                     ingest_file,
                     save_path,
-                    user_id,
+                    user_id=user_id,
+                    file_bytes=content,
+                    filename=filename,
                     extract_graph=False,
                     generate_ai_summary=False,
                     on_progress=_progress_cb
                 )
+                try:
+                    from src.docs_db import update_document_status
+                    update_document_status(
+                        filename,
+                        user_id=user_id,
+                        status="ready",
+                        chunk_count=ingest_res.get("chunk_count", 0) if isinstance(ingest_res, dict) else 0,
+                        summary=ingest_res.get("summary") if isinstance(ingest_res, dict) else ""
+                    )
+                except Exception:
+                    pass
                 await q.put({"type": "done", "success": True, "filename": filename})
             except Exception as e:
                 import traceback
@@ -759,26 +876,91 @@ async def upload_document_stream(file: UploadFile = File(...), user_id: str = De
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
-@app.delete("/api/documents/{filename}")
-def delete_document(filename: str, user_id: str = Depends(require_user)):
-    set_current_user(user_id)
-    file_path = resolve_document_path(filename, user_id=user_id)
+def _delete_physical_file(filename: str, user_id: str | None = None):
+    try:
+        safe_name = _validate_filename(filename)
+    except ValueError:
+        return
     
-    # 1. Delete physical file if exists
-    if file_path and os.path.exists(file_path):
-        try:
-            os.remove(file_path)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error deleting file: {e}")
-            
-    # 2. Delete vectors from Qdrant
-    delete_file_from_collection(filename, user_id=user_id)
+    from src.config import UPLOADS_DIR, ROOT_DIR
+    target_dirs = [
+        os.path.join(UPLOADS_DIR, _validate_user_id(user_id)),
+        os.path.join(UPLOADS_DIR, "default"),
+        os.path.join(UPLOADS_DIR, DEFAULT_LOCAL_USER),
+        UPLOADS_DIR,
+        os.path.join(ROOT_DIR, "data"),
+    ]
+    resolved = resolve_document_path(filename, user_id=user_id)
+    if resolved:
+        target_dirs.append(os.path.dirname(resolved))
+    
+    for d in set(target_dirs):
+        p = os.path.join(d, safe_name)
+        if os.path.exists(p) and os.path.isfile(p):
+            try:
+                os.remove(p)
+                print(f"[API] Removed physical file: {p}")
+            except Exception as e:
+                print(f"[API] Error removing physical file {p}: {e}")
+
+def _delete_storage_file(filename: str, user_id: str | None = None):
+    try:
+        safe_name = _validate_filename(filename)
+        from src.supabase_storage import delete_file
+        delete_file(f"users/{user_id}/{safe_name}")
+        if is_guest_or_default_user(user_id):
+            delete_file(f"users/{DEFAULT_LOCAL_USER}/{safe_name}")
+            delete_file(f"users/default/{safe_name}")
+    except Exception:
+        pass
+
+def _delete_graph_file(filename: str, user_id: str | None = None):
     try:
         from src.graph_db import delete_document_graph
         delete_document_graph(filename, user_id=user_id)
     except Exception:
         pass
+
+@app.delete("/api/documents/{filename}")
+def delete_document(filename: str, user_id: str = Depends(require_user)):
+    set_current_user(user_id)
+    _delete_physical_file(filename, user_id=user_id)
+    delete_file_from_collection(filename, user_id=user_id)
+    _delete_storage_file(filename, user_id=user_id)
+    
+    try:
+        from src.docs_db import delete_document_record
+        delete_document_record(filename, user_id=user_id)
+    except Exception as e:
+        print(f"[API] Error deleting docs_db record: {e}")
+        
+    _delete_graph_file(filename, user_id=user_id)
     return {"success": True, "filename": filename}
+
+class BatchDeleteRequest(BaseModel):
+    filenames: List[str]
+
+@app.post("/api/documents/batch-delete")
+def batch_delete_documents(req: BatchDeleteRequest, user_id: str = Depends(require_user)):
+    set_current_user(user_id)
+    filenames = req.filenames
+    if not filenames:
+        return {"success": True, "deleted": []}
+    
+    for fn in filenames:
+        _delete_physical_file(fn, user_id=user_id)
+        _delete_storage_file(fn, user_id=user_id)
+        _delete_graph_file(fn, user_id=user_id)
+        
+    delete_files_from_collection(filenames, user_id=user_id)
+    
+    try:
+        from src.docs_db import delete_document_records
+        delete_document_records(filenames, user_id=user_id)
+    except Exception as e:
+        print(f"[API] Error deleting docs_db records batch: {e}")
+        
+    return {"success": True, "deleted": filenames}
 
 @app.get("/api/download/{filename}")
 def download_document(filename: str, user_id: str = Depends(require_user)):
@@ -1040,6 +1222,19 @@ def get_file_content(filename: str = Query(...), user_id: str = Depends(require_
     if not file_path or not os.path.exists(file_path):
         return {"filename": filename, "content": "File content unavailable."}
     
+    if filename.lower().endswith(".pdf"):
+        from src.pdf_viewer import extract_pdf_page_text
+        try:
+            pages_text = []
+            for p_num in range(1, 4):
+                t = extract_pdf_page_text(file_path, p_num)
+                if t and not t.startswith("Error"):
+                    pages_text.append(t.strip())
+            content = "\n\n---\n\n".join(pages_text) if pages_text else "No text extracted from PDF."
+            return {"filename": filename, "content": content}
+        except Exception as pe:
+            return {"filename": filename, "content": f"PDF extraction note: {str(pe)}"}
+
     try:
         with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
             content = f.read()
@@ -1063,16 +1258,15 @@ def get_pdf_page_image(filename: str = Query(...), page: int = Query(1, ge=1), u
 def get_sessions(user_id: str = Depends(require_user)):
     set_current_user(user_id)
     sessions = get_all_sessions(user_id=user_id)
-    if not sessions:
-        create_session("New Chat", user_id=user_id)
-        sessions = get_all_sessions(user_id=user_id)
     return {"sessions": sessions}
 
 @app.post("/api/sessions")
-def create_new_session(title: str = "New Chat", user_id: str = Depends(require_user)):
+def create_new_session(data: dict = Body(default={}), user_id: str = Depends(require_user)):
     set_current_user(user_id)
-    session_id = create_session(title, user_id=user_id)
-    return {"session_id": session_id, "title": title}
+    title = data.get("title", "New Chat") if isinstance(data, dict) else "New Chat"
+    session_id = data.get("session_id") if isinstance(data, dict) else None
+    real_id = create_session(title=title, user_id=user_id, session_id=session_id)
+    return {"session_id": real_id, "title": title}
 
 @app.get("/api/sessions/{session_id}/messages")
 def get_messages(session_id: str):
@@ -1111,13 +1305,19 @@ def stream_chat(data: dict, user_id: str = Depends(require_user)):
     if not session_id or not prompt:
         raise HTTPException(status_code=400, detail="Missing session_id or prompt")
         
-    messages = get_session_messages(session_id)
-    add_message(session_id, "user", prompt)
-    
     def sse_event_generator():
         try:
             status_msg = "Searching vault & live web via Tavily..." if web_search else "Searching knowledge vault..."
             yield f"data: {json.dumps({'type': 'status', 'message': status_msg})}\n\n"
+
+            # Fetch session history and record user message non-blockingly
+            try:
+                save_message_async(session_id, "user", prompt)
+                messages = get_session_messages(session_id)
+            except Exception as hist_err:
+                print(f"[Warning] Chat history notice: {hist_err}", flush=True)
+                messages = []
+
             try:
                 prompt_str, retrieved_contexts = prepare_context_and_prompt(
                     prompt, 
@@ -1139,7 +1339,11 @@ def stream_chat(data: dict, user_id: str = Depends(require_user)):
                 full_text += token
                 yield f"data: {json.dumps({'type': 'token', 'token': token})}\n\n"
                 
-            add_message(session_id, "assistant", full_text, retrieved_contexts)
+            try:
+                save_message_async(session_id, "assistant", full_text, retrieved_contexts)
+            except Exception as save_err:
+                print(f"[Warning] Failed to save assistant message: {save_err}", flush=True)
+
             yield f"data: {json.dumps({'type': 'done', 'full_text': full_text})}\n\n"
         except Exception as e:
             print(f"[Error] Stream generation error: {e}", flush=True)
@@ -1210,7 +1414,7 @@ def build_graph(
             doc_files = []
             for vd in vault_docs:
                 fn = vd["filename"]
-                p = resolve_document_path(fn)
+                p = resolve_document_path(fn, user_id=uid)
                 if p and os.path.exists(p):
                     doc_files.append((p, fn))
 

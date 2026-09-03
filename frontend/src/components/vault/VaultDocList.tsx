@@ -1,5 +1,4 @@
-import React from 'react';
-import { Eye, Download, RotateCw, Trash2, Check, BookOpen, ArrowUp, ArrowDown, ArrowUpDown, Sparkles } from 'lucide-react';
+import { Eye, Download, RotateCw, Trash2, Check, BookOpen, ArrowUp, ArrowDown, ArrowUpDown, Sparkles, Loader2 } from 'lucide-react';
 import { DocumentItem } from '../../types/document';
 import { FormatBadge } from '../common/FormatBadge';
 import { CustomCheckbox } from '../common/CustomCheckbox';
@@ -187,17 +186,33 @@ export const VaultDocList: React.FC<VaultDocListProps> = ({
 
                   {/* Vector Index Status Micro-Pill */}
                   <td className="py-3.5 px-4">
-                    <span 
-                      className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border shadow-2xs"
-                      style={{
-                        backgroundColor: 'var(--status-active-bg)',
-                        color: 'var(--status-active-text)',
-                        borderColor: 'var(--status-active-border)',
-                      }}
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--status-active-text)]" />
-                      <span>Indexed</span>
-                    </span>
+                    {doc.status === 'indexing' || doc.status === 'uploading' || doc.indexed === false ? (
+                      <span 
+                        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border shadow-2xs bg-amber-500/10 text-amber-500 dark:text-amber-400 border-amber-500/20"
+                      >
+                        <Loader2 size={11} className="animate-spin text-amber-500 dark:text-amber-400" />
+                        <span>{doc.status === 'uploading' ? 'Uploading...' : 'Indexing...'}</span>
+                      </span>
+                    ) : doc.status === 'failed' ? (
+                      <span 
+                        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border shadow-2xs bg-rose-500/10 text-rose-500 dark:text-rose-400 border-rose-500/20"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                        <span>Failed</span>
+                      </span>
+                    ) : (
+                      <span 
+                        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border shadow-2xs"
+                        style={{
+                          backgroundColor: 'var(--status-active-bg)',
+                          color: 'var(--status-active-text)',
+                          borderColor: 'var(--status-active-border)',
+                        }}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--status-active-text)]" />
+                        <span>Indexed</span>
+                      </span>
+                    )}
                   </td>
 
                   {/* Actions Bar */}

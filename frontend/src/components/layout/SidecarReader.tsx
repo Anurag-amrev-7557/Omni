@@ -4,14 +4,10 @@ import {
   ZoomIn, 
   ZoomOut, 
   Download, 
-  FileText, 
   ChevronLeft, 
   ChevronRight, 
   Copy, 
   Check, 
-  RotateCcw, 
-  Maximize2, 
-  Sparkles,
   ShieldCheck
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -32,6 +28,7 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
   const [zoom, setZoom] = useState<number>(100);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isPageLoading, setIsPageLoading] = useState<boolean>(false);
+  const [imgError, setImgError] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
 
   // Initialize or update document state
@@ -40,6 +37,8 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
 
     setCurrentPage(doc.page || 1);
     setZoom(100);
+    setImgError(false);
+    setIsPageLoading(true);
 
     const isPdf = doc.filename.toLowerCase().endsWith('.pdf');
     if (isPdf) {
@@ -59,6 +58,8 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
       .finally(() => setIsLoading(false));
   }, [doc]);
 
+  const isPdf = doc?.filename ? doc.filename.toLowerCase().endsWith('.pdf') : false;
+
   // Keyboard navigation shortcuts
   useEffect(() => {
     if (!isOpen) return;
@@ -75,7 +76,7 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, totalPages, onClose]);
+  }, [isOpen, totalPages, onClose, isPdf]);
 
   const handleCopyText = useCallback(() => {
     if (!content) return;
@@ -83,8 +84,6 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [content]);
-
-  const isPdf = doc?.filename ? doc.filename.toLowerCase().endsWith('.pdf') : false;
 
   return (
     <aside 
@@ -209,7 +208,7 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
           <div className="h-full flex flex-col items-center justify-center p-12">
             <OrbitingOrbLoader size="lg" />
           </div>
-        ) : isPdf ? (
+        ) : isPdf && !imgError ? (
           <div className="w-full flex flex-col items-center justify-start">
             <div 
               className="relative w-full flex justify-center"
@@ -223,6 +222,10 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
                 src={api.getPdfPageImageUrl(doc.filename, currentPage)} 
                 alt={`Page ${currentPage} of ${doc.filename}`}
                 onLoad={() => setIsPageLoading(false)}
+                onError={() => {
+                  setImgError(true);
+                  setIsPageLoading(false);
+                }}
                 className={`w-full h-auto block select-text transition-opacity duration-200 ${isPageLoading ? 'opacity-40' : 'opacity-100'}`}
                 style={{ imageRendering: '-webkit-optimize-contrast' }}
                 loading="eager"
@@ -244,13 +247,18 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
             )}
           </div>
         ) : (
-          /* Text / Markdown Render Directly in Viewport */
+          /* Text / Markdown Render Directly in Viewport (or PDF text fallback) */
           <div 
             className="w-full p-6 sm:p-8 omni-prose"
             style={{ 
               fontSize: `${(zoom / 100) * 0.95}rem`,
             }}
           >
+            {isPdf && imgError && (
+              <div className="mb-4 px-3 py-2 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] text-xs text-[var(--text-muted)] flex items-center gap-2">
+                <span>Viewing verified document text stream</span>
+              </div>
+            )}
             <ReactMarkdown>{content}</ReactMarkdown>
           </div>
         )}

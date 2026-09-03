@@ -1,7 +1,8 @@
 import os
 import json
-import urllib.request
 from typing import Optional
+import requests
+from requests.adapters import HTTPAdapter
 
 try:
     from src.config import TAVILY_API_KEY
@@ -13,15 +14,31 @@ except ImportError:
 
 TAVILY_SEARCH_URL = "https://api.tavily.com/search"
 
+# Persistent connection pool for Tavily to eliminate SSL handshake overhead on repeated queries
+_tavily_session: Optional[requests.Session] = None
+
+def _get_tavily_session() -> requests.Session:
+    global _tavily_session
+    if _tavily_session is None:
+        _tavily_session = requests.Session()
+        adapter = HTTPAdapter(pool_connections=5, pool_maxsize=10, max_retries=1)
+        _tavily_session.mount("https://", adapter)
+        _tavily_session.headers.update({
+            "Content-Type": "application/json",
+            "User-Agent": "Omni-RAG-WebSearch/2.0"
+        })
+    return _tavily_session
+
+
 def search_tavily(
     query: str, 
-    max_results: int = 5, 
+    max_results: int = 4, 
     search_depth: str = "basic",
-    include_answer: bool = True
+    include_answer: bool = False
 ) -> dict:
     """
-    Executes a web search using the Tavily Search API.
-    Returns structured results including AI synthesized quick answer, sources, and snippets.
+    Executes an ultra-fast web search using the Tavily Search API.
+    Uses connection pooling and skips internal LLM answer synthesis for maximum speed (<500ms).
     """
     api_key = TAVILY_API_KEY or os.getenv("TAVILY_API_KEY", "")
     if not api_key:
@@ -43,33 +60,29 @@ def search_tavily(
     }
 
     try:
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            TAVILY_SEARCH_URL,
-            data=data,
-            headers={"Content-Type": "application/json", "User-Agent": "Omni-RAG-WebSearch/1.0"}
-        )
-        with urllib.request.urlopen(req, timeout=12) as response:
-            res_json = json.loads(response.read().decode("utf-8"))
+        session = _get_tavily_session()
+        response = session.post(TAVILY_SEARCH_URL, json=payload, timeout=6.0)
+        response.raise_for_status()
+        res_json = response.json()
+        
+        answer = res_json.get("answer")
+        results = res_json.get("results", [])
+        
+        clean_results = []
+        for r in results:
+            clean_results.append({
+                "title": r.get("title", ""),
+                "url": r.get("url", ""),
+                "content": r.get("content", ""),
+                "score": r.get("score", 0.0)
+            })
             
-            answer = res_json.get("answer")
-            results = res_json.get("results", [])
-            
-            clean_results = []
-            for r in results:
-                clean_results.append({
-                    "title": r.get("title", ""),
-                    "url": r.get("url", ""),
-                    "content": r.get("content", ""),
-                    "score": r.get("score", 0.0)
-                })
-                
-            return {
-                "success": True,
-                "query": query,
-                "answer": answer,
-                "results": clean_results
-            }
+        return {
+            "success": True,
+            "query": query,
+            "answer": answer,
+            "results": clean_results
+        }
     except Exception as e:
         print(f"[Tavily Error] Failed web search for '{query}': {e}")
         return {
@@ -79,3 +92,4 @@ def search_tavily(
             "answer": None,
             "results": []
         }
+

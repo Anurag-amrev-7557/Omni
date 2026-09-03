@@ -18,6 +18,7 @@ import re
 DEFAULT_MODELS = [
     "openai/gpt-oss-120b",
     "openai/gpt-oss-20b",
+    "groq/compound-mini",
     "groq/compound",
     "qwen/qwen3.6-27b",
     "qwen/qwen3.8-27b",
@@ -26,6 +27,7 @@ DEFAULT_MODELS = [
 MODEL_ALIASES = {
     "GPT-OSS 120B": "openai/gpt-oss-120b",
     "GPT-OSS 20B": "openai/gpt-oss-20b",
+    "Groq Compound Mini": "groq/compound-mini",
     "Groq Compound": "groq/compound",
     "Qwen 3.6 27B": "qwen/qwen3.6-27b",
     "Qwen 3.8 27B": "qwen/qwen3.8-27b",
@@ -127,25 +129,33 @@ def prepare_context_and_prompt(
     sub_queries = decompose_query(standalone_query)
     
     all_contexts = []
-    for sq in sub_queries:
-        contexts = hybrid_search(sq, k=3, user_id=user_id)
-        all_contexts.extend(contexts)
-
-    # For meta-queries about the vault, explicitly pull representative context from all active files
-    if is_vault_meta_query(query) and active_files:
-        for fname in active_files:
-            doc_contexts = hybrid_search(f"Overview summary and purpose of {fname}", k=2, user_id=user_id)
-            all_contexts.extend(doc_contexts)
-
-    # Tavily Web Search augmentation if requested
     web_contexts = []
-    if web_search and search_tavily:
+
+    def fetch_local_contexts() -> list[dict]:
+        if not active_files:
+            return []
+        local_ctx = []
+        for sq in sub_queries:
+            contexts = hybrid_search(sq, k=3, user_id=user_id, active_filenames=active_files)
+            local_ctx.extend(contexts)
+
+        # For meta-queries about the vault, explicitly pull representative context from all active files
+        if is_vault_meta_query(query):
+            for fname in active_files:
+                doc_contexts = hybrid_search(f"Overview summary and purpose of {fname}", k=2, user_id=user_id, active_filenames=active_files)
+                local_ctx.extend(doc_contexts)
+        return local_ctx
+
+    def fetch_web_contexts() -> list[dict]:
+        if not (web_search and search_tavily):
+            return []
+        w_ctx = []
         try:
-            print(f"[WebSearch] Invoking Tavily web search for: '{standalone_query}'")
-            tavily_res = search_tavily(standalone_query, max_results=4, include_answer=True)
+            print(f"[WebSearch] Invoking fast Tavily web search for: '{standalone_query}'")
+            tavily_res = search_tavily(standalone_query, max_results=4, include_answer=False)
             if tavily_res.get("success"):
                 if tavily_res.get("answer"):
-                    web_contexts.append({
+                    w_ctx.append({
                         "filename": "Tavily AI Web Synthesis",
                         "page": 1,
                         "content": tavily_res["answer"],
@@ -157,7 +167,7 @@ def prepare_context_and_prompt(
                     snippet = r.get("content", "")
                     url = r.get("url", "")
                     if snippet:
-                        web_contexts.append({
+                        w_ctx.append({
                             "filename": f"[Web] {title}",
                             "page": 1,
                             "content": f"{snippet}\nSource URL: {url}",
@@ -166,6 +176,18 @@ def prepare_context_and_prompt(
                         })
         except Exception as e:
             print(f"[WebSearch Warning] Tavily search error: {e}")
+        return w_ctx
+
+    # Execute local and web search concurrently via ThreadPoolExecutor
+    if web_search:
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            local_future = executor.submit(fetch_local_contexts)
+            web_future = executor.submit(fetch_web_contexts)
+            all_contexts = local_future.result()
+            web_contexts = web_future.result()
+    else:
+        all_contexts = fetch_local_contexts()
         
     manifest_text = "DOCUMENTS CURRENTLY IN THE KNOWLEDGE VAULT:\n"
     if active_files:
@@ -259,7 +281,7 @@ def answer_query_stream(
     has_streamed = False
     for model_name in models_to_try:
         try:
-            llm = ChatGroq(model=model_name, temperature=0, streaming=True, max_tokens=1800, max_retries=1, request_timeout=35.0)
+            llm = ChatGroq(model=model_name, temperature=0, streaming=True, max_tokens=1800, max_retries=0, request_timeout=20.0)
             for chunk in llm.stream(prompt):
                 if chunk.content:
                     has_streamed = True
