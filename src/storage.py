@@ -53,14 +53,25 @@ def ensure_bucket_exists():
         pass
 
 
-def save_file(user_id: str, filename: str, content: bytes, local_path: Optional[str] = None) -> bool:
+def save_file(user_id: str, filename: str, content: Optional[bytes] = None, local_path: Optional[str] = None) -> bool:
     """Saves file to local disk cache and uploads to Supabase Storage."""
-    if local_path:
+    if local_path and content is not None:
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
         with open(local_path, "wb") as f:
             f.write(content)
 
     if not is_storage_configured():
+        return bool(local_path)
+
+    upload_data = content
+    if upload_data is None and local_path and os.path.exists(local_path):
+        try:
+            with open(local_path, "rb") as f:
+                upload_data = f.read()
+        except Exception:
+            upload_data = None
+
+    if upload_data is None:
         return bool(local_path)
 
     ensure_bucket_exists()
@@ -74,7 +85,7 @@ def save_file(user_id: str, filename: str, content: bytes, local_path: Optional[
     headers["x-upsert"] = "true"
 
     try:
-        req = urllib.request.Request(url, data=content, headers=headers, method="POST")
+        req = urllib.request.Request(url, data=upload_data, headers=headers, method="POST")
         with urllib.request.urlopen(req, timeout=15) as resp:
             if resp.status in (200, 201):
                 print(f"[Supabase Storage] Successfully uploaded {key} to bucket '{BUCKET_NAME}'")

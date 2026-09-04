@@ -10,10 +10,12 @@ try:
     from src.db import get_qdrant_client, init_db, delete_file_from_collection
     from src.config import COLLECTION_NAME
     from src.retrieve import get_embeddings
+    from src.memory import reclaim_memory
 except ImportError:
     from db import get_qdrant_client, init_db, delete_file_from_collection
     from config import COLLECTION_NAME
     from retrieve import get_embeddings
+    from memory import reclaim_memory
 
 
 def generate_summary(pages: list[Document]) -> str:
@@ -166,9 +168,17 @@ def ingest_file(file_path: str, user_id: str | None = None, progress_callback = 
         embedding=embeddings_model,
     )
     
-    if progress_callback:
-        progress_callback(75, "Writing vectors to Qdrant...")
-    vector_store.add_documents(child_documents)
+    # Batch vector indexing in chunks of 32 to avoid sharp FastEmbed / ONNX memory spikes on 512MB RAM
+    CHUNK_BATCH_SIZE = 32
+    total_children = len(child_documents)
+    for i in range(0, total_children, CHUNK_BATCH_SIZE):
+        batch = child_documents[i:i + CHUNK_BATCH_SIZE]
+        vector_store.add_documents(batch)
+        if progress_callback:
+            pct = int(60 + (i / max(1, total_children)) * 16)
+            progress_callback(pct, f"Indexing vectors ({min(i + CHUNK_BATCH_SIZE, total_children)}/{total_children})...")
+        reclaim_memory()
+
     print(f"[DEBUG] Ingested {filename} into Qdrant: {len(parent_docs)} parent blocks, {len(child_documents)} child vectors.")
     print(f"[DEBUG] Collection name used: {COLLECTION_NAME}")
 
@@ -177,8 +187,8 @@ def ingest_file(file_path: str, user_id: str | None = None, progress_callback = 
         from src.graph_extractor import extract_entities_and_relations
         from src.graph_clustering import run_community_detection_and_summaries
         
-        # Process up to 4 salient parent chunks for rapid yet comprehensive graph coverage
-        chunks_to_process = min(4, len(parent_docs))
+        # Process up to 3 salient parent chunks for rapid yet comprehensive graph coverage without memory spikes
+        chunks_to_process = min(3, len(parent_docs))
         entities_extracted = 0
         relations_extracted = 0
         
@@ -209,12 +219,11 @@ def ingest_file(file_path: str, user_id: str | None = None, progress_callback = 
     except Exception as g_exc:
         print(f"[Ingest] Graph extraction notice for {filename}: {g_exc}")
     
-    # Immediately reclaim memory to prevent Render 512MB RAM OOM
+    # Immediately reclaim memory to release RSS back to OS
     del child_documents
     del parent_docs
     del pages
-    import gc
-    gc.collect()
+    reclaim_memory()
 
     if progress_callback:
         progress_callback(100, "Completed")

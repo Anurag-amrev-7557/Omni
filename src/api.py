@@ -35,6 +35,7 @@ try:
         add_semantic_cached_response,
         invalidate_user_cache,
     )
+    from src.memory import reclaim_memory, get_rss_mb
 except ImportError:
     from db import init_db, clear_collection, get_collection_stats, delete_file_from_collection, get_qdrant_client
     from ingest import ingest_file
@@ -53,6 +54,7 @@ except ImportError:
         add_semantic_cached_response,
         invalidate_user_cache,
     )
+    from memory import reclaim_memory, get_rss_mb
 
 def get_uploads_dir() -> str:
     candidate = os.getenv("UPLOADS_DIR")
@@ -147,8 +149,11 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     resp = JSONResponse(status_code=500, content={"detail": f"Internal Server Error: {str(exc)}"})
     return add_cors_headers_if_needed(resp, request)
 
+_request_counter = 0
+
 @app.middleware("http")
 async def logging_and_auth_middleware(request: Request, call_next):
+    global _request_counter
     start_time = time.perf_counter()
     user_id = None
     
@@ -191,6 +196,11 @@ async def logging_and_auth_middleware(request: Request, call_next):
         traceback.print_exc()
         resp = JSONResponse(status_code=500, content={"detail": f"Internal server error: {str(exc)}"})
         return add_cors_headers_if_needed(resp, request)
+
+    # Periodically trim glibc memory every 25 requests or after memory-heavy requests
+    _request_counter += 1
+    if _request_counter % 25 == 0 or request.url.path.startswith(("/api/upload", "/api/pdf-page-image", "/api/graph/build")):
+        reclaim_memory()
 
     response = add_cors_headers_if_needed(response, request)
     latency_ms = round((time.perf_counter() - start_time) * 1000, 1)
@@ -338,6 +348,7 @@ def health_check():
             "status": status,
             "ready": is_ready,
             "version": "2.0.0",
+            "memory_rss_mb": get_rss_mb(),
             "checks": checks,
         },
     )
@@ -534,11 +545,13 @@ def process_upload_batch_sync(upload_id: str, user_id: str, file_records: list[d
             upload_progress[upload_id]["files"] = file_records
             upload_progress[upload_id]["completed_files"] = completed
         save_upload_job(upload_id, user_id, "processing" if completed < len(file_records) else "completed", len(file_records), completed, file_records)
+        reclaim_memory()
         
     final_status = "completed" if completed > 0 else "failed"
     if upload_id in upload_progress:
         upload_progress[upload_id]["status"] = final_status
     save_upload_job(upload_id, user_id, final_status, len(file_records), completed, file_records)
+    reclaim_memory()
 
 @app.post("/api/upload", status_code=202)
 @limiter.limit("20/minute")
@@ -563,13 +576,19 @@ async def upload_documents(
         if ext not in ALLOWED_EXTENSIONS:
             raise HTTPException(status_code=400, detail=f"Unsupported file format '{ext}'. Only PDF, TXT, and MD are allowed.")
             
-        content = await file.read()
-        file_size = len(content)
-        if file_size > MAX_FILE_SIZE_BYTES:
-            raise HTTPException(status_code=400, detail=f"File '{filename}' exceeds maximum allowed size of 35MB.")
-            
         save_path = os.path.join(uploads_dir, filename)
-        save_file(user_id, filename, content, local_path=save_path)
+        file_size = 0
+        with open(save_path, "wb") as f_out:
+            while chunk := await file.read(512 * 1024):
+                file_size += len(chunk)
+                if file_size > MAX_FILE_SIZE_BYTES:
+                    f_out.close()
+                    if os.path.exists(save_path):
+                        os.remove(save_path)
+                    raise HTTPException(status_code=400, detail=f"File '{filename}' exceeds maximum allowed size of 35MB.")
+                f_out.write(chunk)
+            
+        save_file(user_id, filename, None, local_path=save_path)
         upsert_document(user_id, filename, "processing", size_bytes=file_size)
         
         file_records.append({
@@ -581,6 +600,7 @@ async def upload_documents(
             "progress": 25,
             "indexed": False
         })
+    reclaim_memory()
         
     upload_progress[upload_id] = {
         "user_id": user_id,
@@ -817,7 +837,7 @@ def get_pdf_page_image(filename: str = Query(...), page: int = Query(1, ge=1)):
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="File not found")
         
-    img_bytes = render_pdf_page_image(file_path, page_num=page, dpi=150)
+    img_bytes = render_pdf_page_image(file_path, page_num=page, dpi=100)
     if not img_bytes:
         raise HTTPException(status_code=500, detail="Failed to render PDF page image")
         
@@ -1103,10 +1123,13 @@ def build_graph(
                 }
 
             client = get_qdrant_client()
-            points_list = []
+            seen_parents = set()
+            total_entities = 0
+            total_relations = 0
+            MAX_GRAPH_PARENT_CHUNKS = 25
             offset = None
 
-            while True:
+            while len(seen_parents) < MAX_GRAPH_PARENT_CHUNKS:
                 try:
                     points, offset = client.scroll(
                         collection_name=COLLECTION_NAME,
@@ -1116,7 +1139,7 @@ def build_graph(
                                 FieldCondition(key="user_id", match=MatchValue(value=uid)),
                             ]
                         ),
-                        limit=100,
+                        limit=50,
                         offset=offset,
                         with_payload=True,
                         with_vectors=False,
@@ -1124,49 +1147,49 @@ def build_graph(
                 except Exception:
                     points, offset = client.scroll(
                         collection_name=COLLECTION_NAME,
-                        limit=100,
+                        limit=50,
                         offset=offset,
                         with_payload=True,
                         with_vectors=False,
                     )
 
-                points_list.extend(points)
-                if offset is None:
+                if not points:
                     break
 
-            seen_parents = set()
-            total_entities = 0
-            total_relations = 0
-            
-            for point in points_list:
-                payload = point.payload or {}
-                meta = payload.get("metadata") or {}
-                
-                # Check user_id ownership
-                pt_uid = meta.get("user_id") or payload.get("user_id")
-                if pt_uid and str(pt_uid) != str(uid):
-                    continue
+                for point in points:
+                    if len(seen_parents) >= MAX_GRAPH_PARENT_CHUNKS:
+                        break
+                    payload = point.payload or {}
+                    meta = payload.get("metadata") or {}
+                    
+                    # Check user_id ownership
+                    pt_uid = meta.get("user_id") or payload.get("user_id")
+                    if pt_uid and str(pt_uid) != str(uid):
+                        continue
 
-                fname = meta.get("filename") or payload.get("filename") or ""
-                # Strictly process only active vault files
-                if fname and fname not in active_files:
-                    continue
+                    fname = meta.get("filename") or payload.get("filename") or ""
+                    # Strictly process only active vault files
+                    if fname and fname not in active_files:
+                        continue
 
-                parent_text = (
-                    meta.get("parent_content")
-                    or payload.get("parent_content")
-                    or payload.get("page_content")
-                    or meta.get("text")
-                    or payload.get("text")
-                    or ""
-                )
-                page = meta.get("page") or payload.get("page") or 1
+                    parent_text = (
+                        meta.get("parent_content")
+                        or payload.get("parent_content")
+                        or payload.get("page_content")
+                        or meta.get("text")
+                        or payload.get("text")
+                        or ""
+                    )
+                    page = meta.get("page") or payload.get("page") or 1
 
-                if parent_text and len(parent_text.strip()) > 30 and parent_text not in seen_parents:
-                    seen_parents.add(parent_text)
-                    result = extract_entities_and_relations(parent_text, fname or "Document", int(page) if str(page).isdigit() else 1)
-                    total_entities += len(result.get("entities", []))
-                    total_relations += len(result.get("relations", []))
+                    if parent_text and len(parent_text.strip()) > 30 and parent_text not in seen_parents:
+                        seen_parents.add(parent_text)
+                        result = extract_entities_and_relations(parent_text, fname or "Document", int(page) if str(page).isdigit() else 1)
+                        total_entities += len(result.get("entities", []))
+                        total_relations += len(result.get("relations", []))
+
+                if offset is None:
+                    break
 
             # Fallback to extracting from uploaded files on disk if Qdrant returned 0
             if len(seen_parents) == 0:
@@ -1181,6 +1204,8 @@ def build_graph(
                                 from src.pdf_viewer import extract_pdf_page_text, get_pdf_page_count
                                 total_pages = get_pdf_page_count(fname)
                                 for p in range(1, min(6, total_pages + 1)):
+                                    if len(seen_parents) >= MAX_GRAPH_PARENT_CHUNKS:
+                                        break
                                     text = extract_pdf_page_text(fname, p)
                                     if text and len(text.strip()) > 30 and text not in seen_parents:
                                         seen_parents.add(text)
@@ -1199,6 +1224,7 @@ def build_graph(
                                 except Exception:
                                     pass
 
+            reclaim_memory()
             print(f"[GraphWorker] Extracted {total_entities} entities and {total_relations} relations from {len(seen_parents)} text blocks.")
             
             # Prune any stale entities/relations and recalculate communities
@@ -1206,6 +1232,7 @@ def build_graph(
 
             # Always run community detection for full builds
             run_community_detection_and_summaries()
+            reclaim_memory()
             print(f"[GraphWorker] Knowledge Graph build completed for user {uid} ({len(seen_parents)} parent blocks processed).")
             
             # Get final graph stats

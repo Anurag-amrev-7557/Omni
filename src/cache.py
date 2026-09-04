@@ -15,31 +15,39 @@ from typing import Optional, Tuple, List, Dict, Any
 # In-memory storage with thread-safe locks
 _lock = threading.RLock()
 
+try:
+    from src.memory import reclaim_memory
+except ImportError:
+    from memory import reclaim_memory
+
 # 1. Embedding Cache: Map[query_normalized, vector]
 _EMBEDDING_CACHE: Dict[str, List[float]] = {}
-_MAX_EMBEDDING_CACHE_SIZE = 1000
+_MAX_EMBEDDING_CACHE_SIZE = 250
 
 # 2. Retrieval Cache: Map[cache_key, List[dict]]
 _RETRIEVAL_CACHE: Dict[str, Tuple[float, List[Dict[str, Any]]]] = {}
 _RETRIEVAL_CACHE_TTL = 3600  # 1 hour
+_MAX_RETRIEVAL_CACHE_SIZE = 50
 
 # 3. Exact Response Cache: Map[cache_key, dict]
 _EXACT_RESPONSE_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
 _RESPONSE_CACHE_TTL = 7200  # 2 hours
+_MAX_EXACT_CACHE_SIZE = 50
 
 # 4. Semantic Response Cache: List of entries per user
 # Structure: { user_id: [ {"embedding": List[float], "query": str, "response": str, "contexts": List[dict], "fingerprint": str, "created_at": float} ] }
 _SEMANTIC_CACHE: Dict[str, List[Dict[str, Any]]] = {}
-_MAX_SEMANTIC_ENTRIES_PER_USER = 100
+_MAX_SEMANTIC_ENTRIES_PER_USER = 15
+_MAX_SEMANTIC_USERS = 10
 _SEMANTIC_SIMILARITY_THRESHOLD = 0.965  # High-precision threshold to guarantee accurate context reuse
 
 # 5. User Vault Fingerprints: Map[user_id, fingerprint_str]
 _USER_VAULT_FINGERPRINTS: Dict[str, str] = {}
 
-
 # 6. User Graph Structure Cache: Map[user_id, Tuple[timestamp, graph_dict]]
 _GRAPH_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
 _GRAPH_CACHE_TTL = 3600  # 1 hour
+_MAX_GRAPH_CACHE_SIZE = 5
 
 
 def normalize_query(query: str) -> str:
@@ -97,9 +105,12 @@ def get_cached_user_graph(user_id: str) -> Optional[Dict[str, Any]]:
 
 
 def set_cached_user_graph(user_id: str, graph: Dict[str, Any]):
-    """Populates in-memory graph cache."""
+    """Populates in-memory graph cache with size capping."""
     now = time.time()
     with _lock:
+        if len(_GRAPH_CACHE) >= _MAX_GRAPH_CACHE_SIZE and user_id not in _GRAPH_CACHE:
+            first_key = next(iter(_GRAPH_CACHE))
+            _GRAPH_CACHE.pop(first_key, None)
         _GRAPH_CACHE[user_id] = (now, graph)
 
 
@@ -133,6 +144,7 @@ def invalidate_user_cache(user_id: str):
         for k in keys_to_delete_resp:
             _EXACT_RESPONSE_CACHE.pop(k, None)
             
+        reclaim_memory()
         print(f"[HyperCache] Invalidation complete for user {user_id}. Rotated vault fingerprint to {new_fp}.")
 
 
@@ -158,6 +170,10 @@ def set_cached_retrieval(user_id: str, query: str, k: int, results: List[Dict[st
     cache_key = f"{user_id}:{fp}:{k}:{norm_q}"
     now = time.time()
     with _lock:
+        # Evict oldest if reached capacity
+        if len(_RETRIEVAL_CACHE) >= _MAX_RETRIEVAL_CACHE_SIZE and cache_key not in _RETRIEVAL_CACHE:
+            first_key = next(iter(_RETRIEVAL_CACHE))
+            _RETRIEVAL_CACHE.pop(first_key, None)
         _RETRIEVAL_CACHE[cache_key] = (now, results)
 
 
@@ -194,6 +210,9 @@ def set_exact_cached_response(user_id: str, prompt: str, history: List[Dict], we
     key = make_response_cache_key(user_id, prompt, history, web_search)
     now = time.time()
     with _lock:
+        if len(_EXACT_RESPONSE_CACHE) >= _MAX_EXACT_CACHE_SIZE and key not in _EXACT_RESPONSE_CACHE:
+            first_key = next(iter(_EXACT_RESPONSE_CACHE))
+            _EXACT_RESPONSE_CACHE.pop(first_key, None)
         _EXACT_RESPONSE_CACHE[key] = (now, {
             "full_text": full_text,
             "contexts": contexts,
@@ -267,6 +286,10 @@ def add_semantic_cached_response(
     
     with _lock:
         if user_id not in _SEMANTIC_CACHE:
+            # Enforce max users in semantic cache
+            if len(_SEMANTIC_CACHE) >= _MAX_SEMANTIC_USERS:
+                oldest_user = next(iter(_SEMANTIC_CACHE))
+                _SEMANTIC_CACHE.pop(oldest_user, None)
             _SEMANTIC_CACHE[user_id] = []
         user_list = _SEMANTIC_CACHE[user_id]
         if len(user_list) >= _MAX_SEMANTIC_ENTRIES_PER_USER:

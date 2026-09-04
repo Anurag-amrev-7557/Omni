@@ -28,10 +28,10 @@ def get_connection_pool():
         from psycopg_pool import ConnectionPool
         _pool = ConnectionPool(
             conninfo=db_url,
-            min_size=2,
-            max_size=20,
+            min_size=1,
+            max_size=5,
             timeout=15.0,
-            max_idle=60.0,
+            max_idle=30.0,
             kwargs={"row_factory": dict_row}
         )
         return _pool
