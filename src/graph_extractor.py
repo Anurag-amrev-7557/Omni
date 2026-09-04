@@ -96,11 +96,44 @@ TYPE_NORMALIZATION_MAP = {
     "domain": "Concept",
 }
 
+PERSON_ROLE_PATTERNS = [
+    r"Software\s+Engineering\s+Intern",
+    r"Software\s+Engineer",
+    r"Software\s+Developer",
+    r"Full[- ]Stack\s+Developer",
+    r"Full[- ]Stack\s+Engineer",
+    r"Backend\s+Developer",
+    r"Frontend\s+Developer",
+    r"Data\s+Scientist",
+    r"AI\s+Engineer",
+    r"Intern",
+    r"Student",
+    r"Consultant",
+    r"Researcher",
+    r"Architect",
+    r"Lead",
+    r"Manager",
+]
+
 def canonicalize_name(name: str) -> str:
-    """Normalizes entity names for semantic deduplication."""
+    """Normalizes entity names for semantic deduplication and entity resolution."""
     cleaned = name.strip().strip("\"'`")
     cleaned = re.sub(r'\s+', ' ', cleaned)
     cleaned = re.sub(r'[\.,;:]+$', '', cleaned).strip()
+    
+    # Strip honorifics
+    cleaned = re.sub(r'^(?:Dr|Prof|Mr|Mrs|Ms)\.?\s+', '', cleaned, flags=re.IGNORECASE)
+
+    # Strip attached job roles from names (e.g. 'Anurag Verma Software Engineer' -> 'Anurag Verma')
+    for role in PERSON_ROLE_PATTERNS:
+        pat = rf'\s+(?:-\s+|\|\s+|at\s+|,\s+)?{role}.*$'
+        if re.search(pat, cleaned, flags=re.IGNORECASE):
+            cand = re.sub(pat, '', cleaned, flags=re.IGNORECASE).strip()
+            # Keep if the base name still has substantial length and isn't just an adjective
+            if len(cand) >= 3 and cand.lower() not in {"software", "full-stack", "full stack", "backend", "frontend", "ai", "data"}:
+                cleaned = cand
+                break
+
     return cleaned
 
 def normalize_entity_type(raw_type: str, name: str) -> str:

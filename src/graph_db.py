@@ -269,6 +269,12 @@ def batch_save_entities_and_relations(
                 ))
                 relations_saved += 1
 
+    # Run entity resolution to merge any fragmented entity nodes created across documents
+    try:
+        run_entity_resolution_and_deduplication(user_id)
+    except Exception as er_exc:
+        print(f"[GraphDB] Entity resolution notice: {er_exc}")
+
     try:
         from src.cache import invalidate_user_cache
         invalidate_user_cache(user_id)
@@ -444,6 +450,147 @@ def sync_and_prune_graph(user_id: str, active_filenames: list[str]):
         ent_count = cur.fetchone()["count"]
         if ent_count == 0:
             cur.execute("DELETE FROM graph_communities WHERE user_id = %s", (user_id,))
+
+    # 5. Run automatic cross-document entity resolution & semantic deduplication
+    run_entity_resolution_and_deduplication(user_id)
+
+def run_entity_resolution_and_deduplication(user_id: str | None = None) -> int:
+    """Discovers and merges duplicate entities across different documents based on stems, aliases, and name prefixes.
+    Redirects all graph relations to the canonical primary entity and prevents fragmented graphs.
+    """
+    import re
+    from collections import defaultdict
+
+    uid = user_id or get_current_user()
+
+    def normalize_entity_stem(name: str) -> str:
+        s = name.lower().strip()
+        s = re.sub(r'^(?:dr|prof|mr|mrs|ms)\.?\s+', '', s)
+        for r in [
+            r'software\s+engineering\s+intern',
+            r'software\s+engineer',
+            r'software\s+developer',
+            r'full[- ]stack\s+developer',
+            r'full[- ]stack\s+engineer',
+            r'backend\s+developer',
+            r'frontend\s+developer',
+            r'data\s+scientist',
+            r'ai\s+engineer',
+            r'intern',
+            r'student',
+            r'consultant',
+            r'researcher',
+            r'architect',
+            r'lead',
+            r'manager'
+        ]:
+            s = re.sub(rf'\s+(?:-\s+|\|\s+|at\s+|,\s+)?{r}.*$', '', s)
+        s = re.sub(r'\.js$', '', s)
+        return re.sub(r'[^a-z0-9]', '', s)
+
+    with connection() as conn, conn.cursor() as cur:
+        cur.execute("""
+            SELECT entity_id, canonical_name, entity_type, description, aliases, source_docs
+            FROM graph_entities
+            WHERE user_id = %s
+        """, (uid,))
+        entities = cur.fetchall()
+
+        stem_groups = defaultdict(list)
+        for ent in entities:
+            stem = normalize_entity_stem(ent['canonical_name'])
+            if len(stem) >= 3:
+                stem_groups[stem].append(ent)
+
+        merged_count = 0
+        for stem, group in stem_groups.items():
+            if len(group) <= 1:
+                continue
+
+            def score_entity(e):
+                type_score = 0
+                if e['entity_type'] == 'Person': type_score = 40
+                elif e['entity_type'] == 'Organization': type_score = 30
+                elif e['entity_type'] == 'Technology': type_score = 20
+                elif e['entity_type'] == 'System': type_score = 15
+                elif e['entity_type'] != 'Concept': type_score = 10
+                name_len_score = max(0, 50 - len(e['canonical_name']))
+                return type_score + name_len_score
+
+            sorted_group = sorted(group, key=score_entity, reverse=True)
+            primary = sorted_group[0]
+            secondaries = sorted_group[1:]
+
+            primary_id = primary['entity_id']
+            all_source_docs = set(primary.get('source_docs') or [])
+            all_aliases = set(primary.get('aliases') or [])
+            best_desc = primary.get('description') or ''
+
+            for sec in secondaries:
+                sec_id = sec['entity_id']
+                all_source_docs.update(sec.get('source_docs') or [])
+                all_aliases.update(sec.get('aliases') or [])
+                all_aliases.add(sec['canonical_name'])
+                if len(sec.get('description') or '') > len(best_desc):
+                    best_desc = sec['description']
+
+                # Redirect relations where secondary was source
+                cur.execute("""
+                    UPDATE graph_relations
+                    SET source_entity_id = %s
+                    WHERE user_id = %s AND source_entity_id = %s
+                """, (primary_id, uid, sec_id))
+
+                # Redirect relations where secondary was target
+                cur.execute("""
+                    UPDATE graph_relations
+                    SET target_entity_id = %s
+                    WHERE user_id = %s AND target_entity_id = %s
+                """, (primary_id, uid, sec_id))
+
+                # Delete redundant secondary entity
+                cur.execute("""
+                    DELETE FROM graph_entities
+                    WHERE user_id = %s AND entity_id = %s
+                """, (uid, sec_id))
+                merged_count += 1
+
+            # Clean self-referencing loops created by merge
+            cur.execute("""
+                DELETE FROM graph_relations
+                WHERE user_id = %s AND source_entity_id = target_entity_id
+            """, (uid,))
+
+            # Deduplicate parallel relations
+            cur.execute("""
+                DELETE FROM graph_relations a USING graph_relations b
+                WHERE a.ctid < b.ctid
+                  AND a.user_id = b.user_id
+                  AND a.source_entity_id = b.source_entity_id
+                  AND a.target_entity_id = b.target_entity_id
+                  AND a.relation_type = b.relation_type
+                  AND a.user_id = %s
+            """, (uid,))
+
+            # Update primary canonical entity with merged attributes
+            cur.execute("""
+                UPDATE graph_entities
+                SET source_docs = %s,
+                    aliases = %s,
+                    description = %s,
+                    updated_at = now()
+                WHERE user_id = %s AND entity_id = %s
+            """, (list(all_source_docs), list(all_aliases), best_desc, uid, primary_id))
+
+        if merged_count > 0:
+            print(f"[GraphDB] Resolved and unified {merged_count} fragmented entities for user {uid}")
+            try:
+                from src.cache import invalidate_user_cache
+                invalidate_user_cache(uid)
+            except Exception:
+                pass
+
+        return merged_count
 
 def delete_document_graph(filename: str):
     """Deletes graph edges and disconnected nodes originating solely from a deleted document."""
