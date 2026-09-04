@@ -174,22 +174,24 @@ def run_community_detection_and_summaries() -> dict:
 
         # Only invoke LLM for significant clusters (3+ entities) to ensure lightning-fast processing
         if len(cnodes) >= 3 and key_entity_names:
-            try:
-                llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0.2, max_tokens=250, timeout=4.0)
-                res = llm.invoke(COMMUNITY_SUMMARY_PROMPT.format(
-                    title=title,
-                    entities=", ".join(key_entity_names),
-                    relations="; ".join(crelations) or "Hierarchically clustered concepts"
-                ))
-                raw_summary = res.content
-                raw_summary = re.sub(r'<think>[\s\S]*?</think>', '', raw_summary).strip()
-                if raw_summary:
-                    summary_text = raw_summary
-                    parsed_findings = [line.strip('- *') for line in raw_summary.split('\n') if line.strip().startswith('-')]
-                    if parsed_findings:
-                        findings = parsed_findings
-            except Exception as e:
-                print(f"[Clustering] LLM summary fallback for Community {cid}: {e}")
+            for model_name in ["qwen/qwen3.8-27b", "openai/gpt-oss-120b", "qwen/qwen3.6-27b"]:
+                try:
+                    llm = ChatGroq(model=model_name, temperature=0.2, max_tokens=250, timeout=4.0)
+                    res = llm.invoke(COMMUNITY_SUMMARY_PROMPT.format(
+                        title=title,
+                        entities=", ".join(key_entity_names),
+                        relations="; ".join(crelations) or "Hierarchically clustered concepts"
+                    ))
+                    raw_summary = res.content
+                    raw_summary = re.sub(r'<think>[\s\S]*?</think>', '', raw_summary).strip()
+                    if raw_summary:
+                        summary_text = raw_summary
+                        parsed_findings = [line.strip('- *') for line in raw_summary.split('\n') if line.strip().startswith('-')]
+                        if parsed_findings:
+                            findings = parsed_findings
+                        break
+                except Exception as e:
+                    continue
 
         return {
             "community_id": cid,

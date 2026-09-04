@@ -642,6 +642,33 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
     };
   }, [activeNodeIds, selectedNode, selectedLink, hoveredNode, showLabels, showEdgeLabels, physicsEnabled, isDark, themeAccent, selectedDoc, selectedType, filterCommunity]);
 
+  // Non-passive wheel event listener to allow preventDefault for smooth zoom without browser console error
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      const zoomDelta = -e.deltaY * 0.0015;
+      const zoomFactor = Math.exp(Math.max(-0.25, Math.min(0.25, zoomDelta)));
+      const t = transformRef.current;
+      const newK = Math.max(0.2, Math.min(4.0, t.k * zoomFactor));
+
+      t.x = mouseX - (mouseX - t.x) * (newK / t.k);
+      t.y = mouseY - (mouseY - t.y) * (newK / t.k);
+      t.k = newK;
+    };
+
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      canvas.removeEventListener('wheel', onWheel);
+    };
+  }, []);
+
   // Auto-focus camera when filtering by document or entity type
   useEffect(() => {
     if (selectedDoc === 'All' && selectedType === 'All' && filterCommunity === null) return;
@@ -765,26 +792,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
   const handleMouseUp = () => {
     draggedNodeRef.current = null;
     isDraggingCanvasRef.current = false;
-  };
-
-  // Ultra-Smooth Linear-Damped Zoom
-  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    const zoomDelta = -e.deltaY * 0.0015;
-    const zoomFactor = Math.exp(Math.max(-0.25, Math.min(0.25, zoomDelta)));
-    const t = transformRef.current;
-    const newK = Math.max(0.2, Math.min(4.0, t.k * zoomFactor));
-
-    t.x = mouseX - (mouseX - t.x) * (newK / t.k);
-    t.y = mouseY - (mouseY - t.y) * (newK / t.k);
-    t.k = newK;
   };
 
   const handleZoom = (factor: number) => {
@@ -1010,7 +1017,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
-          onWheel={handleWheel}
           className="w-full h-full block"
         />
 

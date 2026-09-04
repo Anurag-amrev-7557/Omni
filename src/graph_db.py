@@ -105,7 +105,14 @@ def upsert_entity(
                 %s, %s, %s, %s, %s, %s, %s, now()
             )
             ON CONFLICT (user_id, canonical_name) DO UPDATE SET
-                entity_type = CASE WHEN EXCLUDED.entity_type != 'Concept' THEN EXCLUDED.entity_type ELSE graph_entities.entity_type END,
+                entity_type = CASE 
+                    WHEN EXCLUDED.entity_type = 'Person' THEN 'Person'
+                    WHEN graph_entities.entity_type = 'Person' THEN 'Person'
+                    WHEN EXCLUDED.entity_type = 'Organization' THEN 'Organization'
+                    WHEN graph_entities.entity_type = 'Organization' THEN 'Organization'
+                    WHEN EXCLUDED.entity_type != 'Concept' THEN EXCLUDED.entity_type 
+                    ELSE graph_entities.entity_type 
+                END,
                 description = CASE WHEN LENGTH(EXCLUDED.description) > LENGTH(graph_entities.description) THEN EXCLUDED.description ELSE graph_entities.description END,
                 aliases = (
                     SELECT COALESCE(array_agg(DISTINCT elem), '{}'::text[])
@@ -198,7 +205,14 @@ def batch_save_entities_and_relations(
                     %s, %s, %s, %s, %s, %s, %s, now()
                 )
                 ON CONFLICT (user_id, canonical_name) DO UPDATE SET
-                    entity_type = CASE WHEN EXCLUDED.entity_type != 'Concept' THEN EXCLUDED.entity_type ELSE graph_entities.entity_type END,
+                    entity_type = CASE 
+                        WHEN EXCLUDED.entity_type = 'Person' THEN 'Person'
+                        WHEN graph_entities.entity_type = 'Person' THEN 'Person'
+                        WHEN EXCLUDED.entity_type = 'Organization' THEN 'Organization'
+                        WHEN graph_entities.entity_type = 'Organization' THEN 'Organization'
+                        WHEN EXCLUDED.entity_type != 'Concept' THEN EXCLUDED.entity_type 
+                        ELSE graph_entities.entity_type 
+                    END,
                     description = CASE WHEN LENGTH(EXCLUDED.description) > LENGTH(graph_entities.description) THEN EXCLUDED.description ELSE graph_entities.description END,
                     aliases = (
                         SELECT COALESCE(array_agg(DISTINCT elem), '{}'::text[])
@@ -461,6 +475,12 @@ def delete_document_graph(filename: str):
         if ent_count == 0:
             cur.execute("DELETE FROM graph_communities WHERE user_id=%s", (user_id,))
 
+    try:
+        from src.cache import invalidate_user_cache
+        invalidate_user_cache(user_id)
+    except Exception:
+        pass
+
 def clear_user_graph():
     """Deletes all knowledge graph data for the current user."""
     user_id = get_current_user()
@@ -471,4 +491,11 @@ def clear_user_graph():
         cur.execute("DELETE FROM graph_entities WHERE user_id=%s", (user_id,))
         # Delete communities
         cur.execute("DELETE FROM graph_communities WHERE user_id=%s", (user_id,))
+
+    try:
+        from src.cache import invalidate_user_cache
+        invalidate_user_cache(user_id)
+    except Exception:
+        pass
+
     print(f"[GraphDB] Cleared all knowledge graph data for user {user_id}")
