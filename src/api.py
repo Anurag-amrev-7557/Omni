@@ -391,44 +391,78 @@ def get_stats():
 
 @app.get("/api/documents")
 def list_documents():
-    """List indexed documents even when Render's ephemeral disk was reset."""
+    """List indexed documents using PostgreSQL state DB as durable truth, augmented by Qdrant and local disk."""
+    user_id = get_current_user()
     stats = get_collection_stats()
     uploads_dir = user_upload_dir()
-    available_files = []
-    
-    print(f"[DEBUG] Uploads directory: {uploads_dir}")
-    print(f"[DEBUG] Directory exists: {os.path.exists(uploads_dir)}")
-    print(f"[DEBUG] Files in Qdrant: {stats['files']}")
     
     os.makedirs(uploads_dir, exist_ok=True)
     files_on_disk = {
         fname for fname in os.listdir(uploads_dir)
         if os.path.isfile(os.path.join(uploads_dir, fname))
     }
-    print(f"[DEBUG] Files on disk: {sorted(files_on_disk)}")
+    
+    db_docs_map = {}
+    try:
+        from src.state_db import list_user_documents
+        for doc in list_user_documents(user_id):
+            if doc.get("filename"):
+                db_docs_map[doc["filename"]] = doc
+    except Exception as exc:
+        print(f"[Warning] Could not list user documents from state DB: {exc}")
 
-    # Qdrant is the durable source of truth for indexed documents.  The local
-    # disk only augments records with original-file details when it is present.
-    all_filenames = sorted(set(stats["files"]) | files_on_disk)
+    # Merge durable state DB, Qdrant vectors, and local disk
+    all_filenames = sorted(set(stats.get("files", [])) | files_on_disk | set(db_docs_map.keys()))
+    available_files = []
+    
     for fname in all_filenames:
         fpath = os.path.join(uploads_dir, fname)
         local_file_exists = fname in files_on_disk
         details = stats.get("file_details", {}).get(fname, {})
-        is_indexed = fname in stats["files"]
+        db_doc = db_docs_map.get(fname, {})
+        
+        is_indexed = fname in stats.get("files", []) or db_doc.get("status") == "indexed"
+        raw_status = db_doc.get("status")
+        if not raw_status:
+            status = "completed" if is_indexed else "processing"
+        elif raw_status == "indexed":
+            status = "completed"
+        else:
+            status = raw_status
+
+        progress = 100 if status == "completed" else (20 if status == "failed" else 60)
+        
+        # Determine size_mb
+        size_bytes = db_doc.get("size_bytes")
+        if size_bytes:
+            size_mb = round(size_bytes / (1024 * 1024), 2)
+        elif local_file_exists:
+            try:
+                size_mb = round(os.path.getsize(fpath) / (1024 * 1024), 2)
+            except Exception:
+                size_mb = 0
+        else:
+            size_mb = 0
+
+        # Determine pages
+        pages = db_doc.get("page_count")
+        if not pages:
+            if local_file_exists and fname.lower().endswith(".pdf"):
+                pages = get_pdf_page_count(fpath)
+            else:
+                pages = details.get("pages", 1)
+
         available_files.append({
             "filename": fname,
-            "size_mb": round(os.path.getsize(fpath) / (1024 * 1024), 2) if local_file_exists else 0,
-            "pages": (
-                get_pdf_page_count(fpath) if local_file_exists and fname.lower().endswith(".pdf")
-                else details.get("pages", 1)
-            ),
+            "size_mb": size_mb,
+            "pages": pages,
             "indexed": is_indexed,
-            "status": "completed" if is_indexed else "processing",
-            "progress": 100 if is_indexed else 50,
+            "status": status,
+            "progress": progress,
             "source_file_available": local_file_exists,
         })
     
-    print(f"[DEBUG] Returning {len(available_files)} available files")
+    print(f"[DEBUG] Returning {len(available_files)} documents for user {user_id}")
     return {"documents": available_files}
 
 def get_active_vault_filenames(user_id: str) -> list[str]:
@@ -551,6 +585,12 @@ def process_upload_batch_sync(upload_id: str, user_id: str, file_records: list[d
     if upload_id in upload_progress:
         upload_progress[upload_id]["status"] = final_status
     save_upload_job(upload_id, user_id, final_status, len(file_records), completed, file_records)
+    try:
+        from src.db import invalidate_stats_cache
+        invalidate_stats_cache(user_id)
+        invalidate_user_cache(user_id)
+    except Exception as c_exc:
+        print(f"[Worker] Cache invalidation warning: {c_exc}")
     reclaim_memory()
 
 @app.post("/api/upload", status_code=202)
@@ -690,7 +730,7 @@ def delete_document(filename: str):
     # Delete Qdrant first.  If the remote operation fails, retain the source
     # file so the user can retry instead of losing the only re-indexable copy.
     try:
-        delete_file_from_collection(filename)
+        delete_file_from_collection(filename, user_id=user_id)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Could not delete vectors from Qdrant: {exc}")
 
@@ -706,10 +746,15 @@ def delete_document(filename: str):
     # Clean up knowledge graph for this document
     try:
         from src.graph_db import delete_document_graph
-        delete_document_graph(filename)
+        delete_document_graph(filename, user_id=user_id)
     except Exception as g_exc:
         print(f"[Warning] Could not delete document graph: {g_exc}")
 
+    try:
+        from src.db import invalidate_stats_cache
+        invalidate_stats_cache(user_id)
+    except Exception:
+        pass
     invalidate_user_cache(user_id)
     return {"success": True, "filename": filename}
 
@@ -873,7 +918,7 @@ def reset_all():
     
     # Clear Qdrant vector collection for current user
     try:
-        clear_collection()
+        clear_collection(user_id)
         print(f"[Reset] Cleared Qdrant collection for user {user_id}")
     except Exception as q_exc:
         print(f"[Warning] Failed to clear Qdrant collection: {q_exc}")
@@ -881,7 +926,7 @@ def reset_all():
     # Clear knowledge graph for current user
     try:
         from src.graph_db import clear_user_graph
-        clear_user_graph()
+        clear_user_graph(user_id)
     except Exception as g_exc:
         print(f"[Warning] Failed to clear knowledge graph: {g_exc}")
     
@@ -912,8 +957,10 @@ def reset_all():
     except Exception as s_exc:
         print(f"[Warning] Failed to clear chat sessions: {s_exc}")
     
-    # Invalidate user cache
+    # Invalidate user and stats cache
     try:
+        from src.db import invalidate_stats_cache
+        invalidate_stats_cache(user_id)
         invalidate_user_cache(user_id)
     except Exception as c_exc:
         print(f"[Warning] Failed to invalidate cache: {c_exc}")
@@ -1075,7 +1122,7 @@ def get_graph(user_id: str = Depends(require_user)):
     try:
         from src.graph_db import get_user_graph
         active_files = get_active_vault_filenames(user_id)
-        graph_data = get_user_graph(active_filenames=active_files)
+        graph_data = get_user_graph(user_id=user_id, active_filenames=active_files)
         return graph_data
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to fetch knowledge graph: {exc}")
@@ -1091,7 +1138,8 @@ def build_graph(
     def graph_worker(uid: str, force: bool):
         set_current_user(uid)
         try:
-            from src.graph_extractor import extract_entities_and_relations
+            from collections import defaultdict
+            from src.graph_extractor import extract_entities_and_relations, run_entity_resolution_and_deduplication
             from src.graph_clustering import run_community_detection_and_summaries
             from src.graph_db import get_user_graph, clear_user_graph, sync_and_prune_graph
             from src.db import get_qdrant_client
@@ -1104,13 +1152,13 @@ def build_graph(
             # Clear existing graph if force rebuild is requested
             if force:
                 print(f"[GraphWorker] Force rebuild requested - clearing existing graph for user {uid}")
-                clear_user_graph()
+                clear_user_graph(uid)
             else:
                 sync_and_prune_graph(uid, active_files)
 
             if not active_files:
                 print(f"[GraphWorker] No active vault documents for user {uid}. Knowledge graph cleared.")
-                clear_user_graph()
+                clear_user_graph(uid)
                 return {
                     "status": "completed",
                     "user_id": uid,
@@ -1123,13 +1171,13 @@ def build_graph(
                 }
 
             client = get_qdrant_client()
-            seen_parents = set()
-            total_entities = 0
-            total_relations = 0
-            MAX_GRAPH_PARENT_CHUNKS = 25
+            file_chunks = defaultdict(list)
             offset = None
+            max_scroll_iterations = 10
+            scroll_count = 0
 
-            while len(seen_parents) < MAX_GRAPH_PARENT_CHUNKS:
+            while scroll_count < max_scroll_iterations:
+                scroll_count += 1
                 try:
                     points, offset = client.scroll(
                         collection_name=COLLECTION_NAME,
@@ -1139,7 +1187,7 @@ def build_graph(
                                 FieldCondition(key="user_id", match=MatchValue(value=uid)),
                             ]
                         ),
-                        limit=50,
+                        limit=100,
                         offset=offset,
                         with_payload=True,
                         with_vectors=False,
@@ -1147,7 +1195,7 @@ def build_graph(
                 except Exception:
                     points, offset = client.scroll(
                         collection_name=COLLECTION_NAME,
-                        limit=50,
+                        limit=100,
                         offset=offset,
                         with_payload=True,
                         with_vectors=False,
@@ -1157,8 +1205,6 @@ def build_graph(
                     break
 
                 for point in points:
-                    if len(seen_parents) >= MAX_GRAPH_PARENT_CHUNKS:
-                        break
                     payload = point.payload or {}
                     meta = payload.get("metadata") or {}
                     
@@ -1182,17 +1228,14 @@ def build_graph(
                     )
                     page = meta.get("page") or payload.get("page") or 1
 
-                    if parent_text and len(parent_text.strip()) > 30 and parent_text not in seen_parents:
-                        seen_parents.add(parent_text)
-                        result = extract_entities_and_relations(parent_text, fname or "Document", int(page) if str(page).isdigit() else 1)
-                        total_entities += len(result.get("entities", []))
-                        total_relations += len(result.get("relations", []))
+                    if parent_text and len(parent_text.strip()) > 30:
+                        file_chunks[fname].append((parent_text, page))
 
                 if offset is None:
                     break
 
             # Fallback to extracting from uploaded files on disk if Qdrant returned 0
-            if len(seen_parents) == 0:
+            if not file_chunks:
                 uploads_dir = user_upload_dir()
                 if os.path.exists(uploads_dir):
                     for fname in os.listdir(uploads_dir):
@@ -1204,39 +1247,75 @@ def build_graph(
                                 from src.pdf_viewer import extract_pdf_page_text, get_pdf_page_count
                                 total_pages = get_pdf_page_count(fname)
                                 for p in range(1, min(6, total_pages + 1)):
-                                    if len(seen_parents) >= MAX_GRAPH_PARENT_CHUNKS:
-                                        break
                                     text = extract_pdf_page_text(fname, p)
-                                    if text and len(text.strip()) > 30 and text not in seen_parents:
-                                        seen_parents.add(text)
-                                        result = extract_entities_and_relations(text, fname, p)
-                                        total_entities += len(result.get("entities", []))
-                                        total_relations += len(result.get("relations", []))
+                                    if text and len(text.strip()) > 30:
+                                        file_chunks[fname].append((text, p))
                             else:
                                 try:
                                     with open(fpath, "r", encoding="utf-8", errors="ignore") as f:
                                         text = f.read()
-                                    if text and len(text.strip()) > 30 and text not in seen_parents:
-                                        seen_parents.add(text)
-                                        result = extract_entities_and_relations(text[:3000], fname, 1)
-                                        total_entities += len(result.get("entities", []))
-                                        total_relations += len(result.get("relations", []))
+                                    if text and len(text.strip()) > 30:
+                                        file_chunks[fname].append((text[:3000], 1))
                                 except Exception:
                                     pass
 
+            # Select balanced representative chunks per active file (up to 6 per file, max 30 total)
+            MAX_CHUNKS_PER_FILE = 6
+            MAX_TOTAL_CHUNKS = 30
+            selected_chunks = []
+            seen_texts = set()
+
+            for fname, chunks in file_chunks.items():
+                unique_file_chunks = []
+                for text, page in chunks:
+                    if text not in seen_texts:
+                        seen_texts.add(text)
+                        unique_file_chunks.append((text, fname, page))
+                
+                if len(unique_file_chunks) <= MAX_CHUNKS_PER_FILE:
+                    chosen = unique_file_chunks
+                else:
+                    indices = [int(i * (len(unique_file_chunks) - 1) / (MAX_CHUNKS_PER_FILE - 1)) for i in range(MAX_CHUNKS_PER_FILE)]
+                    chosen = [unique_file_chunks[i] for i in sorted(set(indices))]
+                selected_chunks.extend(chosen)
+
+            if len(selected_chunks) > MAX_TOTAL_CHUNKS:
+                selected_chunks = selected_chunks[:MAX_TOTAL_CHUNKS]
+
+            seen_parents = set()
+            total_entities = 0
+            total_relations = 0
+
+            for parent_text, fname, page in selected_chunks:
+                seen_parents.add(parent_text)
+                result = extract_entities_and_relations(
+                    parent_text,
+                    fname or "Document",
+                    int(page) if str(page).isdigit() else 1,
+                    user_id=uid
+                )
+                total_entities += len(result.get("entities", []))
+                total_relations += len(result.get("relations", []))
+
             reclaim_memory()
-            print(f"[GraphWorker] Extracted {total_entities} entities and {total_relations} relations from {len(seen_parents)} text blocks.")
+            print(f"[GraphWorker] Extracted {total_entities} entities and {total_relations} relations from {len(seen_parents)} text blocks across {len(file_chunks)} files.")
             
             # Prune any stale entities/relations and recalculate communities
             sync_and_prune_graph(uid, active_files)
 
+            # Run cross-document entity resolution and deduplication
+            try:
+                run_entity_resolution_and_deduplication(user_id=uid)
+            except Exception as er_exc:
+                print(f"[GraphWorker] Entity resolution warning: {er_exc}")
+
             # Always run community detection for full builds
-            run_community_detection_and_summaries()
+            run_community_detection_and_summaries(user_id=uid)
             reclaim_memory()
             print(f"[GraphWorker] Knowledge Graph build completed for user {uid} ({len(seen_parents)} parent blocks processed).")
             
             # Get final graph stats
-            final_graph = get_user_graph(active_filenames=active_files)
+            final_graph = get_user_graph(user_id=uid, active_filenames=active_files)
             return {
                 "status": "completed",
                 "user_id": uid,

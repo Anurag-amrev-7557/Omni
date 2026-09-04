@@ -185,6 +185,7 @@ def extract_entities_and_relations(
     text: str,
     filename: str,
     page: int = 1,
+    user_id: str | None = None,
 ) -> dict[str, Any]:
     """Extracts ERPG entities and relations from a text chunk using high-accuracy LLM with schema validation and fallback."""
     if not text or len(text.strip()) < 40:
@@ -369,6 +370,7 @@ def extract_entities_and_relations(
         filename=filename,
         page=page,
         snippet=text[:300].strip(),
+        user_id=user_id,
     )
 
     return {"entities": cleaned_entities, "relations": cleaned_relations}

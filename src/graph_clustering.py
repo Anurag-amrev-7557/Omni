@@ -116,9 +116,11 @@ def detect_louvain_communities(nodes: list[dict], links: list[dict]) -> dict[str
     comm_map = {old: new for new, old in enumerate(unique_comms)}
     return {nid: comm_map[comm] for nid, comm in community.items()}
 
-def run_community_detection_and_summaries() -> dict:
+def run_community_detection_and_summaries(user_id: str | None = None) -> dict:
     """Detects communities, calculates metrics, generates summaries, and updates database."""
-    graph = get_user_graph()
+    from src.auth import get_current_user
+    uid = user_id or get_current_user()
+    graph = get_user_graph(user_id=uid)
     nodes = graph["nodes"]
     links = graph["links"]
 
@@ -145,7 +147,7 @@ def run_community_detection_and_summaries() -> dict:
             "degree": deg_map.get(nid, 0),
             "pagerank": pagerank_scores.get(nid, 1.0),
         })
-    update_entity_metrics(entity_updates)
+    update_entity_metrics(entity_updates, user_id=uid)
 
     # 4. Generate Community Summaries Concurrently
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -226,7 +228,7 @@ def run_community_detection_and_summaries() -> dict:
             "findings": [f"Contains {n}" for n in key_entity_names[:2]],
         })
 
-    save_community_clusters(community_records)
+    save_community_clusters(community_records, user_id=uid)
     return {"status": "success", "total_communities": len(community_records), "communities": community_records}
 
 def nodes_by_id(nodes: list[dict], nid: str) -> str:

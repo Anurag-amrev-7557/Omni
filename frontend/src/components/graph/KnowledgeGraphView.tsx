@@ -73,11 +73,13 @@ export const getNodeStyle = (type?: string, communityId: number = 0) => {
 interface KnowledgeGraphViewProps {
   onInspectDoc?: (doc: { filename: string; page?: number; content?: string }) => void;
   className?: string;
+  vaultVersion?: number;
 }
 
 export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
   onInspectDoc,
   className = '',
+  vaultVersion,
 }) => {
   const { theme, currentConfig } = useTheme();
   const isDark = currentConfig?.category === 'Dark' || theme.includes('dark');
@@ -172,7 +174,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({
 
   useEffect(() => {
     loadGraph();
-  }, [loadGraph]);
+  }, [loadGraph, vaultVersion]);
 
   const handleRebuild = async () => {
     try {

@@ -157,8 +157,8 @@ def ingest_file(file_path: str, user_id: str | None = None, progress_callback = 
     # Clean knowledge graph data for this file before re-insertion
     try:
         from src.graph_db import delete_document_graph
-        delete_document_graph(filename)
-        print(f"[Ingest] Cleared existing graph data for {filename}")
+        delete_document_graph(filename, user_id=user_id)
+        print(f"[Ingest] Cleared existing graph data for {filename} (user: {user_id})")
     except Exception as g_exc:
         print(f"[Ingest] Graph cleanup warning for {filename}: {g_exc}")
 
@@ -186,38 +186,60 @@ def ingest_file(file_path: str, user_id: str | None = None, progress_callback = 
     try:
         from src.graph_extractor import extract_entities_and_relations
         from src.graph_clustering import run_community_detection_and_summaries
+        from src.graph_db import run_entity_resolution_and_deduplication
         
-        # Process up to 3 salient parent chunks for rapid yet comprehensive graph coverage without memory spikes
-        chunks_to_process = min(3, len(parent_docs))
+        # Adaptively extract up to 6 parent blocks to ensure deep coverage across all pages
+        total_parents = len(parent_docs)
+        if total_parents <= 6:
+            chunks_to_process = parent_docs
+        else:
+            # Pick representative blocks across beginning, middle, and end
+            step = total_parents / 6.0
+            indices = [int(i * step) for i in range(6)]
+            chunks_to_process = [parent_docs[min(i, total_parents - 1)] for i in indices]
+
         entities_extracted = 0
         relations_extracted = 0
         
-        for idx, parent in enumerate(parent_docs[:chunks_to_process]):
-            chunk_pct = int(78 + (idx / max(1, chunks_to_process)) * 16)
+        for idx, parent in enumerate(chunks_to_process):
+            chunk_pct = int(78 + (idx / max(1, len(chunks_to_process))) * 16)
             if progress_callback:
-                progress_callback(chunk_pct, f"Extracting Knowledge Graph ({idx + 1}/{chunks_to_process})...")
+                progress_callback(chunk_pct, f"Extracting Knowledge Graph ({idx + 1}/{len(chunks_to_process)})...")
                 
             result = extract_entities_and_relations(
                 text=parent.page_content,
                 filename=filename,
                 page=parent.metadata.get("page", 1),
+                user_id=user_id,
             )
             entities_extracted += len(result.get("entities", []))
             relations_extracted += len(result.get("relations", []))
         
         print(f"[Ingest] Extracted {entities_extracted} entities and {relations_extracted} relations from {filename}")
         
+        # Run cross-document resolution so this file immediately links with existing entities in the graph
+        run_entity_resolution_and_deduplication(user_id=user_id)
+
         # Only run community detection if this is a significant addition
         if entities_extracted > 2 or relations_extracted > 2:
             if progress_callback:
                 progress_callback(96, "Detecting community clusters & themes...")
-            run_community_detection_and_summaries()
+            run_community_detection_and_summaries(user_id=user_id)
             print(f"[Ingest] Updated community clusters after processing {filename}")
         else:
             print(f"[Ingest] Skipped community detection for small update ({entities_extracted} entities, {relations_extracted} relations)")
             
     except Exception as g_exc:
         print(f"[Ingest] Graph extraction notice for {filename}: {g_exc}")
+
+    # Immediately invalidate both stats cache and user graph cache so UI reflects fresh data
+    try:
+        from src.db import invalidate_stats_cache
+        from src.cache import invalidate_user_cache
+        invalidate_stats_cache(user_id)
+        invalidate_user_cache(user_id)
+    except Exception:
+        pass
     
     # Immediately reclaim memory to release RSS back to OS
     del child_documents

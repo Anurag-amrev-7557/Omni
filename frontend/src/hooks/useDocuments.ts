@@ -18,6 +18,7 @@ export const useDocuments = (showToast: (msg: string) => void) => {
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [health, setHealth] = useState<PipelineHealth | null>(null);
   const [currentUploadId, setCurrentUploadId] = useState<string | null>(null);
+  const [vaultVersion, setVaultVersion] = useState<number>(Date.now());
   const pollerRef = useRef<number | null>(null);
   const activeXhrRef = useRef<XMLHttpRequest | null>(null);
 
@@ -66,6 +67,7 @@ export const useDocuments = (showToast: (msg: string) => void) => {
       fetchStats(),
       fetchHealth(),
     ]);
+    setVaultVersion(Date.now());
   }, [fetchDocuments, fetchHealth, fetchStats]);
 
   useEffect(() => {
@@ -462,5 +464,6 @@ export const useDocuments = (showToast: (msg: string) => void) => {
     batchReindexDocuments,
     batchDownloadDocuments,
     cleanupOrphaned,
+    vaultVersion,
   };
 };

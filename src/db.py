@@ -77,25 +77,26 @@ def invalidate_stats_cache(user_id: str | None = None):
     _stats_cache.pop(uid, None)
 
 
-def clear_collection():
-    """Deletes only the current user's vectors; never resets other tenants."""
+def clear_collection(user_id: str | None = None):
+    """Deletes only the specified or current user's vectors; never resets other tenants."""
     client = get_qdrant_client()
+    uid = user_id or get_current_user()
     try:
-        client.delete(collection_name=COLLECTION_NAME, points_selector=Filter(must=[FieldCondition(key="metadata.user_id", match=MatchValue(value=get_current_user()))]), wait=True)
-        invalidate_stats_cache()
+        client.delete(collection_name=COLLECTION_NAME, points_selector=Filter(must=[FieldCondition(key="metadata.user_id", match=MatchValue(value=uid))]), wait=True)
+        invalidate_stats_cache(uid)
     except Exception as e:
         print(f"Error clearing Qdrant collection: {e}")
 
 
-def delete_file_from_collection(filename: str):
+def delete_file_from_collection(filename: str, user_id: str | None = None):
     """Deletes all vector chunks belonging to a specific filename."""
     client = get_qdrant_client()
-    user_id = get_current_user()
+    uid = user_id or get_current_user()
     client.delete(
         collection_name=COLLECTION_NAME,
         points_selector=Filter(
             must=[
-                FieldCondition(key="metadata.user_id", match=MatchValue(value=user_id)),
+                FieldCondition(key="metadata.user_id", match=MatchValue(value=uid)),
                 Filter(
                     should=[
                         FieldCondition(key="metadata.filename", match=MatchValue(value=filename)),
@@ -106,7 +107,7 @@ def delete_file_from_collection(filename: str):
         ),
         wait=True,
     )
-    invalidate_stats_cache(user_id)
+    invalidate_stats_cache(uid)
     print(f"Deleted vector chunks for '{filename}' from Qdrant.")
 
 

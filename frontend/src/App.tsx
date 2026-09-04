@@ -121,6 +121,7 @@ export default function App() {
     batchReindexDocuments,
     batchDownloadDocuments,
     cleanupOrphaned,
+    vaultVersion,
   } = useDocuments(showToast);
 
   const { speakText, startVoiceDictation } = useSpeech(showToast);
@@ -660,6 +661,7 @@ export default function App() {
             {activeTab === 'graph' && (
               <KnowledgeGraphView
                 onInspectDoc={handleInspectDoc}
+                vaultVersion={vaultVersion}
               />
             )}
           </div>
