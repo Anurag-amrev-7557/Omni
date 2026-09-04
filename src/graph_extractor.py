@@ -5,32 +5,39 @@ from typing import Any
 from langchain_groq import ChatGroq
 
 EXTRACTION_PROMPT = """You are an expert Knowledge Graph and Ontology Engineer.
-Extract the key real-world entities and precise directed relationships from the text below.
+Extract key real-world entities and precise directed relationships from the text below.
 
-STRICT ONTOLOGY SPECIFICATION:
-Allowed Entity Types:
-- Person: Human individuals (e.g., 'Anurag Verma', 'Linus Torvalds'). NEVER classify an individual person's name as Technology, Concept, or Organization!
-- Organization: Companies, universities, institutions, agencies (e.g., 'Google', 'Google Cloud India', 'IIT Bhubaneswar', 'Stripe', 'LangChain Academy').
-- Technology: Programming languages, frameworks, libraries, developer tools, databases, protocols (e.g., 'Python', 'FastAPI', 'Docker', 'PostgreSQL', 'JWT', 'React').
-- System: Software applications, microservices, platforms, products (e.g., 'Polling Platform', 'Knowledge Vault', 'Mapfolio').
-- Document: Certificates, resumes, invoices, licenses, reports (e.g., 'Internship Certificate', 'Tax Invoice', 'Resume').
-- Concept: Methodologies, domains, abstract theories, architectural paradigms (e.g., 'Microservices Architecture', 'RAG', 'Retrieval-Augmented Generation').
-- Process: Roles, degrees, internships, structured workflows (e.g., 'Software Engineering Internship', 'B.Tech in Civil Engineering').
-- Component: Physical or logical hardware/software modules, audio gear line items (e.g., 'FiiO BTR11', 'TANGZU Waner SG 2').
+OPEN-DOMAIN KNOWLEDGE ONTOLOGY:
+1. Canonical Atomic Entity Names:
+   - Always extract clean, atomic proper nouns for entities.
+   - NEVER combine a person's or organization's name with their title, profession, designation, or degree (e.g. use 'Anurag Verma', NEVER 'Anurag Verma Software Engineer' or 'Dr. Jane Doe').
+   - Human individuals MUST have type 'Person'.
 
-Allowed Relationship Types:
-- Person <-> Organization: 'WORKS_AT', 'INTERNS_AT', 'STUDIES_AT', 'FOUNDED', 'MEMBER_OF'
-- Person <-> Technology / System: 'USES', 'PROFICIENT_IN', 'BUILT', 'MAINTAINS'
-- Person <-> Document / Process: 'COMPLETED', 'AWARDED', 'AUTHORS', 'EARNED'
-- Organization <-> Document / Process: 'ISSUES', 'HOSTS', 'OFFERS'
-- Technology / System <-> Technology / System: 'DEPENDS_ON', 'INTEGRATES_WITH', 'BUILT_WITH', 'DEPLOYS_TO'
-- General: 'CONTAINS', 'PART_OF', 'RELATES_TO'
+2. Professions, Designations, Degrees, and Domains as First-Class Entities:
+   - Do NOT ignore, drop, or discard job titles, professions, designations, degrees, or domain concepts!
+   - Extract them as their own distinct entities (e.g., type 'Role' for 'Software Engineering Intern', 'Chief Medical Officer', 'Full Stack Developer'; type 'Award' or 'Degree' for 'B.Tech in Civil Engineering', 'Certificate of Completion'; type 'Domain' for 'Retrieval-Augmented Generation', 'Quantum Optics').
+   - Create explicit directed relationships linking the person/entity to their role or domain:
+     e.g.,
+     Source: 'Anurag Verma' -> Target: 'Software Engineering Intern', Type: 'HAS_ROLE'
+     Source: 'Anurag Verma' -> Target: 'Google Cloud India', Type: 'INTERNS_AT'
+     Source: 'Google Cloud India' -> Target: 'Certificate of Completion', Type: 'ISSUES'
+     Source: 'Anurag Verma' -> Target: 'Certificate of Completion', Type: 'AWARDED'
 
-RULES:
-1. Canonical Name: Extract clean, succinct proper nouns. Strip titles or roles from person names (e.g., use 'Anurag Verma', NOT 'Anurag Verma Software Engineer' or 'Subject').
-2. Person Typing: Any human individual's name MUST be typed as 'Person'.
-3. Relationships: Directed source -> target relations must be logically accurate, meaningful, and factually grounded in the text.
-4. Output Format: Return ONLY a valid raw JSON object. No Markdown code fences, no explanations, no text before or after.
+3. Open-Domain Entity Types:
+   - Use descriptive TitleCase types suited to the text domain:
+     - Core: Person, Organization, Technology, System, Document, Role, Skill, Location, Award, Concept, Process, Component
+     - Domain Extensions: Domain, Field, MedicalCondition, LegalClause, Metric, Event, Credential, Dataset, etc.
+
+4. Expressive Directed Relationships:
+   - Relationships must be UPPER_SNAKE_CASE expressing semantic verbs grounded in the text:
+     'WORKS_AT', 'INTERNS_AT', 'STUDIES_AT', 'HAS_ROLE', 'PROFICIENT_IN', 'BUILT', 'ISSUED_BY', 'AWARDED',
+     'AUTHORED', 'LOCATED_IN', 'PART_OF', 'SPECIALIZES_IN', 'COLLABORATES_WITH', 'DEPENDS_ON', 'INTEGRATES_WITH',
+     'CONTAINS', 'RELATES_TO'.
+
+5. Cross-Document Entity Unification:
+   - Extract consistent atomic canonical names for entities (e.g. 'Anurag Verma') so they unify into a coherent knowledge graph across documents.
+
+Return ONLY a valid raw JSON object. No Markdown code fences, no explanations, no text before or after.
 
 Output Schema:
 {
@@ -59,10 +66,11 @@ Text Chunk (from document '{filename}', page {page}):
 \"\"\"
 """
 
-# Recognized entity types
-VALID_ENTITY_TYPES = {
+# Recognized core entity types (open-domain extensions are also welcomed)
+CORE_ENTITY_TYPES = {
     "Person", "Organization", "Technology", "System",
-    "Document", "Concept", "Process", "Component"
+    "Document", "Role", "Skill", "Award", "Concept", "Process",
+    "Component", "Location", "Domain"
 }
 
 TYPE_NORMALIZATION_MAP = {
@@ -70,16 +78,30 @@ TYPE_NORMALIZATION_MAP = {
     "human": "Person",
     "candidate": "Person",
     "student": "Person",
-    "engineer": "Person",
     "company": "Organization",
     "institution": "Organization",
     "university": "Organization",
     "college": "Organization",
+    "agency": "Organization",
+    "firm": "Organization",
+    "role": "Role",
+    "profession": "Role",
+    "designation": "Role",
+    "occupation": "Role",
+    "position": "Role",
+    "job": "Role",
+    "skill": "Skill",
+    "competency": "Skill",
+    "degree": "Award",
+    "diploma": "Award",
+    "credential": "Award",
+    "certification": "Award",
     "framework": "Technology",
     "language": "Technology",
     "library": "Technology",
     "database": "Technology",
     "tool": "Technology",
+    "sdk": "Technology",
     "platform": "System",
     "service": "System",
     "application": "System",
@@ -87,33 +109,19 @@ TYPE_NORMALIZATION_MAP = {
     "certificate": "Document",
     "paper": "Document",
     "file": "Document",
-    "role": "Process",
-    "internship": "Process",
-    "education": "Process",
-    "degree": "Process",
+    "resume": "Document",
+    "invoice": "Document",
     "methodology": "Concept",
     "topic": "Concept",
-    "domain": "Concept",
+    "domain": "Domain",
+    "location": "Location",
+    "city": "Location",
+    "country": "Location",
+    "hardware": "Component",
+    "module": "Component",
+    "workflow": "Process",
+    "internship": "Role",
 }
-
-PERSON_ROLE_PATTERNS = [
-    r"Software\s+Engineering\s+Intern",
-    r"Software\s+Engineer",
-    r"Software\s+Developer",
-    r"Full[- ]Stack\s+Developer",
-    r"Full[- ]Stack\s+Engineer",
-    r"Backend\s+Developer",
-    r"Frontend\s+Developer",
-    r"Data\s+Scientist",
-    r"AI\s+Engineer",
-    r"Intern",
-    r"Student",
-    r"Consultant",
-    r"Researcher",
-    r"Architect",
-    r"Lead",
-    r"Manager",
-]
 
 def canonicalize_name(name: str) -> str:
     """Normalizes entity names for semantic deduplication and entity resolution."""
@@ -122,38 +130,54 @@ def canonicalize_name(name: str) -> str:
     cleaned = re.sub(r'[\.,;:]+$', '', cleaned).strip()
     
     # Strip honorifics
-    cleaned = re.sub(r'^(?:Dr|Prof|Mr|Mrs|Ms)\.?\s+', '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'^(?:Dr|Prof|Mr|Mrs|Ms|Hon|Sir|Dame|Rev)\.?\s+', '', cleaned, flags=re.IGNORECASE)
 
-    # Strip attached job roles from names (e.g. 'Anurag Verma Software Engineer' -> 'Anurag Verma')
-    for role in PERSON_ROLE_PATTERNS:
-        pat = rf'\s+(?:-\s+|\|\s+|at\s+|,\s+)?{role}.*$'
-        if re.search(pat, cleaned, flags=re.IGNORECASE):
-            cand = re.sub(pat, '', cleaned, flags=re.IGNORECASE).strip()
-            # Keep if the base name still has substantial length and isn't just an adjective
-            if len(cand) >= 3 and cand.lower() not in {"software", "full-stack", "full stack", "backend", "frontend", "ai", "data"}:
-                cleaned = cand
-                break
+    # Strip degree suffixes
+    cleaned = re.sub(r',?\s+(?:Ph\.?D\.?|M\.?D\.?|B\.?E\.?|B\.?Tech|M\.?Tech|MBA|Esq\.?)$', '', cleaned, flags=re.IGNORECASE)
 
-    return cleaned
+    return cleaned.strip()
+
+def split_implicit_role(raw_name: str) -> tuple[str, str | None]:
+    """Separates atomic entity name from any attached role/designation suffix."""
+    cname = canonicalize_name(raw_name)
+    # Check for "Name - Role" or "Name | Role" or "Name as Role"
+    delim_match = re.match(r'^([A-Z][a-zA-Z\s\.\'-]{2,35}?)\s*(?:[-–—|]|\s+as\s+|\s+at\s+)\s*([A-Z][a-zA-Z0-9\s/&_-]{2,50})$', cname)
+    if delim_match:
+        cand_name, cand_role = delim_match.group(1).strip(), delim_match.group(2).strip()
+        if len(cand_name.split()) >= 2:
+            return cand_name, cand_role
+            
+    # Check for "Name (Role)"
+    paren_match = re.match(r'^([A-Z][a-zA-Z\s\.\'-]{2,35}?)\s*\(([A-Za-z0-9\s/&_-]{2,50})\)$', cname)
+    if paren_match:
+        cand_name, cand_role = paren_match.group(1).strip(), paren_match.group(2).strip()
+        if len(cand_name.split()) >= 2:
+            return cand_name, cand_role
+
+    return cname, None
 
 def normalize_entity_type(raw_type: str, name: str) -> str:
-    """Strictly maps raw entity types to canonical ontology, enforcing Person overrides."""
+    """Normalizes raw entity types into clean TitleCase open-domain types, with common taxonomy mappings."""
     t = (raw_type or "").strip()
-    # Direct match in valid set
-    for vt in VALID_ENTITY_TYPES:
-        if vt.lower() == t.lower():
-            return vt
-            
-    # Substring match in normalization map
+    if not t:
+        return "Concept"
+
     lower_t = t.lower()
+
+    # Exact or substring match in normalization map
     for k, v in TYPE_NORMALIZATION_MAP.items():
-        if k in lower_t:
+        if k == lower_t or k in lower_t:
             return v
-            
+
     # Check common technology keywords in name
     lower_n = name.lower()
     if any(kw in lower_n for kw in ["python", "docker", "fastapi", "react", "next.js", "postgres", "sql", "jwt", "git", "api", "qdrant", "redis", "linux", "html", "css", "typescript", "javascript"]):
         return "Technology"
+
+    # Open-domain fallback: preserve any clean alphanumeric TitleCase domain type!
+    clean_type = re.sub(r'[^a-zA-Z0-9_]', '', t.title())
+    if len(clean_type) >= 2 and clean_type.lower() not in {"unknown", "misc", "other", "item", "thing", "tag", "entity"}:
+        return clean_type
 
     return "Concept"
 
@@ -175,11 +199,11 @@ def extract_entities_and_relations(
     
     extracted_json = None
     # High-accuracy instruction-following models on Groq
-    models_to_try = ["qwen/qwen3.8-27b", "openai/gpt-oss-120b", "qwen/qwen3.6-27b", "openai/gpt-oss-20b"]
+    models_to_try = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b", "qwen/qwen3.6-27b"]
     
     for model in models_to_try:
         try:
-            llm = ChatGroq(model=model, temperature=0.0, max_tokens=1800)
+            llm = ChatGroq(model=model, temperature=0.0)
             res = llm.invoke(prompt)
             raw = res.content
             # Remove any reasoning/thinking traces
@@ -194,7 +218,7 @@ def extract_entities_and_relations(
                 extracted_json = json.loads(json_match.group(0))
                 if isinstance(extracted_json, dict) and "entities" in extracted_json:
                     break
-        except Exception as exc:
+        except Exception:
             continue
 
     if not extracted_json or not isinstance(extracted_json, dict):
@@ -235,6 +259,7 @@ def extract_entities_and_relations(
     # Disambiguation, Cleansing & Batched Database Ingestion
     cleaned_entities = []
     seen_entity_names = set()
+    implicit_relations = []
 
     for ent in entities:
         if not isinstance(ent, dict):
@@ -243,34 +268,63 @@ def extract_entities_and_relations(
         if not raw_name:
             continue
             
-        cname = canonicalize_name(raw_name)
-        if not cname or len(cname) < 2 or cname.lower() in seen_entity_names:
+        cname, implicit_role = split_implicit_role(raw_name)
+        if not cname or len(cname) < 2:
             continue
             
         # Filter out generic stop labels
-        if cname.lower() in {"subject", "unknown", "document", "item", "page"}:
+        if cname.lower() in {"subject", "unknown", "document", "item", "page", "table", "figure"}:
             continue
-            
-        seen_entity_names.add(cname.lower())
+
         raw_type = ent.get("type", "Concept")
         norm_type = normalize_entity_type(raw_type, cname)
 
-        cleaned_entities.append({
-            "name": cname,
-            "type": norm_type,
-            "description": ent.get("description", "").strip(),
-            "aliases": [canonicalize_name(a) for a in ent.get("aliases", []) if a and canonicalize_name(a)],
-        })
+        if cname.lower() not in seen_entity_names:
+            seen_entity_names.add(cname.lower())
+            cleaned_entities.append({
+                "name": cname,
+                "type": norm_type,
+                "description": ent.get("description", "").strip(),
+                "aliases": [canonicalize_name(a) for a in ent.get("aliases", []) if a and canonicalize_name(a)],
+            })
+
+        # If an implicit role or designation was attached to the name, preserve it as a Role entity!
+        if implicit_role and len(implicit_role) >= 2:
+            clean_role = canonicalize_name(implicit_role)
+            if clean_role.lower() not in seen_entity_names:
+                seen_entity_names.add(clean_role.lower())
+                cleaned_entities.append({
+                    "name": clean_role,
+                    "type": "Role",
+                    "description": f"Role associated with {cname}",
+                    "aliases": [],
+                })
+            implicit_relations.append({
+                "source": cname,
+                "target": clean_role,
+                "type": "HAS_ROLE",
+                "description": f"{cname} holds role {clean_role}",
+                "weight": 1.0,
+            })
+
+    # Combine relations with any extracted implicit role relations
+    all_relations = relations + implicit_relations
 
     valid_entity_names_lower = {e["name"].lower() for e in cleaned_entities}
     cleaned_relations = []
     seen_rel_keys = set()
 
-    for rel in relations:
+    for rel in all_relations:
         if not isinstance(rel, dict):
             continue
         src = canonicalize_name(rel.get("source", ""))
         tgt = canonicalize_name(rel.get("target", ""))
+
+        # Check if source or target had an implicit role attached
+        src_clean, _ = split_implicit_role(src)
+        tgt_clean, _ = split_implicit_role(tgt)
+        src = src_clean or src
+        tgt = tgt_clean or tgt
         
         if not src or not tgt or src.lower() == tgt.lower():
             continue

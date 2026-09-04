@@ -463,29 +463,25 @@ def run_entity_resolution_and_deduplication(user_id: str | None = None) -> int:
 
     uid = user_id or get_current_user()
 
-    def normalize_entity_stem(name: str) -> str:
+    def normalize_entity_stem(name: str, etype: str = "") -> str:
         s = name.lower().strip()
-        s = re.sub(r'^(?:dr|prof|mr|mrs|ms)\.?\s+', '', s)
-        for r in [
-            r'software\s+engineering\s+intern',
-            r'software\s+engineer',
-            r'software\s+developer',
-            r'full[- ]stack\s+developer',
-            r'full[- ]stack\s+engineer',
-            r'backend\s+developer',
-            r'frontend\s+developer',
-            r'data\s+scientist',
-            r'ai\s+engineer',
-            r'intern',
-            r'student',
-            r'consultant',
-            r'researcher',
-            r'architect',
-            r'lead',
-            r'manager'
-        ]:
-            s = re.sub(rf'\s+(?:-\s+|\|\s+|at\s+|,\s+)?{r}.*$', '', s)
-        s = re.sub(r'\.js$', '', s)
+        # Strip honorifics
+        s = re.sub(r'^(?:dr|prof|mr|mrs|ms|hon|sir|dame|rev)\.?\s+', '', s)
+        # Strip academic/professional degree suffixes
+        s = re.sub(r',?\s+(?:ph\.?d\.?|m\.?d\.?|b\.?e\.?|b\.?tech|m\.?tech|mba|esq\.?)$', '', s)
+
+        # Organization legal forms
+        if etype in ('Organization', 'Company'):
+            s = re.sub(r'\b(?:inc|incorporated|llc|ltd|limited|corp|corporation|pvt|private|technologies|solutions|co)\b\.?', '', s)
+
+        # Technology suffixes
+        if etype in ('Technology', 'System', 'Skill'):
+            s = re.sub(r'\.js$', '', s)
+            s = re.sub(r'\b(?:framework|library|database|db|platform|engine|sdk|api)\b', '', s)
+
+        # Delimiters and parenthetical clauses (e.g. "Anurag Verma - SDE" or "Anurag Verma (Intern)")
+        s = re.sub(r'\s*[-–—|:/]\s*.*$', '', s)
+        s = re.sub(r'\s*\([^)]*\)', '', s)
         return re.sub(r'[^a-z0-9]', '', s)
 
     with connection() as conn, conn.cursor() as cur:
@@ -498,7 +494,7 @@ def run_entity_resolution_and_deduplication(user_id: str | None = None) -> int:
 
         stem_groups = defaultdict(list)
         for ent in entities:
-            stem = normalize_entity_stem(ent['canonical_name'])
+            stem = normalize_entity_stem(ent['canonical_name'], ent.get('entity_type', ''))
             if len(stem) >= 3:
                 stem_groups[stem].append(ent)
 
@@ -509,11 +505,13 @@ def run_entity_resolution_and_deduplication(user_id: str | None = None) -> int:
 
             def score_entity(e):
                 type_score = 0
-                if e['entity_type'] == 'Person': type_score = 40
-                elif e['entity_type'] == 'Organization': type_score = 30
-                elif e['entity_type'] == 'Technology': type_score = 20
-                elif e['entity_type'] == 'System': type_score = 15
-                elif e['entity_type'] != 'Concept': type_score = 10
+                et = e.get('entity_type', 'Concept')
+                if et == 'Person': type_score = 50
+                elif et == 'Organization': type_score = 40
+                elif et == 'Technology': type_score = 30
+                elif et == 'System': type_score = 25
+                elif et in ('Role', 'Skill', 'Award'): type_score = 20
+                elif et != 'Concept': type_score = 15
                 name_len_score = max(0, 50 - len(e['canonical_name']))
                 return type_score + name_len_score
 
@@ -533,6 +531,35 @@ def run_entity_resolution_and_deduplication(user_id: str | None = None) -> int:
                 all_aliases.add(sec['canonical_name'])
                 if len(sec.get('description') or '') > len(best_desc):
                     best_desc = sec['description']
+
+                # Check if secondary had an embedded role to preserve as a first-class entity
+                delim_match = re.search(r'[-–—|]\s*([A-Za-z0-9\s/&_-]{3,50})$', sec['canonical_name'])
+                paren_match = re.search(r'\(([A-Za-z0-9\s/&_-]{3,50})\)$', sec['canonical_name'])
+                extracted_role = None
+                if delim_match:
+                    extracted_role = delim_match.group(1).strip()
+                elif paren_match:
+                    extracted_role = paren_match.group(1).strip()
+
+                if extracted_role and len(extracted_role) >= 3 and primary.get('entity_type') == 'Person':
+                    try:
+                        role_id = str(uuid.uuid4())
+                        cur.execute("""
+                            INSERT INTO graph_entities (entity_id, user_id, canonical_name, entity_type, description, updated_at)
+                            VALUES (%s, %s, %s, 'Role', %s, now())
+                            ON CONFLICT (user_id, canonical_name) DO UPDATE SET updated_at = now()
+                            RETURNING entity_id
+                        """, (role_id, uid, extracted_role, f"Role associated with {primary['canonical_name']}"))
+                        r_row = cur.fetchone()
+                        target_role_id = r_row['entity_id'] if r_row else role_id
+                        src_doc = sec.get('source_docs', [''])[0] if sec.get('source_docs') else ''
+                        cur.execute("""
+                            INSERT INTO graph_relations (relation_id, user_id, source_entity_id, target_entity_id, relation_type, weight, description, source_doc)
+                            VALUES (%s, %s, %s, %s, 'HAS_ROLE', 1.0, %s, %s)
+                            ON CONFLICT (user_id, source_entity_id, target_entity_id, relation_type) DO NOTHING
+                        """, (str(uuid.uuid4()), uid, primary_id, target_role_id, f"{primary['canonical_name']} holds role {extracted_role}", src_doc))
+                    except Exception:
+                        pass
 
                 # Redirect relations where secondary was source
                 cur.execute("""
