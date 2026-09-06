@@ -6,14 +6,9 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-try:
-    from src.db import init_db
-    from src.ingest import ingest_file
-    from src.generate import answer_query
-except ImportError:
-    from db import init_db
-    from ingest import ingest_file
-    from generate import answer_query
+from src.storage.vector_store import init_db
+from src.ingestion.service import ingest_file
+from src.generation.service import answer_query
 
 def main():
     parser = argparse.ArgumentParser(description="Multi-Document RAG CLI")

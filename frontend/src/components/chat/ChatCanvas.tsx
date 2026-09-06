@@ -92,9 +92,9 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
                   <div className="h-3.5 w-[90%] rounded bg-[var(--border-color)]/60" />
                   
                   {/* Context pills skeleton */}
-                  <div className="flex gap-2 pt-2 border-t border-[var(--border-color)]/40">
-                    <div className="h-5 w-28 rounded-full bg-[var(--border-color)]/50" />
-                    <div className="h-5 w-36 rounded-full bg-[var(--border-color)]/40" />
+                  <div className="flex gap-2 pt-2 border-t border-[var(--border-color)]">
+                    <div className="h-5 w-28 rounded-full bg-[var(--bg-input)]" />
+                    <div className="h-5 w-36 rounded-full bg-[var(--bg-input)]" />
                   </div>
                 </div>
               </div>

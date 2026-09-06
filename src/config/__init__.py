@@ -1,0 +1,49 @@
+"""Configuration package for Omni RAG workstation."""
+from src.config.settings import settings, Settings, ROOT_DIR
+
+# Export all constants directly so `from src.config import COLLECTION_NAME, ...` works cleanly
+GROQ_API_KEY = settings.GROQ_API_KEY
+QDRANT_URL = settings.QDRANT_URL
+QDRANT_API_KEY = settings.QDRANT_API_KEY
+QDRANT_PATH = settings.QDRANT_PATH
+COLLECTION_NAME = settings.COLLECTION_NAME
+DB_URL = settings.DATABASE_URL
+CHAT_DB_PATH = settings.CHAT_DB_PATH
+GRAPH_DB_PATH = settings.GRAPH_DB_PATH
+FILE_STORAGE_TYPE = settings.FILE_STORAGE_TYPE
+FILE_STORAGE_BUCKET = settings.FILE_STORAGE_BUCKET
+AWS_ACCESS_KEY_ID = settings.AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY = settings.AWS_SECRET_ACCESS_KEY
+AWS_REGION = settings.AWS_REGION
+UPLOADS_DIR = settings.UPLOADS_DIR
+SUPABASE_URL = settings.SUPABASE_URL
+SUPABASE_PUBLISHABLE_KEY = settings.SUPABASE_PUBLISHABLE_KEY
+TAVILY_API_KEY = settings.TAVILY_API_KEY
+FRONTEND_URL = settings.FRONTEND_URL
+ENVIRONMENT = settings.ENVIRONMENT
+ALLOWED_FILE_EXTENSIONS = settings.ALLOWED_FILE_EXTENSIONS
+
+__all__ = [
+    "settings",
+    "Settings",
+    "ROOT_DIR",
+    "GROQ_API_KEY",
+    "QDRANT_URL",
+    "QDRANT_API_KEY",
+    "QDRANT_PATH",
+    "COLLECTION_NAME",
+    "DB_URL",
+    "CHAT_DB_PATH",
+    "GRAPH_DB_PATH",
+    "FILE_STORAGE_TYPE",
+    "FILE_STORAGE_BUCKET",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_REGION",
+    "UPLOADS_DIR",
+    "SUPABASE_URL",
+    "SUPABASE_PUBLISHABLE_KEY",
+    "TAVILY_API_KEY",
+    "FRONTEND_URL",
+    "ENVIRONMENT",
+]

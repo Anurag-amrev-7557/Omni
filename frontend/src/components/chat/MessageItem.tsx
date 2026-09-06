@@ -345,7 +345,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
       {/* MINIMALIST GROUNDED REFERENCES & SOURCES */}
       {parsedCitations.length > 0 && (
-        <div className="mt-3.5 pt-3 border-t border-[var(--border-color)]/60">
+        <div className="mt-3.5 pt-3 border-t border-[var(--border-color)]">
           <div 
             className="flex items-center justify-between cursor-pointer py-1 select-none group"
             onClick={() => setReferencesOpen(!referencesOpen)}
@@ -357,7 +357,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               <span className="text-[12px] font-semibold text-[var(--text-main)] tracking-tight">
                 Grounded References
               </span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-[var(--bg-input)] border border-[var(--border-color)]/60 text-[var(--text-muted)] font-medium">
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-muted)] font-medium">
                 {parsedCitations.length}
               </span>
             </div>
@@ -382,11 +382,11 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                   <div 
                     key={cit.id}
                     onClick={() => onInspectDoc({
-                      filename: cit.filename,
+                       filename: cit.filename,
                       content: cit.quote,
                       page: cit.page ? parseInt(cit.page, 10) : undefined
                     })}
-                    className="group relative flex flex-col gap-1.5 p-3 rounded-xl bg-[var(--bg-card)]/70 hover:bg-[var(--bg-hover)] border border-[var(--border-color)]/70 hover:border-[var(--border-hover)] transition-all cursor-pointer shadow-2xs"
+                    className="group relative flex flex-col gap-1.5 p-3 rounded-xl bg-[var(--bg-card)]/70 hover:bg-[var(--bg-hover)] border border-[var(--border-color)] hover:border-[var(--border-hover)] transition-all cursor-pointer shadow-2xs"
                   >
                     {/* Top Meta Row */}
                     <div className="flex items-center justify-between gap-2">
@@ -399,7 +399,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                           {cit.filename}
                         </span>
                         {cit.page && (
-                          <span className="text-[10.5px] font-mono text-[var(--text-muted)] bg-[var(--bg-input)] px-1.5 py-0.5 rounded border border-[var(--border-color)]/50 flex-shrink-0">
+                          <span className="text-[10.5px] font-mono text-[var(--text-muted)] bg-[var(--bg-input)] px-1.5 py-0.5 rounded border border-[var(--border-color)] flex-shrink-0">
                             p. {cit.page}
                           </span>
                         )}
@@ -438,7 +438,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
       {/* RETRIEVED GROUNDING CONTEXT SOURCES ACCORDION */}
       {message.contexts && message.contexts.length > 0 && (
-        <div className="mt-2.5 pt-2.5 border-t border-[var(--border-color)]/40">
+        <div className="mt-2.5 pt-2.5 border-t border-[var(--border-color)]">
           <div 
             className="flex items-center justify-between cursor-pointer py-1 select-none group"
             onClick={() => setSourcesOpen(!sourcesOpen)}
@@ -450,7 +450,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               <span className="text-[12px] font-medium text-[var(--text-muted)] group-hover:text-[var(--text-main)] transition-colors">
                 Retrieved Vector Chunks
               </span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-[var(--bg-input)] border border-[var(--border-color)]/60 text-[var(--text-muted)] font-medium">
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-muted)] font-medium">
                 {message.contexts.length}
               </span>
             </div>
@@ -475,7 +475,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                   return (
                     <div 
                       key={idx}
-                      className="flex items-center justify-between p-2.5 rounded-xl bg-[var(--bg-card)]/50 hover:bg-[var(--bg-hover)] border border-[var(--border-color)]/60 hover:border-[var(--border-hover)] text-xs cursor-pointer transition-all group"
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-[var(--bg-card)]/50 hover:bg-[var(--bg-hover)] border border-[var(--border-color)] hover:border-[var(--border-hover)] text-xs cursor-pointer transition-all group"
                       onClick={() => onInspectDoc({ filename: fname, content: ctx.parent_content || ctx.content, page: ctx.page })}
                     >
                       <div className="flex items-center gap-2 truncate pr-2">
@@ -494,7 +494,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                       </div>
 
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="px-1.5 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border-color)]/50 text-[10px] text-[var(--text-muted)] font-mono">
+                        <span className="px-1.5 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border-color)] text-[10px] text-[var(--text-muted)] font-mono">
                           {ctx.rerank_score ? `score: ${ctx.rerank_score.toFixed(2)}` : 'RRF'}
                         </span>
                         <ExternalLink size={11} className="text-[var(--text-muted)] group-hover:text-[var(--accent-primary)] transition-colors" />

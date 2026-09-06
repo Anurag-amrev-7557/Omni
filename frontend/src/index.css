@@ -4,6 +4,12 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  *, ::before, ::after {
+    border-color: var(--border-color);
+  }
+}
+
 /* =========================================================
    COMPREHENSIVE DESIGN TOKENS (LIGHT & DARK PAIRS)
 ========================================================= */

@@ -133,6 +133,13 @@ export default function App() {
 
   const skipNextMessageLoadRef = useRef<string | null>(null);
   const previousUserIdRef = useRef<string | null>(null);
+  const isStreamingRef = useRef<boolean>(false);
+  const activeSessionIdRef = useRef<string | null>(currentSessionId);
+
+  // Keep activeSessionIdRef in sync with currentSessionId
+  useEffect(() => {
+    activeSessionIdRef.current = currentSessionId;
+  }, [currentSessionId]);
 
   // Sync sessions cache with localStorage on every update (including immediate deletions)
   useEffect(() => {
@@ -208,11 +215,19 @@ export default function App() {
   const loadSessions = useCallback(async () => {
     try {
       const sess = await api.getSessions();
-      setSessions(sess);
+      setSessions(prev => {
+        // Preserve any optimistic sessions that the remote server hasn't committed yet
+        const optimistic = prev.filter(p => !sess.some(s => s.session_id === p.session_id));
+        return [...optimistic, ...sess];
+      });
       try {
         localStorage.setItem('omni_sessions_cache', JSON.stringify(sess));
       } catch {}
       setCurrentSessionId(prev => {
+        // Never hijack or switch sessions while user is streaming
+        if (isStreamingRef.current) return prev;
+        // If user intentionally navigated to New Chat (prev === null), preserve it!
+        if (prev === null) return null;
         if (prev && sess.some(s => s.session_id === prev)) {
           return prev;
         }
@@ -227,7 +242,9 @@ export default function App() {
 
   // Fetch Messages for active session (with instant cache hydration)
   const loadMessages = useCallback(async (sessionId: string) => {
-    if (isStreaming) return;
+    if (isStreamingRef.current) return;
+    if (sessionId !== activeSessionIdRef.current) return;
+
     const cached = getCachedMessages(sessionId);
     if (cached.length > 0) {
       setMessages(cached);
@@ -237,6 +254,9 @@ export default function App() {
     }
     try {
       const msgs = await api.getMessages(sessionId);
+      if (isStreamingRef.current || sessionId !== activeSessionIdRef.current) {
+        return;
+      }
       setMessages(msgs);
       try {
         localStorage.setItem(`omni_msgs_${sessionId}`, JSON.stringify(msgs));
@@ -244,14 +264,18 @@ export default function App() {
     } catch (e) {
       console.error("Error loading messages:", e);
     } finally {
-      setIsLoadingMessages(false);
+      if (sessionId === activeSessionIdRef.current) {
+        setIsLoadingMessages(false);
+      }
     }
-  }, [isStreaming]);
+  }, []);
 
   // Instant switch between sessions
   const handleSelectSession = useCallback((sessionId: string) => {
     if (sessionId === currentSessionId) return;
+    if (isStreamingRef.current) return;
     setCurrentSessionId(sessionId);
+    activeSessionIdRef.current = sessionId;
     const cached = getCachedMessages(sessionId);
     if (cached.length > 0) {
       setMessages(cached);
@@ -325,7 +349,9 @@ export default function App() {
 
   // Create New Thread (Instant local reset - creates remote thread on first prompt)
   const handleNewChat = () => {
+    if (isStreamingRef.current) return;
     setCurrentSessionId(null);
+    activeSessionIdRef.current = null;
     setMessages([]);
     try {
       localStorage.removeItem('omni_active_session_id');
@@ -436,6 +462,7 @@ export default function App() {
         return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
       });
       skipNextMessageLoadRef.current = activeSessId;
+      activeSessionIdRef.current = activeSessId;
       const sessionTitle = actualPrompt.slice(0, 32).trim() || 'New chat';
       const optimisticSession: ChatSession = {
         session_id: activeSessId,
@@ -452,6 +479,7 @@ export default function App() {
         console.warn("Could not proactively create remote session:", err);
       });
     } else {
+      activeSessionIdRef.current = activeSessId;
       // Optimistically update session title in sidebar if it was generic
       const truncatedTitle = actualPrompt.slice(0, 32).trim();
       if (truncatedTitle) {
@@ -471,6 +499,7 @@ export default function App() {
     const tempAssistantMsg: ChatMessage = { role: 'assistant', content: '', contexts: null };
     setMessages(prev => [...prev, userMsg, tempAssistantMsg]);
     setIsStreaming(true);
+    isStreamingRef.current = true;
 
     // 5. If files were attached, initiate ingestion concurrently
     if (filesToUpload.length > 0) {
@@ -590,6 +619,7 @@ export default function App() {
       });
     } finally {
       setIsStreaming(false);
+      isStreamingRef.current = false;
     }
   };
 
