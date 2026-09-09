@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { clearUserDataOnLogout } from '../../services/api';
 import { LogIn, LogOut, User } from 'lucide-react';
 
 interface AuthControlsProps {
@@ -24,6 +25,7 @@ export const AuthControls: React.FC<AuthControlsProps> = ({ onOpenAuth }) => {
 
   const handleSignOut = async () => {
     try {
+      clearUserDataOnLogout();
       await supabase.auth.signOut();
       setUserEmail(null);
     } catch (e) {

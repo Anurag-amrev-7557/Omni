@@ -93,6 +93,15 @@ export const useDocuments = (showToast: (msg: string) => void) => {
     });
   }, []);
 
+  const resetDocumentsState = useCallback(() => {
+    setDocuments([]);
+    setStats({
+      total_chunks: 0,
+      files_count: 0,
+      files: []
+    });
+  }, []);
+
   const refreshVault = useCallback(async () => {
     try {
       await Promise.all([fetchDocuments(), fetchStats()]);
@@ -442,5 +451,6 @@ export const useDocuments = (showToast: (msg: string) => void) => {
     batchReindexDocuments,
     batchEnhanceDocuments,
     batchDownloadDocuments,
+    resetDocumentsState,
   };
 };

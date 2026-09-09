@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { ChatSession } from '../../types/chat';
 import { supabase } from '../../lib/supabase';
+import { clearUserDataOnLogout } from '../../services/api';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -69,6 +70,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const handleSignOut = async () => {
     try {
+      clearUserDataOnLogout();
       await supabase.auth.signOut();
       setUserEmail(null);
       showToast("Signed out successfully");

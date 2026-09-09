@@ -16,6 +16,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
   contexts?: ContextChunk[] | null;
+  statusMessage?: string;
   created_at?: string;
   timestamp?: string;
 }

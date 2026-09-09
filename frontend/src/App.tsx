@@ -14,7 +14,7 @@ import { AuthPage } from './components/auth/AuthPage';
 import { Toast } from './components/common/Toast';
 import { useDocuments } from './hooks/useDocuments';
 import { useSpeech } from './hooks/useSpeech';
-import { api, API_BASE, setAuthTokenProvider, getAuthToken, setCachedToken, getGuestSessionId } from './services/api';
+import { api, API_BASE, setAuthTokenProvider, getAuthToken, setCachedToken, getGuestSessionId, clearUserDataOnLogout } from './services/api';
 import { supabase } from './lib/supabase';
 import { ChatSession, ChatMessage } from './types/chat';
 import { ProjectItem, INITIAL_PROJECTS } from './types/project';
@@ -207,6 +207,7 @@ export default function App() {
     batchReindexDocuments,
     batchEnhanceDocuments,
     batchDownloadDocuments,
+    resetDocumentsState,
   } = useDocuments(showToast);
 
   const { speakText, startVoiceDictation } = useSpeech(showToast);
@@ -316,14 +317,18 @@ export default function App() {
         if (session) {
           setAuthModalOpen(false);
         }
-        // Only wipe state if authenticated user ID actually changed (e.g. login or logout)
-        if (currentUserId !== previousUserIdRef.current) {
+        // Wipe all user data, caches, and reset state if user logs out or switches accounts
+        if (event === 'SIGNED_OUT' || currentUserId !== previousUserIdRef.current) {
           previousUserIdRef.current = currentUserId;
+          clearUserDataOnLogout();
           setCurrentSessionId(null);
+          setSessions([]);
           setMessages([]);
-          try {
-            localStorage.removeItem('omni_active_session_id');
-          } catch {}
+          setProjects(INITIAL_PROJECTS);
+          setActiveProjectId('default-vault');
+          setSidecarDoc(null);
+          setSidecarOpen(false);
+          resetDocumentsState();
           refreshVault();
           loadSessions();
         }
@@ -554,12 +559,20 @@ export default function App() {
 
             try {
               const parsed = JSON.parse(dataStr);
+              let statusUpdate: string | undefined = undefined;
+
+              // Handle status events emitted by backend during retrieval/web search
+              if (parsed.type === 'status' || parsed.status || (parsed.message && !parsed.token && !parsed.contexts)) {
+                statusUpdate = parsed.message || parsed.status || '';
+              }
+
               if (parsed.token) {
                 targetContent += parsed.token;
               }
               if (parsed.contexts) {
                 streamContexts = parsed.contexts;
               }
+
               setMessages(prev => {
                 const updated = [...prev];
                 const lastIdx = updated.length - 1;
@@ -567,7 +580,8 @@ export default function App() {
                   updated[lastIdx] = {
                     ...updated[lastIdx],
                     content: targetContent,
-                    contexts: streamContexts || updated[lastIdx].contexts
+                    contexts: streamContexts || updated[lastIdx].contexts,
+                    ...(statusUpdate !== undefined ? { statusMessage: statusUpdate } : {})
                   };
                 }
                 return updated;

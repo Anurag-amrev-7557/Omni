@@ -8,7 +8,6 @@ from src.core.logging import logger
 from src.core.security import build_user_filter, normalize_user_id, is_default_or_local_user
 from src.core.auth import get_current_user
 from src.storage.vector_store import get_qdrant_client, init_db, get_collection_stats
-from src.graph.traversal import traverse_subgraph
 from src.retrieval.embeddings import get_embeddings
 from src.retrieval.reranker import get_reranker
 from src.retrieval.hybrid import compute_reciprocal_rank_fusion
@@ -113,14 +112,15 @@ def hybrid_search(
             top_pool = fused_candidates[:min(len(fused_candidates), 15)]
             if top_pool:
                 reranker = get_reranker()
-                pairs = [[query, doc.get("child_snippet") or doc["content"][:400]] for doc in top_pool]
-                rerank_scores = reranker.predict(pairs)
+                if reranker is not None:
+                    pairs = [[query, doc.get("child_snippet") or doc["content"][:400]] for doc in top_pool]
+                    rerank_scores = reranker.predict(pairs)
 
-                for idx, score in enumerate(rerank_scores):
-                    top_pool[idx]["rerank_score"] = round(float(score), 4)
+                    for idx, score in enumerate(rerank_scores):
+                        top_pool[idx]["rerank_score"] = round(float(score), 4)
 
-                top_pool.sort(key=lambda x: x["rerank_score"], reverse=True)
-                fused_candidates = top_pool + fused_candidates[len(top_pool):]
+                    top_pool.sort(key=lambda x: x["rerank_score"], reverse=True)
+                    fused_candidates = top_pool + fused_candidates[len(top_pool):]
         except Exception as e:
             logger.debug(f"Cross-Encoder reranking note: {e}")
 
@@ -131,6 +131,7 @@ def hybrid_search(
             active_files = get_collection_stats(user_id=norm_uid).get("files", [])
 
         if active_files:
+            from src.graph.traversal import traverse_subgraph
             graph_res = traverse_subgraph(query, user_id=norm_uid, active_filenames=active_files)
             if graph_res.get("contexts"):
                 fused_candidates = graph_res["contexts"][:2] + fused_candidates

@@ -264,12 +264,17 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   }
 
   // 2. ASSISTANT MESSAGE RENDER
-  // If actively streaming and no text has arrived yet, show only the pristine orbiting orb loader
+  // If actively streaming and no text has arrived yet, show the orbiting orb loader with live status message
   if (isLastAssistant && isStreaming && !bodyText.trim()) {
     return (
       <div className="w-full flex flex-col my-5 fade-in">
-        <div className="py-3">
+        <div className="py-3 flex items-center gap-3">
           <OrbitingOrbLoader size="md" />
+          {message.statusMessage && (
+            <span className="text-xs text-[var(--text-muted)] animate-pulse font-sans">
+              {message.statusMessage}
+            </span>
+          )}
         </div>
       </div>
     );

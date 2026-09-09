@@ -81,6 +81,47 @@ export const getGuestSessionId = (): string => {
   return guestId;
 };
 
+export const clearUserDataOnLogout = () => {
+  cachedToken = null;
+  if (typeof window === 'undefined') return;
+
+  try {
+    // 1. Explicit fixed user/session data keys
+    const userKeys = [
+      'omni_sessions_cache',
+      'omni_active_session_id',
+      'omni_active_project',
+      'omni_projects',
+      'omni_documents_cache',
+      'omni_stats_cache',
+      'omni_custom_instructions',
+      'omni_user_name',
+      'omni_call_name',
+      'omni_work_domain',
+    ];
+    userKeys.forEach(k => {
+      try { localStorage.removeItem(k); } catch {}
+    });
+
+    // 2. Clear all dynamic per-session message cache keys (omni_msgs_*)
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('omni_msgs_')) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(k => {
+      try { localStorage.removeItem(k); } catch {}
+    });
+
+    // 3. Clear guest session ID in sessionStorage so the next guest session starts clean
+    try { sessionStorage.removeItem('omni_guest_session_id'); } catch {}
+  } catch (err) {
+    console.error('Failed to clear user data on logout:', err);
+  }
+};
+
 export const apiFetch = async (path: string, options: RequestInit = {}) => {
   const token = await getAuthToken();
   const headers = new Headers(options.headers);
