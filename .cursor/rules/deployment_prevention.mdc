@@ -83,3 +83,40 @@ def get_reranker():
 ```
 - Never perform network blocking calls inside synchronous FastAPI startup events; run them asynchronously in background threads via `asyncio.to_thread` or lifespan handlers.
 - Bind host to `0.0.0.0` and port to `$PORT`.
+
+---
+
+## 🚨 Ephemeral Container Filesystem & Inaccessible Path Prevention
+
+### Problem
+```
+Failed to save file: [Errno 2] No such file or directory: '/var/data/uploaded_docs/.../file.pdf'
+```
+
+### Root Cause
+1. Render Persistent Disks mount to `/var/data`, but on free tier or instances without an attached disk, `/var/data` does not exist or has permission denied.
+2. Code assuming `os.makedirs(UPLOADS_DIR)` succeeds without checking writability crashes during file writes (`open(path, "wb")`).
+
+### Prevention Rule
+```python
+# ❌ WRONG - Assuming UPLOADS_DIR exists or can be created without checking writability
+user_dir = os.path.join(settings.UPLOADS_DIR, safe_uid)
+os.makedirs(user_dir, exist_ok=True)
+return user_dir
+
+# ✅ CORRECT - Test writability and gracefully fall back to /tmp
+def get_user_uploads_dir(user_id=None):
+    candidates = [
+        os.path.join("/tmp", "rag_uploads", safe_uid),
+        os.path.join(settings.UPLOADS_DIR, safe_uid) if settings.UPLOADS_DIR else None,
+    ]
+    for candidate in filter(None, candidates):
+        try:
+            os.makedirs(candidate, exist_ok=True)
+            if os.path.isdir(candidate) and os.access(candidate, os.W_OK):
+                return candidate
+        except Exception:
+            pass
+    return os.path.join(tempfile.gettempdir(), "rag_uploads", safe_uid)
+```
+

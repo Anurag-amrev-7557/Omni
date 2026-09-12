@@ -11,6 +11,9 @@ export OPENBLAS_NUM_THREADS=1
 export VECLIB_MAXIMUM_THREADS=1
 export NUMEXPR_NUM_THREADS=1
 
+# Default ENVIRONMENT to production on Render if not explicitly set
+export ENVIRONMENT="${ENVIRONMENT:-production}"
+
 PORT="${PORT:-10000}"
 echo "==> [Omni Startup] Launching Uvicorn on 0.0.0.0:${PORT}..."
 

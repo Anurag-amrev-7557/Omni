@@ -14,12 +14,11 @@ from src.storage.relational_db import get_db_cursor
 _docs_db_initialized = False
 
 
-def init_docs_db():
-    """Initializes the documents metadata table in PostgreSQL or SQLite."""
+def init_docs_db(force: bool = False):
+    """Initializes and automatically migrates the documents metadata table in PostgreSQL or SQLite."""
     global _docs_db_initialized
-    if _docs_db_initialized:
+    if _docs_db_initialized and not force:
         return
-    _docs_db_initialized = True
 
     try:
         with get_db_cursor(commit=True) as (conn, cur, p):
@@ -41,7 +40,20 @@ def init_docs_db():
                     );
                     CREATE INDEX IF NOT EXISTS idx_documents_user_id ON documents(user_id);
                     CREATE INDEX IF NOT EXISTS idx_documents_filename ON documents(filename);
+
+                    ALTER TABLE documents ADD COLUMN IF NOT EXISTS size_bytes BIGINT DEFAULT 0;
+                    ALTER TABLE documents ADD COLUMN IF NOT EXISTS page_count INT DEFAULT 1;
+                    ALTER TABLE documents ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ready';
+                    ALTER TABLE documents ADD COLUMN IF NOT EXISTS summary TEXT;
+                    ALTER TABLE documents ADD COLUMN IF NOT EXISTS chunk_count INT DEFAULT 0;
+                    ALTER TABLE documents ADD COLUMN IF NOT EXISTS error TEXT;
+                    ALTER TABLE documents ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+                    ALTER TABLE documents ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
                 """)
+                try:
+                    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_filename_user_id ON documents(filename, user_id);")
+                except Exception as uidx_err:
+                    logger.debug(f"PostgreSQL unique index note: {uidx_err}")
             else:
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS documents (
@@ -61,6 +73,25 @@ def init_docs_db():
                 """)
                 cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_user_id ON documents(user_id);")
                 cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_filename ON documents(filename);")
+                for col, col_def in [
+                    ("size_bytes", "INTEGER DEFAULT 0"),
+                    ("page_count", "INTEGER DEFAULT 1"),
+                    ("status", "TEXT DEFAULT 'ready'"),
+                    ("summary", "TEXT"),
+                    ("chunk_count", "INTEGER DEFAULT 0"),
+                    ("error", "TEXT"),
+                    ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+                    ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+                ]:
+                    try:
+                        cur.execute(f"ALTER TABLE documents ADD COLUMN {col} {col_def};")
+                    except Exception:
+                        pass
+                try:
+                    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_filename_user_id ON documents(filename, user_id);")
+                except Exception as uidx_err:
+                    logger.debug(f"SQLite unique index note: {uidx_err}")
+        _docs_db_initialized = True
     except Exception as e:
         logger.error(f"init_docs_db error: {e}")
 
@@ -81,19 +112,33 @@ def upsert_document_record(
     try:
         with get_db_cursor(commit=True) as (conn, cur, p):
             ts = now if p == "%s" else now.isoformat()
-            cur.execute(f"""
-                INSERT INTO documents (filename, user_id, size_bytes, page_count, status, summary, chunk_count, created_at, updated_at)
-                VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p})
-                ON CONFLICT (filename, user_id) DO UPDATE SET
-                    size_bytes = EXCLUDED.size_bytes,
-                    page_count = EXCLUDED.page_count,
-                    status = EXCLUDED.status,
-                    summary = COALESCE(EXCLUDED.summary, documents.summary),
-                    chunk_count = EXCLUDED.chunk_count,
-                    error = NULL,
-                    updated_at = EXCLUDED.updated_at
-            """, (filename, norm_user, size_bytes, page_count, status, summary, chunk_count, ts, ts))
-            return True
+            try:
+                cur.execute(f"""
+                    INSERT INTO documents (filename, user_id, size_bytes, page_count, status, summary, chunk_count, created_at, updated_at)
+                    VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p})
+                    ON CONFLICT (filename, user_id) DO UPDATE SET
+                        size_bytes = EXCLUDED.size_bytes,
+                        page_count = EXCLUDED.page_count,
+                        status = EXCLUDED.status,
+                        summary = COALESCE(EXCLUDED.summary, documents.summary),
+                        chunk_count = EXCLUDED.chunk_count,
+                        error = NULL,
+                        updated_at = EXCLUDED.updated_at
+                """, (filename, norm_user, size_bytes, page_count, status, summary, chunk_count, ts, ts))
+                return True
+            except Exception as conflict_err:
+                logger.debug(f"ON CONFLICT upsert note ({conflict_err}). Falling back to UPDATE/INSERT...")
+                cur.execute(f"""
+                    UPDATE documents
+                    SET size_bytes = {p}, page_count = {p}, status = {p}, summary = COALESCE({p}, summary), chunk_count = {p}, error = NULL, updated_at = {p}
+                    WHERE filename = {p} AND user_id = {p}
+                """, (size_bytes, page_count, status, summary, chunk_count, ts, filename, norm_user))
+                if cur.rowcount == 0:
+                    cur.execute(f"""
+                        INSERT INTO documents (filename, user_id, size_bytes, page_count, status, summary, chunk_count, created_at, updated_at)
+                        VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p})
+                    """, (filename, norm_user, size_bytes, page_count, status, summary, chunk_count, ts, ts))
+                return True
     except Exception as e:
         logger.error(f"upsert_document_record error for {filename}: {e}")
         return False
@@ -119,6 +164,11 @@ def update_document_status(
                 SET status = {p}, chunk_count = {p}, error = {p}, summary = COALESCE({p}, summary), updated_at = {p}
                 WHERE filename = {p} AND user_id = {p}
             """, (status, chunk_count, error, summary, ts, filename, norm_user))
+            if cur.rowcount == 0:
+                cur.execute(f"""
+                    INSERT INTO documents (filename, user_id, status, chunk_count, error, summary, created_at, updated_at)
+                    VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p}, {p})
+                """, (filename, norm_user, status, chunk_count, error, summary, ts, ts))
             return True
     except Exception as e:
         logger.error(f"update_document_status error for {filename}: {e}")
@@ -152,6 +202,29 @@ def get_user_documents(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
             return _format_doc_rows(rows)
     except Exception as e:
         logger.error(f"get_user_documents error: {e}")
+        if "column" in str(e).lower() or "does not exist" in str(e).lower():
+            try:
+                init_docs_db(force=True)
+                with get_db_cursor() as (conn, cur, p):
+                    order_clause = "ORDER BY updated_at DESC NULLS LAST" if p == "%s" else "ORDER BY updated_at DESC"
+                    if is_local:
+                        cur.execute(f"""
+                            SELECT filename, size_bytes, page_count, status, summary, chunk_count, error, updated_at
+                            FROM documents
+                            WHERE user_id = {p} OR user_id = {p}
+                            {order_clause}
+                        """, (norm_user, settings.DEFAULT_LOCAL_USER))
+                    else:
+                        cur.execute(f"""
+                            SELECT filename, size_bytes, page_count, status, summary, chunk_count, error, updated_at
+                            FROM documents
+                            WHERE user_id = {p}
+                            {order_clause}
+                        """, (norm_user,))
+                    rows = cur.fetchall()
+                    return _format_doc_rows(rows)
+            except Exception as retry_e:
+                logger.error(f"get_user_documents retry error: {retry_e}")
         return []
 
 

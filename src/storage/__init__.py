@@ -2,6 +2,7 @@
 from src.storage.vector_store import (
     get_qdrant_client,
     init_db,
+    ensure_payload_indices,
     clear_collection,
     delete_files_from_collection,
     delete_file_from_collection,
@@ -43,6 +44,7 @@ from src.storage.file_storage import (
 __all__ = [
     "get_qdrant_client",
     "init_db",
+    "ensure_payload_indices",
     "clear_collection",
     "delete_files_from_collection",
     "delete_file_from_collection",

@@ -248,13 +248,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           />
           <div className="absolute bottom-full mb-1 left-2 sm:left-8 z-10 w-full max-w-[calc(100vw-32px)] sm:max-w-sm overflow-hidden pointer-events-none p-0.5">
             <div className={`${isMentionClosing ? 'pure-slide-down' : 'pure-slide-up'} pointer-events-auto w-full max-h-72 overflow-y-auto p-1.5 bg-[var(--bg-modal)] border border-[var(--border-color)] rounded-2xl text-xs`}>
-              <div className="flex items-center justify-between px-3 py-1.5 text-[10.5px] font-bold text-[var(--text-dark)] uppercase tracking-wider select-none border-b border-[var(--border-color)] mb-1">
+              <div className="flex items-center justify-between px-3 py-1.5 text-[11px] font-bold text-[var(--text-dark)] uppercase tracking-wider select-none border-b border-[var(--border-color)] mb-1">
                 <span className="flex items-center gap-1.5 text-[var(--text-main)]">
                   <AtSign size={13} className="text-[var(--accent-primary)]" />
                   <span>Reference Files</span>
                   {mentionQuery && <span className="lowercase font-mono text-[var(--text-muted)] font-normal">&ldquo;{mentionQuery}&rdquo;</span>}
                 </span>
-                <span className="font-mono text-[10px] text-[var(--text-dark)]">Tab / ↵</span>
+                <span className="font-mono text-[11px] text-[var(--text-muted)]">Tab / ↵</span>
               </div>
 
               <div className="flex flex-col gap-0.5">
@@ -663,9 +663,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       </div>
 
       {/* Footer Disclaimer & Model Selector Row */}
-      <div className="flex items-center justify-end sm:justify-between text-xs text-[var(--text-dark)] mt-2 px-1">
+      <div className="flex items-center justify-end sm:justify-between text-xs text-[var(--text-muted)] mt-2 px-1">
         {/* Left Disclaimer (Hidden on mobile) */}
-        <span className="text-[11.5px] text-[var(--text-dark)] select-none hidden sm:inline">
+        <span className="text-[12px] text-[var(--text-muted)] select-none hidden sm:inline">
           Omni is AI and can make mistakes. Please double-check responses.
         </span>
 
@@ -688,7 +688,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               <div 
                 className="dropdown-popover-bottom absolute right-0 bottom-8 z-50 w-72 max-w-[calc(100vw-32px)] py-2 px-1.5 bg-[var(--bg-modal)]/95 border border-[var(--border-color)] rounded-2xl shadow-[0_16px_48px_rgba(0,0,0,0.25)] backdrop-blur-2xl text-xs"
               >
-                <div className="px-3 py-1.5 text-[10.5px] font-bold text-[var(--text-dark)] uppercase tracking-wider select-none">
+                <div className="px-3 py-1.5 text-[11px] font-bold text-[var(--text-dark)] uppercase tracking-wider select-none">
                   Model Selection
                 </div>
 

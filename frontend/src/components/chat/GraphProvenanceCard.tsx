@@ -47,7 +47,7 @@ export const GraphProvenanceCard: React.FC<GraphProvenanceCardProps> = ({
                     {hop.source}
                   </span>
                   <ArrowRight size={12} className="text-[var(--text-muted)]" />
-                  <span className="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500 font-semibold text-[10.5px]">
+                  <span className="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-700 dark:text-purple-300 font-semibold text-[11px]">
                     {hop.relation}
                   </span>
                   <ArrowRight size={12} className="text-[var(--text-muted)]" />

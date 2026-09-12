@@ -224,7 +224,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               {/* CHATS SECTION */}
               {(categoryFilter === 'all' || categoryFilter === 'chats') && filteredSessions.length > 0 && (
                 <div>
-                  <div className="px-3 py-1 text-[10.5px] font-bold text-[var(--text-dark)] uppercase tracking-wider select-none">
+                  <div className="px-3 py-1 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider select-none">
                     Recent Chats & Research Threads
                   </div>
                   <div className="flex flex-col gap-0.5 mt-1">
@@ -251,7 +251,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                             </div>
                             <div className="truncate">
                               <div className="text-[13px] font-medium truncate">{s.title || 'Untitled chat'}</div>
-                              <div className="text-[10.5px] text-[var(--text-muted)] mt-0.5 font-mono">Chat Session</div>
+                              <div className="text-[11px] text-[var(--text-muted)] mt-0.5 font-mono">Chat Session</div>
                             </div>
                           </div>
                           <ArrowRight size={13} className="text-[var(--text-dark)] group-hover:text-[var(--text-main)] transition-colors flex-shrink-0" />
@@ -265,7 +265,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               {/* DOCUMENTS SECTION */}
               {(categoryFilter === 'all' || categoryFilter === 'docs') && filteredDocs.length > 0 && (
                 <div>
-                  <div className="px-3 py-1 text-[10.5px] font-bold text-[var(--text-dark)] uppercase tracking-wider select-none">
+                  <div className="px-3 py-1 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider select-none">
                     Knowledge Vault Documents
                   </div>
                   <div className="flex flex-col gap-0.5 mt-1">
@@ -290,7 +290,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                             <FormatBadge filename={d.filename} size="md" />
                             <div className="truncate">
                               <div className="text-[13px] font-medium truncate">{d.filename}</div>
-                              <div className="text-[10.5px] text-[var(--text-dark)] font-mono">
+                              <div className="text-[11px] text-[var(--text-muted)] font-mono">
                                 {d.pages} pages · {d.size_mb} MB
                               </div>
                             </div>
@@ -306,7 +306,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               {/* QUICK ACTIONS SECTION */}
               {(categoryFilter === 'all' || categoryFilter === 'actions') && systemActions.length > 0 && (
                 <div>
-                  <div className="px-3 py-1 text-[10.5px] font-bold text-[var(--text-dark)] uppercase tracking-wider select-none">
+                  <div className="px-3 py-1 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider select-none">
                     System Actions & Navigation
                   </div>
                   <div className="flex flex-col gap-0.5 mt-1">
@@ -359,7 +359,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
             </span>
           </div>
 
-          <span className="font-mono text-[10.5px]">
+          <span className="font-mono text-[11px]">
             {allResults.length} {allResults.length === 1 ? 'match' : 'matches'}
           </span>
         </div>

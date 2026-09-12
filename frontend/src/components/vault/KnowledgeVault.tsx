@@ -234,7 +234,7 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = ({
               </button>
 
               <button
-                className="h-9 px-4 rounded-lg bg-[var(--accent-primary)] text-white hover:opacity-95 text-[13px] font-medium transition-all inline-flex items-center gap-2 cursor-pointer shadow-xs active:scale-[0.98]"
+                className="h-9 px-4 rounded-lg bg-[var(--accent-primary)] text-[var(--accent-contrast-text)] hover:opacity-95 text-[13px] font-medium transition-all inline-flex items-center gap-2 cursor-pointer shadow-xs active:scale-[0.98]"
                 onClick={() => setIsUploadModalOpen(true)}
               >
                 <UploadCloud size={14.5} />

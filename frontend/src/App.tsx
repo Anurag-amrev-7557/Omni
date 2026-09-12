@@ -544,54 +544,86 @@ export default function App() {
       const decoder = new TextDecoder('utf-8');
       let targetContent = '';
       let streamContexts: any = null;
+      let lastStatusUpdate: string | undefined = undefined;
+      let renderPending = false;
 
+      const scheduleRender = () => {
+        if (renderPending) return;
+        renderPending = true;
+        requestAnimationFrame(() => {
+          renderPending = false;
+          setMessages(prev => {
+            const updated = [...prev];
+            const lastIdx = updated.length - 1;
+            if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
+              updated[lastIdx] = {
+                ...updated[lastIdx],
+                content: targetContent,
+                contexts: streamContexts || updated[lastIdx].contexts,
+                ...(lastStatusUpdate !== undefined ? { statusMessage: lastStatusUpdate } : {})
+              };
+            }
+            return updated;
+          });
+        });
+      };
+
+      let sseBuffer = '';
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
+        sseBuffer += decoder.decode(value, { stream: true });
+        const lines = sseBuffer.split('\n');
+        // Preserve any trailing incomplete line in buffer
+        sseBuffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const dataStr = line.replace('data: ', '').trim();
-            if (dataStr === '[DONE]') break;
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data: ')) continue;
 
-            try {
-              const parsed = JSON.parse(dataStr);
-              let statusUpdate: string | undefined = undefined;
+          const dataStr = trimmed.slice(6).trim();
+          if (dataStr === '[DONE]') break;
 
-              // Handle status events emitted by backend during retrieval/web search
-              if (parsed.type === 'status' || parsed.status || (parsed.message && !parsed.token && !parsed.contexts)) {
-                statusUpdate = parsed.message || parsed.status || '';
-              }
+          try {
+            const parsed = JSON.parse(dataStr);
 
-              if (parsed.token) {
-                targetContent += parsed.token;
-              }
-              if (parsed.contexts) {
-                streamContexts = parsed.contexts;
-              }
+            // Handle status events emitted by backend during retrieval/web search
+            if (parsed.type === 'status' || parsed.status || (parsed.message && !parsed.token && !parsed.contexts)) {
+              lastStatusUpdate = parsed.message || parsed.status || '';
+            }
 
-              setMessages(prev => {
-                const updated = [...prev];
-                const lastIdx = updated.length - 1;
-                if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
-                  updated[lastIdx] = {
-                    ...updated[lastIdx],
-                    content: targetContent,
-                    contexts: streamContexts || updated[lastIdx].contexts,
-                    ...(statusUpdate !== undefined ? { statusMessage: statusUpdate } : {})
-                  };
-                }
-                return updated;
-              });
-            } catch {
+            if (parsed.token) {
+              targetContent += parsed.token;
+            }
+            if (parsed.contexts) {
+              streamContexts = parsed.contexts;
+            }
+
+            scheduleRender();
+          } catch {
+            // Only append if it's plain text from a non-JSON SSE source, never broken JSON fragments
+            if (!dataStr.startsWith('{') && !dataStr.startsWith('[')) {
               targetContent += dataStr;
+              scheduleRender();
             }
           }
         }
       }
+
+      // Final synchronous flush on stream completion
+      setMessages(prev => {
+        const updated = [...prev];
+        const lastIdx = updated.length - 1;
+        if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
+          updated[lastIdx] = {
+            ...updated[lastIdx],
+            content: targetContent,
+            contexts: streamContexts || updated[lastIdx].contexts,
+          };
+        }
+        return updated;
+      });
 
       // Safeguard against empty response hanging the loader
       if (!targetContent.trim()) {

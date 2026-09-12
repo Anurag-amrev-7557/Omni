@@ -167,9 +167,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               backgroundColor: 'var(--bg-sidebar)',
             }}
           >
-            {/* Search Input Bar (subtly lighter background for optimal contrast) */}
+            {/* Search Input Bar (theme background for optimal contrast) */}
             <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-dark)' }} />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
               <input 
                 type="text"
                 value={searchQuery}
@@ -177,7 +177,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 placeholder="Search"
                 className="w-full h-8 pl-9 pr-3 rounded-lg text-[13px] focus:outline-none transition-colors"
                 style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                  backgroundColor: 'var(--bg-input)',
                   borderWidth: '1px',
                   borderStyle: 'solid',
                   borderColor: 'var(--border-color)',
@@ -188,7 +188,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <button 
                   onClick={() => setSearchQuery('')}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] cursor-pointer"
-                  style={{ color: 'var(--text-dark)' }}
+                  style={{ color: 'var(--text-muted)' }}
                 >
                   ✕
                 </button>
@@ -207,7 +207,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div key={group.label}>
                     <div 
                       className="px-2.5 mb-1.5 text-[11px] font-semibold tracking-wider uppercase"
-                      style={{ color: 'var(--text-dark)' }}
+                      style={{ color: 'var(--text-muted)' }}
                     >
                       {group.label}
                     </div>
@@ -403,7 +403,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div className="pt-2">
                         <div className="mb-1.5">
                           <span className="text-sm font-medium block" style={{ color: 'var(--text-sidebar-item)' }}>Instructions for Omni</span>
-                          <span className="text-[12px] leading-relaxed block mt-0.5" style={{ color: 'var(--text-dark)' }}>
+                          <span className="text-[12px] leading-relaxed block mt-0.5" style={{ color: 'var(--text-muted)' }}>
                             Omni will keep these in mind for this and any of your associated accounts across chats and retrieval sessions.
                           </span>
                         </div>
@@ -547,7 +547,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div className="flex items-center justify-between">
                         <div>
                           <span className="text-sm font-medium block" style={{ color: 'var(--text-sidebar-item)' }}>Motion</span>
-                          <span className="text-[12px] block mt-0.5" style={{ color: 'var(--text-dark)' }}>
+                          <span className="text-[12px] block mt-0.5" style={{ color: 'var(--text-muted)' }}>
                             Reduce animation in streaming responses and other interface elements.
                           </span>
                         </div>
@@ -1008,7 +1008,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </span>
                       </div>
                       <input type="range" min="0.0" max="1.0" step="0.05" value={temperature} onChange={(e) => setTemperature(parseFloat(e.target.value))} className="w-full cursor-pointer" style={{ accentColor: 'var(--accent-primary)' }} />
-                      <div className="flex justify-between text-[11px] mt-1 font-mono" style={{ color: 'var(--text-dark)' }}><span>0.0 (Deterministic)</span><span>1.0 (Creative)</span></div>
+                      <div className="flex justify-between text-[11px] mt-1 font-mono" style={{ color: 'var(--text-muted)' }}><span>0.0 (Deterministic)</span><span>1.0 (Creative)</span></div>
                     </div>
 
                     {/* Top-K */}
@@ -1031,7 +1031,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </span>
                       </div>
                       <input type="range" min="1" max="15" step="1" value={similarityTopK} onChange={(e) => setSimilarityTopK(parseInt(e.target.value))} className="w-full cursor-pointer" style={{ accentColor: 'var(--accent-primary)' }} />
-                      <div className="flex justify-between text-[11px] mt-1 font-mono" style={{ color: 'var(--text-dark)' }}><span>1 chunk</span><span>15 chunks</span></div>
+                      <div className="flex justify-between text-[11px] mt-1 font-mono" style={{ color: 'var(--text-muted)' }}><span>1 chunk</span><span>15 chunks</span></div>
                     </div>
 
                     {/* Rerank Limit */}
@@ -1054,7 +1054,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </span>
                       </div>
                       <input type="range" min="1" max="10" step="1" value={rerankLimit} onChange={(e) => setRerankLimit(parseInt(e.target.value))} className="w-full cursor-pointer" style={{ accentColor: 'var(--accent-primary)' }} />
-                      <div className="flex justify-between text-[11px] mt-1 font-mono" style={{ color: 'var(--text-dark)' }}><span>1 top-ranked</span><span>10 top-ranked</span></div>
+                      <div className="flex justify-between text-[11px] mt-1 font-mono" style={{ color: 'var(--text-muted)' }}><span>1 top-ranked</span><span>10 top-ranked</span></div>
                     </div>
 
                     {/* Danger Zone: Reset Collection directly in RAG pipeline tab */}

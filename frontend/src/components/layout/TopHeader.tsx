@@ -74,7 +74,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 className="dropdown-popover-top absolute right-0 top-10 z-50 w-72 max-w-[calc(100vw-24px)] max-h-96 overflow-y-auto no-scrollbar py-2 px-1.5 bg-[var(--bg-modal)] border border-[var(--border-color)] rounded-2xl shadow-[0_16px_48px_rgba(0,0,0,0.25)] backdrop-blur-2xl"
               >
                 {/* Light Themes */}
-                <div className="px-3 py-1.5 text-[10.5px] font-bold text-[var(--text-dark)] uppercase tracking-wider select-none">
+                <div className="px-3 py-1.5 text-[11px] font-bold text-[var(--text-dark)] uppercase tracking-wider select-none">
                   Light & Warm Palettes
                 </div>
                 <div className="flex flex-col gap-0.5">
@@ -103,7 +103,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 <div className="my-2 border-t border-[var(--border-color)]" />
 
                 {/* Dark Themes */}
-                <div className="px-3 py-1.5 text-[10.5px] font-bold text-[var(--text-dark)] uppercase tracking-wider select-none">
+                <div className="px-3 py-1.5 text-[11px] font-bold text-[var(--text-dark)] uppercase tracking-wider select-none">
                   Dark & Night Palettes
                 </div>
                 <div className="flex flex-col gap-0.5">

@@ -545,7 +545,7 @@ export const GitHubConnectorModal: React.FC<GitHubConnectorModalProps> = ({
             {step === 'input' && (
               <button
                 disabled={isLoading || !repoUrl.trim()}
-                className="h-9 px-4 rounded-lg bg-[var(--accent-primary)] text-white text-[13px] font-medium hover:opacity-90 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed shadow-xs cursor-pointer transition-all inline-flex items-center gap-2"
+                className="h-9 px-4 rounded-lg bg-[var(--accent-primary)] text-[var(--accent-contrast-text)] text-[13px] font-medium hover:opacity-90 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed shadow-xs cursor-pointer transition-all inline-flex items-center gap-2"
                 onClick={handlePreview}
               >
                 {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
@@ -555,7 +555,7 @@ export const GitHubConnectorModal: React.FC<GitHubConnectorModalProps> = ({
             {step === 'preview' && (
               <button
                 disabled={selectedPaths.size === 0}
-                className="h-9 px-4 rounded-lg bg-[var(--accent-primary)] text-white text-[13px] font-medium hover:opacity-90 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed shadow-xs cursor-pointer transition-all inline-flex items-center gap-2"
+                className="h-9 px-4 rounded-lg bg-[var(--accent-primary)] text-[var(--accent-contrast-text)] text-[13px] font-medium hover:opacity-90 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed shadow-xs cursor-pointer transition-all inline-flex items-center gap-2"
                 onClick={handleSync}
               >
                 <FolderGit2 size={14} />
@@ -565,7 +565,7 @@ export const GitHubConnectorModal: React.FC<GitHubConnectorModalProps> = ({
             )}
             {step === 'done' && (
               <button
-                className="h-9 px-4 rounded-lg bg-[var(--accent-primary)] text-white text-[13px] font-medium hover:opacity-90 active:scale-[0.98] shadow-xs cursor-pointer transition-all"
+                className="h-9 px-4 rounded-lg bg-[var(--accent-primary)] text-[var(--accent-contrast-text)] text-[13px] font-medium hover:opacity-90 active:scale-[0.98] shadow-xs cursor-pointer transition-all"
                 onClick={handleClose}
               >
                 Done

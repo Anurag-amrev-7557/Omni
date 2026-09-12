@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useLayoutEffect } from 'react';
 import { MessageItem } from './MessageItem';
 import { ChatInput } from './ChatInput';
 import { ChatMessage } from '../../types/chat';
@@ -13,27 +13,27 @@ interface ChatCanvasProps {
   inputPrompt: string;
   setInputPrompt: (val: string) => void;
   attachedFiles: File[];
-  onRemoveAttachedFile: (fileOrIndex: File | number) => void;
-  onAttachFiles: (files: FileList | null) => void;
+  onRemoveAttachedFile: (index: number) => void;
+  onAttachFiles: (files: FileList | File[]) => void;
   vaultDocuments?: DocumentItem[];
   referencedVaultDocs?: string[];
   onAddReferencedDoc?: (filename: string) => void;
   onRemoveReferencedDoc?: (filename: string) => void;
-  onSend: (text?: string) => void;
+  onSend: (overridePrompt?: string) => void;
   selectedModel: string;
   setSelectedModel: (model: string) => void;
   effortLevel: string;
-  setEffortLevel: (effort: string) => void;
+  setEffortLevel: (level: string) => void;
   webSearchEnabled?: boolean;
   onToggleWebSearch?: () => void;
-  onInspectDoc: (chunk: { filename: string; content?: string; page?: number }) => void;
-  onReadAloud: (content: string) => void;
-  onStartVoice: () => void;
+  onInspectDoc?: (doc: any) => void;
+  onReadAloud?: (text: string) => void;
+  onStartVoice?: () => void;
   showToast: (msg: string) => void;
 }
 
 export const ChatCanvas: React.FC<ChatCanvasProps> = ({
-  currentSessionId = null,
+  currentSessionId,
   messages,
   isStreaming,
   isLoadingMessages = false,
@@ -58,16 +58,110 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
   onStartVoice,
   showToast,
 }) => {
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef<boolean>(true);
+  const rafIdRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const stepScroll = () => {
+    const el = scrollContainerRef.current;
+    if (!el || !isNearBottomRef.current) {
+      rafIdRef.current = null;
+      return;
+    }
+
+    const target = el.scrollHeight - el.clientHeight;
+    const diff = target - el.scrollTop;
+
+    if (diff <= 1) {
+      el.scrollTop = target;
+      rafIdRef.current = null;
+      return;
+    }
+
+    // Smooth fluid glide: step 30% of remaining distance (minimum 2px for responsive line tracking)
+    el.scrollTop = el.scrollTop + Math.max(2, diff * 0.3);
+    rafIdRef.current = requestAnimationFrame(stepScroll);
+  };
+
+  // Smooth gliding motion during token streaming; instant lock on finished messages
+  useLayoutEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el || !isNearBottomRef.current) return;
+
+    if (isStreaming) {
+      if (rafIdRef.current === null) {
+        rafIdRef.current = requestAnimationFrame(stepScroll);
+      }
+    } else {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      el.scrollTop = el.scrollHeight;
+    }
   }, [messages, isStreaming]);
+
+  // Clean up RAF on unmount
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+    };
+  }, []);
+
+  // Hardware wheel tracking: pause if user wheels up, resume if user scrolls to bottom
+  const handleWheel = (e: React.WheelEvent) => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    if (e.deltaY < 0) {
+      isNearBottomRef.current = false;
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    } else {
+      const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (dist <= 60) {
+        isNearBottomRef.current = true;
+      }
+    }
+  };
+
+  const handleScroll = () => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (dist <= 40) {
+      isNearBottomRef.current = true;
+    }
+  };
+
+  // Reset to bottom on session change
+  useEffect(() => {
+    isNearBottomRef.current = true;
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
+  }, [currentSessionId]);
+
+  const handleSendPrompt = (override?: string) => {
+    isNearBottomRef.current = true;
+    onSend(override);
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[var(--bg-dark)]">
       {/* Scrollable Message Feed */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 pt-6 pb-6 scroll-smooth">
+      <div 
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        onWheel={handleWheel}
+        className="flex-1 overflow-y-auto px-4 sm:px-6 pt-6 pb-6"
+      >
         <div className="max-w-4xl mx-auto w-full">
           {/* Loading Skeleton when switching sessions */}
           {isLoadingMessages && messages.length === 0 ? (
@@ -128,21 +222,21 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
               message={msg}
               isLastAssistant={idx === messages.length - 1 && msg.role === 'assistant'}
               isStreaming={isStreaming}
-              onRetry={(text) => onSend(text)}
+              onRetry={(text) => handleSendPrompt(text)}
               onEdit={(text) => setInputPrompt(text)}
               onInspectDoc={onInspectDoc}
               onReadAloud={onReadAloud}
               showToast={showToast}
             />
           ))}
-          <div ref={bottomRef} className="h-4" />
+          <div className="h-16 flex-shrink-0" />
         </div>
       </div>
 
-      {/* Docked Bottom Input Area with Smooth Upward Gradient Fade */}
+      {/* Docked Bottom Input Area */}
       <div className="flex-shrink-0 relative z-20 bg-[var(--bg-dark)] pb-4 pt-1 px-4 sm:px-6">
-        {/* Soft, Seamless Gradient Fade Overlay directly above the input boundary */}
-        <div className="absolute inset-x-0 bottom-full h-14 pointer-events-none bg-gradient-to-t from-[var(--bg-dark)] to-transparent" />
+        {/* Subtle, soft gradient fade directly above the input boundary */}
+        <div className="absolute inset-x-0 bottom-full h-6 pointer-events-none bg-gradient-to-t from-[var(--bg-dark)] to-transparent" />
 
         <div className="w-full max-w-4xl mx-auto">
           <ChatInput
@@ -156,7 +250,7 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
             onAddReferencedDoc={onAddReferencedDoc}
             onRemoveReferencedDoc={onRemoveReferencedDoc}
             isStreaming={isStreaming}
-            onSend={() => onSend()}
+            onSend={() => handleSendPrompt()}
             selectedModel={selectedModel}
             setSelectedModel={setSelectedModel}
             effortLevel={effortLevel}

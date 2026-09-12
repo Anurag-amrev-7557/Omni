@@ -203,7 +203,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Recents Thread List */}
-        <div className="px-4 pt-4 pb-1.5 flex items-center justify-between text-xs font-semibold text-[var(--text-dark)] uppercase tracking-wider">
+        <div className="px-4 pt-4 pb-1.5 flex items-center justify-between text-[11px] font-semibold text-[var(--text-dark)] uppercase tracking-wider">
           <span>Recents</span>
         </div>
 
@@ -292,7 +292,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onClick={e => e.stopPropagation()}
             >
               <button 
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium text-red-400 hover:bg-red-500/10 rounded-xl text-left transition-colors cursor-pointer"
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium text-[var(--danger-text)] hover:bg-[var(--danger-bg)] rounded-xl text-left transition-colors cursor-pointer"
                 onClick={() => {
                   onDeleteSession(activeMenuSessionId);
                   setActiveMenuSessionId(null);
@@ -337,7 +337,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div 
               className="dropdown-popover-bottom absolute left-3 right-3 bottom-16 z-50 py-2 px-1.5 bg-[var(--bg-modal)] border border-[var(--border-color)] rounded-2xl shadow-[0_16px_48px_rgba(0,0,0,0.25)] backdrop-blur-2xl"
             >
-              <div className="px-3 py-1 text-[10.5px] font-bold text-[var(--text-dark)] uppercase tracking-wider select-none truncate">
+              <div className="px-3 py-1 text-[11px] font-bold text-[var(--text-dark)] uppercase tracking-wider select-none truncate">
                 {userEmail ? `Account: ${userEmail}` : 'Local Workspace'}
               </div>
 
@@ -363,16 +363,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium text-[var(--text-main)] hover:bg-[var(--bg-hover)] rounded-xl cursor-pointer transition-all"
                 onClick={() => { onOpenSettings('health'); setProfileMenuOpen(false); }}
               >
-                <Activity size={15} className="text-emerald-500" />
+                <Activity size={15} className="text-[var(--status-active-text)]" />
                 <span className="flex-1">System Pipeline Health</span>
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-[var(--status-active-text)] animate-pulse" />
               </div>
 
               {userEmail && (
                 <>
                   <div className="my-1.5 border-t border-[var(--border-color)]" />
                   <div 
-                    className="flex items-center gap-2.5 px-3 py-2 text-[13px] text-red-400 hover:bg-red-500/10 rounded-xl cursor-pointer transition-all"
+                    className="flex items-center gap-2.5 px-3 py-2 text-[13px] text-[var(--danger-text)] hover:bg-[var(--danger-bg)] rounded-xl cursor-pointer transition-all"
                     onClick={handleSignOut}
                   >
                     <LogOut size={15} />

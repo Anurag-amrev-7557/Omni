@@ -111,7 +111,66 @@ function parseSingleCitation(rawItem: string, fallbackIdx: number): ParsedCitati
   };
 }
 
-export const MessageItem: React.FC<MessageItemProps> = ({
+// Static markdown components definition to prevent React from remounting the DOM on every streamed token
+const MARKDOWN_COMPONENTS: import('react-markdown').Components = {
+  a: ({ href, children }) => (
+    <span className="text-[var(--accent-primary)] font-medium cursor-pointer underline hover:text-[var(--accent-hover)] transition-colors">
+      {children}
+    </span>
+  ),
+  table: ({ children }) => (
+    <div className="omni-table-wrapper overflow-x-auto my-3 border border-[var(--border-color)] rounded-xl bg-[var(--bg-card)] shadow-2xs">
+      <table className="min-w-full divide-y divide-[var(--border-color)] text-xs text-left">
+        {children}
+      </table>
+    </div>
+  ),
+  thead: ({ children }) => (
+    <thead className="bg-[var(--bg-sidebar)] text-[var(--text-muted)] font-semibold uppercase tracking-wider text-[11px]">
+      {children}
+    </thead>
+  ),
+  tbody: ({ children }) => (
+    <tbody className="divide-y divide-[var(--border-color)]">
+      {children}
+    </tbody>
+  ),
+  tr: ({ children }) => (
+    <tr className="hover:bg-[var(--bg-hover)] transition-colors">
+      {children}
+    </tr>
+  ),
+  th: ({ children }) => (
+    <th className="px-3.5 py-2.5 font-semibold text-[var(--text-main)] border-r border-[var(--border-color)] last:border-r-0">
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td className="px-3.5 py-2.5 text-[var(--text-main)] border-r border-[var(--border-color)] last:border-r-0 whitespace-normal">
+      {children}
+    </td>
+  ),
+  ul: ({ children }) => (
+    <ul className="list-disc pl-5 my-2 space-y-1 text-[var(--text-main)]">
+      {children}
+    </ul>
+  ),
+  ol: ({ children }) => (
+    <ol className="list-decimal pl-5 my-2 space-y-1 text-[var(--text-main)]">
+      {children}
+    </ol>
+  ),
+  li: ({ children }) => (
+    <li className="pl-1 leading-relaxed text-[var(--text-main)]">
+      {children}
+    </li>
+  ),
+  hr: () => (
+    <hr className="border-0 border-t border-[var(--border-color)]" />
+  ),
+};
+
+export const MessageItem = React.memo<MessageItemProps>(({
   message,
   isLastAssistant,
   isStreaming,
@@ -124,7 +183,6 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const [copied, setCopied] = useState(false);
   const [referencesOpen, setReferencesOpen] = useState(false);
   const [sourcesOpen, setSourcesOpen] = useState(false);
-
   const handleCopy = (textToCopy: string) => {
     navigator.clipboard.writeText(textToCopy);
     setCopied(true);
@@ -286,66 +344,13 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       <div className="omni-prose max-w-none text-sm text-[var(--text-main)] leading-relaxed font-sans">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
-          components={{
-            // Interactive Link / Footnote Renderer
-            a: ({ href, children }) => (
-              <span className="text-[var(--accent-primary)] font-medium cursor-pointer underline hover:text-[var(--accent-hover)] transition-colors">
-                {children}
-              </span>
-            ),
-            // Responsive Table Styling
-            table: ({ children }) => (
-              <div className="omni-table-wrapper overflow-x-auto my-3 border border-[var(--border-color)] rounded-xl bg-[var(--bg-card)] shadow-2xs">
-                <table className="min-w-full divide-y divide-[var(--border-color)] text-xs text-left">
-                  {children}
-                </table>
-              </div>
-            ),
-            thead: ({ children }) => (
-              <thead className="bg-[var(--bg-sidebar)] text-[var(--text-muted)] font-semibold uppercase tracking-wider text-[11px]">
-                {children}
-              </thead>
-            ),
-            tbody: ({ children }) => (
-              <tbody className="divide-y divide-[var(--border-color)]">
-                {children}
-              </tbody>
-            ),
-            tr: ({ children }) => (
-              <tr className="hover:bg-[var(--bg-hover)] transition-colors">
-                {children}
-              </tr>
-            ),
-            th: ({ children }) => (
-              <th className="px-3.5 py-2.5 font-semibold text-[var(--text-main)] border-r border-[var(--border-color)] last:border-r-0">
-                {children}
-              </th>
-            ),
-            td: ({ children }) => (
-              <td className="px-3.5 py-2.5 text-[var(--text-main)] border-r border-[var(--border-color)] last:border-r-0 whitespace-normal">
-                {children}
-              </td>
-            ),
-            // Explicit Lists Formatting to counter Tailwind preflight resets
-            ul: ({ children }) => (
-              <ul className="list-disc pl-5 my-2 space-y-1 text-[var(--text-main)]">
-                {children}
-              </ul>
-            ),
-            ol: ({ children }) => (
-              <ol className="list-decimal pl-5 my-2 space-y-1 text-[var(--text-main)]">
-                {children}
-              </ol>
-            ),
-            li: ({ children }) => (
-              <li className="pl-1 leading-relaxed text-[var(--text-main)]">
-                {children}
-              </li>
-            ),
-          }}
+          components={MARKDOWN_COMPONENTS}
         >
           {bodyText}
         </ReactMarkdown>
+        {isLastAssistant && isStreaming && (
+          <span className="inline-block w-1.5 h-4 ml-1 align-middle bg-[var(--accent-primary)] rounded-xs animate-pulse opacity-90" />
+        )}
       </div>
 
       {/* MINIMALIST GROUNDED REFERENCES & SOURCES */}
@@ -362,7 +367,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               <span className="text-[12px] font-semibold text-[var(--text-main)] tracking-tight">
                 Grounded References
               </span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-muted)] font-medium">
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-muted)] font-medium">
                 {parsedCitations.length}
               </span>
             </div>
@@ -404,7 +409,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                           {cit.filename}
                         </span>
                         {cit.page && (
-                          <span className="text-[10.5px] font-mono text-[var(--text-muted)] bg-[var(--bg-input)] px-1.5 py-0.5 rounded border border-[var(--border-color)] flex-shrink-0">
+                          <span className="text-[11px] font-mono text-[var(--text-muted)] bg-[var(--bg-input)] px-1.5 py-0.5 rounded border border-[var(--border-color)] flex-shrink-0">
                             p. {cit.page}
                           </span>
                         )}
@@ -455,7 +460,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               <span className="text-[12px] font-medium text-[var(--text-muted)] group-hover:text-[var(--text-main)] transition-colors">
                 Retrieved Vector Chunks
               </span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-muted)] font-medium">
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-[var(--bg-input)] border border-[var(--border-color)] text-[var(--text-muted)] font-medium">
                 {message.contexts.length}
               </span>
             </div>
@@ -484,7 +489,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                       onClick={() => onInspectDoc({ filename: fname, content: ctx.parent_content || ctx.content, page: ctx.page })}
                     >
                       <div className="flex items-center gap-2 truncate pr-2">
-                        <span className="w-4.5 h-4.5 rounded text-[10px] font-bold bg-[var(--bg-input)] text-[var(--text-muted)] font-mono flex items-center justify-center flex-shrink-0">
+                        <span className="w-4.5 h-4.5 rounded text-[11px] font-bold bg-[var(--bg-input)] text-[var(--text-muted)] font-mono flex items-center justify-center flex-shrink-0">
                           {idx + 1}
                         </span>
                         <FormatBadge filename={fname} size="xs" />
@@ -492,14 +497,14 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                           {fname}
                         </span>
                         {ctx.page && (
-                          <span className="text-[10px] font-mono text-[var(--text-muted)] bg-[var(--bg-input)] px-1.5 py-0.5 rounded flex-shrink-0">
+                          <span className="text-[11px] font-mono text-[var(--text-muted)] bg-[var(--bg-input)] px-1.5 py-0.5 rounded flex-shrink-0">
                             p. {ctx.page}
                           </span>
                         )}
                       </div>
 
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="px-1.5 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border-color)] text-[10px] text-[var(--text-muted)] font-mono">
+                        <span className="px-1.5 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border-color)] text-[11px] text-[var(--text-muted)] font-mono">
                           {ctx.rerank_score ? `score: ${ctx.rerank_score.toFixed(2)}` : 'RRF'}
                         </span>
                         <ExternalLink size={11} className="text-[var(--text-muted)] group-hover:text-[var(--accent-primary)] transition-colors" />
@@ -537,4 +542,4 @@ export const MessageItem: React.FC<MessageItemProps> = ({
       )}
     </div>
   );
-};
+});

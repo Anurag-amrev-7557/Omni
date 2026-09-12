@@ -33,6 +33,7 @@ def ingest_file(
     on_progress: Optional[Callable[[str, int, str], None]] = None,
     file_bytes: Optional[bytes] = None,
     filename: Optional[str] = None,
+    preloaded_pages: Optional[List[Document]] = None,
 ) -> Dict[str, Any]:
     """Ingests a file with PyMuPDF extraction, hierarchical parent-child chunking, and dense vector storage."""
     start_time = time.time()
@@ -53,8 +54,10 @@ def ingest_file(
     if ext not in SUPPORTED_EXTENSIONS:
         raise ValueError(f"Unsupported file format '{ext}'. Supported: PDF, Markdown, Text, and Source Code files.")
 
-    # 1. Document Page Extraction
-    if file_bytes is not None:
+    # 1. Document Page Extraction (Single-pass or reuse preloaded)
+    if preloaded_pages is not None:
+        pages = preloaded_pages
+    elif file_bytes is not None:
         pages = load_pages_from_bytes(file_bytes, ext)
     elif ext == ".pdf":
         pages = load_pages_with_pymupdf(file_path)
@@ -83,7 +86,7 @@ def ingest_file(
         user_id=norm_uid,
     )
 
-    # 4. Dense Vector Indexing
+    # 4. Dense Vector Indexing with SIMD/Batched Vector Store Insertion
     if on_progress:
         on_progress("embedding", 60, f"Generating dense embeddings for {len(child_documents)} chunks...")
 
@@ -99,7 +102,7 @@ def ingest_file(
         on_progress("indexing", 85, "Storing vectors in Qdrant collection...")
 
     logger.info(f"Indexing {len(child_documents)} child vectors for {filename} (user: {norm_uid})...")
-    vector_store.add_documents(child_documents)
+    vector_store.add_documents(child_documents, batch_size=128)
     invalidate_stats_cache(user_id=norm_uid)
 
     elapsed_time = time.time() - start_time
@@ -107,14 +110,13 @@ def ingest_file(
     total_chunk_count = len(child_documents)
     total_parents_count = len(parent_docs)
 
-    chunks_to_process = []
-    if extract_graph:
-        chunks_to_process = parent_docs if total_parents_count <= 6 else [
-            parent_docs[int(i * (total_parents_count - 1) / 5)] for i in range(6)
-        ]
+    # Sample parent chunks for knowledge graph extraction
+    chunks_to_process = parent_docs if total_parents_count <= 6 else [
+        parent_docs[int(i * (total_parents_count - 1) / 5)] for i in range(6)
+    ]
 
-    # Free memory
-    del child_documents, parent_docs, pages
+    # Free vector memory early
+    del child_documents, pages
     gc.collect()
 
     if on_progress:
@@ -131,6 +133,7 @@ def ingest_file(
         "chunk_count": total_chunk_count,
         "summary": summary,
         "elapsed_seconds": round(elapsed_time, 2),
+        "parent_chunks": chunks_to_process,
     }
 
 
@@ -142,10 +145,26 @@ def _run_knowledge_graph_pipeline(chunks: List[Document], filename: str, user_id
         logger.warning(f"Graph extraction notice for {filename}: {e}")
 
 
-def extract_graph_for_file(file_path: str, filename: Optional[str] = None, user_id: Optional[str] = None):
-    """Standalone background graph extraction called after fast ingestion completes."""
-    clean_fn = filename or os.path.basename(file_path)
+def extract_graph_for_file(
+    file_path: Optional[str] = None,
+    filename: Optional[str] = None,
+    user_id: Optional[str] = None,
+    precomputed_chunks: Optional[List[Document]] = None,
+):
+    """Standalone background graph extraction reusing in-memory chunks without disk re-reading."""
+    clean_fn = filename or (os.path.basename(file_path) if file_path else "document")
     norm_uid = normalize_user_id(user_id)
+
+    if precomputed_chunks:
+        chunks_to_process = precomputed_chunks if len(precomputed_chunks) <= 6 else [
+            precomputed_chunks[int(i * (len(precomputed_chunks) - 1) / 5)] for i in range(6)
+        ]
+        _run_knowledge_graph_pipeline(chunks_to_process, clean_fn, norm_uid)
+        return
+
+    if not file_path or not os.path.exists(file_path):
+        logger.debug(f"Skipping graph extraction for missing file path '{clean_fn}'")
+        return
 
     pages = load_document(file_path)
     if not pages:

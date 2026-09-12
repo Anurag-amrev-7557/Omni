@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { HardDrive, Database, Layers, ShieldCheck, RotateCw, Download, Trash2, X, CheckCircle2 } from 'lucide-react';
+import { HardDrive, Database, Layers, ShieldCheck, RotateCw, Download, Trash2, X, CheckCircle2, Sparkles } from 'lucide-react';
 import { DocumentItem } from '../../types/document';
 import { api } from '../../services/api';
 
@@ -11,6 +11,7 @@ interface VaultBottomRibbonProps {
   documents?: DocumentItem[];
   onClearSelection?: () => void;
   onBatchReindex?: (filenames: string[]) => void;
+  onBatchEnhance?: (filenames: string[]) => void;
   onBatchDownload?: (filenames: string[]) => void;
   onBatchDelete?: (filenames: string[]) => void;
 }
@@ -23,6 +24,7 @@ export const VaultBottomRibbon: React.FC<VaultBottomRibbonProps> = ({
   documents = [],
   onClearSelection,
   onBatchReindex,
+  onBatchEnhance,
   onBatchDownload,
   onBatchDelete,
 }) => {
@@ -73,7 +75,7 @@ export const VaultBottomRibbon: React.FC<VaultBottomRibbonProps> = ({
         <div className="max-w-6xl mx-auto w-full flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
           {/* Selected Count & Size Badge */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="w-5 h-5 rounded-md bg-[var(--accent-primary)] text-white flex items-center justify-center font-bold text-[11px] font-mono shadow-xs">
+            <span className="w-5 h-5 rounded-md bg-[var(--accent-primary)] text-[var(--accent-contrast-text)] flex items-center justify-center font-bold text-[11px] font-mono shadow-xs">
               {selectedFilenames.length}
             </span>
             <span className="text-[12.5px] font-semibold text-[var(--text-main)] whitespace-nowrap">
@@ -97,6 +99,17 @@ export const VaultBottomRibbon: React.FC<VaultBottomRibbonProps> = ({
               </button>
             )}
 
+            {onBatchEnhance && (
+              <button
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-input)] text-[var(--text-main)] hover:bg-[var(--bg-hover)] border border-[var(--border-color)] transition-colors cursor-pointer text-xs font-medium"
+                onClick={() => onBatchEnhance(selectedFilenames)}
+                title="Enhance selected documents with entity extraction and AI summaries"
+              >
+                <Sparkles size={13} className="text-[var(--accent-primary)]" />
+                <span>Enhance</span>
+              </button>
+            )}
+
             {onBatchDownload && (
               <button
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--bg-input)] text-[var(--text-main)] hover:bg-[var(--bg-hover)] border border-[var(--border-color)] transition-colors cursor-pointer text-xs font-medium"
@@ -110,7 +123,7 @@ export const VaultBottomRibbon: React.FC<VaultBottomRibbonProps> = ({
 
             {onBatchDelete && (
               <button
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-colors cursor-pointer text-xs font-medium"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--danger-bg)] text-[var(--danger-text)] hover:opacity-90 border border-[var(--danger-text)]/20 transition-colors cursor-pointer text-xs font-medium"
                 onClick={() => onBatchDelete(selectedFilenames)}
                 title="Delete selected documents from vault"
               >

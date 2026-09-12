@@ -216,7 +216,7 @@ export const CommunityInsightsModal: React.FC<CommunityInsightsModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-full bg-[var(--accent-primary)] text-white text-xs font-semibold hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
+            className="px-5 py-2 rounded-full bg-[var(--accent-primary)] text-[var(--accent-contrast-text)] text-xs font-semibold hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
           >
             Close
           </button>

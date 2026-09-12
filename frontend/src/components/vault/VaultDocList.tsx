@@ -188,16 +188,16 @@ export const VaultDocList: React.FC<VaultDocListProps> = ({
                   <td className="py-3.5 px-4">
                     {doc.status === 'indexing' || doc.status === 'uploading' || doc.indexed === false ? (
                       <span 
-                        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border shadow-2xs bg-amber-500/10 text-amber-500 dark:text-amber-400 border-amber-500/20"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border shadow-2xs bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30"
                       >
-                        <Loader2 size={11} className="animate-spin text-amber-500 dark:text-amber-400" />
+                        <Loader2 size={11} className="animate-spin text-amber-700 dark:text-amber-300" />
                         <span>{doc.status === 'uploading' ? 'Uploading...' : 'Indexing...'}</span>
                       </span>
                     ) : doc.status === 'failed' ? (
                       <span 
-                        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border shadow-2xs bg-rose-500/10 text-rose-500 dark:text-rose-400 border-rose-500/20"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border shadow-2xs bg-[var(--danger-bg)] text-[var(--danger-text)] border-[var(--danger-text)]/25"
                       >
-                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-[var(--danger-text)]" />
                         <span>Failed</span>
                       </span>
                     ) : (

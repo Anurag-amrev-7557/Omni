@@ -800,7 +800,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ onInspec
             {/* Suggestions Dropdown */}
             {searchFocused && searchResults.length > 0 && (
               <div className="absolute left-0 mt-2 w-80 p-2 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-2xl z-50 flex flex-col gap-1 text-[13px] animate-in fade-in duration-100">
-                <div className="px-3 py-1 text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                <div className="px-3 py-1 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
                   Matching Entities ({searchResults.length})
                 </div>
                 {searchResults.map((node) => {
@@ -840,7 +840,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ onInspec
 
             {docDropdownOpen && (
               <div className="absolute left-0 mt-2 w-72 max-h-80 overflow-y-auto p-2 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-2xl z-50 flex flex-col gap-1 text-[13px] animate-in fade-in duration-100">
-                <div className="px-3 py-1.5 text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                <div className="px-3 py-1.5 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
                   Filter by Document
                 </div>
                 {sourceDocs.map((docName) => (
@@ -901,7 +901,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ onInspec
             type="button"
             onClick={handleRebuild}
             disabled={building}
-            className="h-10 flex items-center gap-2 px-4 rounded-full bg-[var(--accent-primary)] text-white text-[12.5px] font-semibold hover:opacity-90 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+            className="h-10 flex items-center gap-2 px-4 rounded-full bg-[var(--accent-primary)] text-[var(--accent-contrast-text)] text-[12.5px] font-semibold hover:opacity-90 shadow-sm transition-all cursor-pointer disabled:opacity-50"
           >
             <RefreshCw size={14} className={building ? 'animate-spin' : ''} />
             <span>{building ? 'Building...' : 'Refresh'}</span>
@@ -943,7 +943,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ onInspec
             <button
               onClick={handleRebuild}
               disabled={building}
-              className="px-5 py-2.5 rounded-xl bg-[var(--accent-primary)] text-white text-xs font-semibold hover:opacity-90 transition-all shadow-md cursor-pointer disabled:opacity-50 active:scale-98 flex items-center gap-2"
+              className="px-5 py-2.5 rounded-xl bg-[var(--accent-primary)] text-[var(--accent-contrast-text)] text-xs font-semibold hover:opacity-90 transition-all shadow-md cursor-pointer disabled:opacity-50 active:scale-98 flex items-center gap-2"
             >
               <Sparkles size={14} />
               <span>{building ? 'Building Graph...' : 'Build Knowledge Graph Now'}</span>
@@ -972,14 +972,14 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = ({ onInspec
         {presentEntityTypes.length > 0 && (
           <div className="absolute bottom-4 left-4 z-20 p-3 sm:p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-lg flex flex-col gap-2 pointer-events-auto max-w-[calc(100vw-32px)]">
             <div 
-              className="text-[10.5px] font-bold tracking-wider uppercase flex items-center justify-between gap-3"
+              className="text-[11px] font-semibold tracking-wider uppercase flex items-center justify-between gap-3"
               style={{ color: themeAccent }}
             >
               <span>Entity Types</span>
               {selectedType !== 'All' && (
                 <button
                   onClick={() => setSelectedType('All')}
-                  className="text-[9.5px] text-[var(--text-muted)] hover:text-[var(--accent-primary)] lowercase underline cursor-pointer"
+                  className="text-[11px] text-[var(--text-muted)] hover:text-[var(--accent-primary)] lowercase underline cursor-pointer"
                 >
                   (reset)
                 </button>

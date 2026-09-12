@@ -168,8 +168,8 @@ export const useDocuments = (showToast: (msg: string) => void) => {
         );
       }
 
-      // Concurrently ensure latest collection stats & documents are synced
-      await refreshVault();
+      // Refresh collection stats in background without blocking UI
+      fetchStats().catch(() => {});
 
       if (res.errors && res.errors.length > 0) {
         const errorMsg = res.ingested_count > 0 

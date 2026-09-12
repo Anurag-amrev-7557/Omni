@@ -30,12 +30,12 @@ export const VaultMassActionsBar: React.FC<VaultMassActionsBarProps> = ({
         
         {/* Count & Info */}
         <div className="flex items-center gap-2 pr-3 border-r border-[var(--border-color)]">
-          <div className="w-5 h-5 rounded-full bg-[var(--accent-primary)] text-white flex items-center justify-center font-bold text-[10px]">
+          <div className="w-5 h-5 rounded-full bg-[var(--accent-primary)] text-[var(--accent-contrast-text)] flex items-center justify-center font-bold text-[11px]">
             {selectedFilenames.length}
           </div>
           <div className="font-medium text-[var(--text-main)]">
             <span>{selectedFilenames.length} selected</span>
-            <span className="font-mono text-[10.5px] text-[var(--text-muted)] ml-1.5">({totalMb} MB)</span>
+            <span className="font-mono text-[11px] text-[var(--text-muted)] ml-1.5">({totalMb} MB)</span>
           </div>
         </div>
 
@@ -60,7 +60,7 @@ export const VaultMassActionsBar: React.FC<VaultMassActionsBarProps> = ({
           </button>
 
           <button
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-colors cursor-pointer font-medium"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--danger-bg)] text-[var(--danger-text)] hover:opacity-90 border border-[var(--danger-text)]/20 transition-colors cursor-pointer font-medium"
             onClick={() => onBatchDelete(selectedFilenames)}
             title="Delete selected documents from vault"
           >

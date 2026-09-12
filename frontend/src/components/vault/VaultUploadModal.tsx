@@ -146,8 +146,6 @@ export const VaultUploadModal: React.FC<VaultUploadModalProps> = ({
         return next;
       });
 
-      await new Promise(resolve => setTimeout(resolve, 300));
-
       // Mark as completed
       setFileStates(prev => {
         const next = [...prev];
@@ -209,32 +207,30 @@ export const VaultUploadModal: React.FC<VaultUploadModalProps> = ({
     setIsUploading(true);
     setCurrentFileIndex(0);
 
-    let completedCount = 0;
+    const CONCURRENCY = 2;
+    const queue = fileStates
+      .map((fs, idx) => ({ fs, idx }))
+      .filter(({ fs }) => fs.status !== 'completed');
+
+    let completedCount = fileStates.filter(s => s.status === 'completed').length;
     let failedCount = 0;
 
-    for (let i = 0; i < fileStates.length; i++) {
-      const fileState = fileStates[i];
-      
-      // Skip already completed files
-      if (fileState.status === 'completed') {
-        completedCount++;
-        continue;
+    const worker = async () => {
+      while (queue.length > 0) {
+        const item = queue.shift();
+        if (!item) break;
+        setCurrentFileIndex(item.idx);
+        const success = await uploadSingleFile(item.fs, item.idx);
+        if (success) completedCount++;
+        else failedCount++;
       }
+    };
 
-      setCurrentFileIndex(i);
-      const success = await uploadSingleFile(fileState, i);
-      
-      if (success) {
-        completedCount++;
-      } else {
-        failedCount++;
-      }
-
-      // Small delay between uploads to prevent overwhelming the server
-      if (i < fileStates.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-    }
+    const workers = Array.from(
+      { length: Math.min(CONCURRENCY, queue.length) },
+      () => worker()
+    );
+    await Promise.all(workers);
 
     setIsUploading(false);
     
@@ -247,10 +243,10 @@ export const VaultUploadModal: React.FC<VaultUploadModalProps> = ({
 
     if (failedCount === 0) {
       showToast(`✓ Successfully indexed ${completedCount} document(s)`);
-      // Increased delay so users can see the completed state
+      // Brief delay so users can see the completed state
       setTimeout(() => {
         handleClose();
-      }, 2000);
+      }, 1200);
     } else {
       showToast(`⚠ Indexed ${completedCount} file(s), ${failedCount} failed (click retry)`);
     }
@@ -484,7 +480,7 @@ export const VaultUploadModal: React.FC<VaultUploadModalProps> = ({
               <button
                 type="button"
                 disabled={fileStates.length === 0 || isUploading}
-                className="h-9 px-4 rounded-lg bg-[var(--accent-primary)] text-white text-[13px] font-medium hover:opacity-90 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed shadow-xs cursor-pointer transition-all inline-flex items-center gap-2"
+                className="h-9 px-4 rounded-lg bg-[var(--accent-primary)] text-[var(--accent-contrast-text)] text-[13px] font-medium hover:opacity-90 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed shadow-xs cursor-pointer transition-all inline-flex items-center gap-2"
                 onClick={handleStartUpload}
               >
                 {isUploading ? (

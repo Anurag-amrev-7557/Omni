@@ -4,7 +4,7 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
-  darkMode: ['class', '[data-theme="dark"]'],
+  darkMode: ['class', '[data-theme$="dark"]', '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
@@ -21,9 +21,13 @@ export default {
           accent: 'var(--accent-primary)',
           'accent-hover': 'var(--accent-hover)',
           'accent-subtle': 'var(--accent-subtle)',
+          'accent-contrast': 'var(--accent-contrast-text)',
+          'accent-text': 'var(--accent-text, var(--accent-primary))',
           'text-main': 'var(--text-main)',
           'text-muted': 'var(--text-muted)',
           'text-dark': 'var(--text-dark)',
+          danger: 'var(--danger-text)',
+          'danger-bg': 'var(--danger-bg)',
           emerald: 'var(--accent-emerald)',
           blue: 'var(--accent-blue)',
         }

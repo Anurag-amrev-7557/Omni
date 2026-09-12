@@ -7,7 +7,7 @@ from src.config.settings import settings
 from src.core.logging import logger
 from src.core.security import build_user_filter, normalize_user_id, is_default_or_local_user
 from src.core.auth import get_current_user
-from src.storage.vector_store import get_qdrant_client, init_db, get_collection_stats
+from src.storage.vector_store import get_qdrant_client, init_db, get_collection_stats, ensure_payload_indices
 from src.retrieval.embeddings import get_embeddings
 from src.retrieval.reranker import get_reranker
 from src.retrieval.hybrid import compute_reciprocal_rank_fusion
@@ -78,8 +78,22 @@ def hybrid_search(
             filter=user_filter,
         )
     except Exception as e:
-        logger.error(f"Vector search exception: {e}")
-        docs_and_scores = []
+        err_str = str(e)
+        if "index required" in err_str.lower() or "index" in err_str.lower():
+            logger.warning(f"Missing Qdrant index during vector search: {e}. Auto-creating indices and retrying...")
+            try:
+                ensure_payload_indices(client=client, col_name=settings.COLLECTION_NAME, force=True)
+                docs_and_scores = vector_store.similarity_search_with_score(
+                    query,
+                    k=candidate_k,
+                    filter=user_filter,
+                )
+            except Exception as retry_err:
+                logger.error(f"Vector search retry failed: {retry_err}")
+                docs_and_scores = []
+        else:
+            logger.error(f"Vector search exception: {e}")
+            docs_and_scores = []
 
     # If no matches in user's documents, return empty immediately - NO GLOBAL FALLBACK!
     if not docs_and_scores:

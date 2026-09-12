@@ -99,7 +99,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
             {/* Action Buttons */}
             <div className="flex items-center gap-2.5 flex-shrink-0">
               <button
-                className="h-9 px-4 rounded-lg bg-[var(--accent-primary)] text-white hover:opacity-95 text-[13px] font-medium transition-all inline-flex items-center gap-2 cursor-pointer shadow-xs active:scale-[0.98]"
+                className="h-9 px-4 rounded-lg bg-[var(--accent-primary)] text-[var(--accent-contrast-text)] hover:opacity-95 text-[13px] font-medium transition-all inline-flex items-center gap-2 cursor-pointer shadow-xs active:scale-[0.98]"
                 onClick={() => setIsCreateModalOpen(true)}
               >
                 <Plus size={15} className="stroke-[2.5]" />
@@ -394,7 +394,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="h-9 px-4 rounded-lg bg-[var(--accent-primary)] text-white hover:opacity-90 active:scale-[0.98] text-[13px] font-medium shadow-xs cursor-pointer transition-all"
+                  className="h-9 px-4 rounded-lg bg-[var(--accent-primary)] text-[var(--accent-contrast-text)] hover:opacity-90 active:scale-[0.98] text-[13px] font-medium shadow-xs cursor-pointer transition-all"
                 >
                   Create Workspace
                 </button>

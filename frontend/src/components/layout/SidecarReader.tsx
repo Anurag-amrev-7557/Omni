@@ -178,7 +178,7 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
               onClick={handleCopyText}
               title="Copy document content"
             >
-              {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+              {copied ? <Check size={14} className="text-[var(--status-active-text)]" /> : <Copy size={14} />}
             </button>
           )}
 
@@ -193,7 +193,7 @@ export const SidecarReader: React.FC<SidecarReaderProps> = ({ isOpen, onClose, d
 
           {/* Close Sidecar */}
           <button 
-            className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-red-500 hover:border-red-400/50 hover:bg-red-500/10 shadow-xs transition-all cursor-pointer ml-0.5"
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-muted)] hover:text-[var(--danger-text)] hover:border-[var(--danger-border)] hover:bg-[var(--danger-bg)] shadow-xs transition-all cursor-pointer ml-0.5"
             onClick={onClose}
             title="Close Preview (Esc)"
           >

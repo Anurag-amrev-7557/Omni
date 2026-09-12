@@ -77,8 +77,8 @@ export const THEME_PRESETS: Record<ThemeId, ThemeConfig> = {
     previewColors: {
       bg: '#fbfaf5',
       sidebar: '#f3efe6',
-      accent: '#da7756',
-      text: '#243e36',
+      accent: '#b84c24',
+      text: '#1c1a17',
     },
   },
   dark: {
@@ -105,8 +105,8 @@ export const THEME_PRESETS: Record<ThemeId, ThemeConfig> = {
     previewColors: {
       bg: '#f5f7f2',
       sidebar: '#e9eee4',
-      accent: '#588157',
-      text: '#1b3223',
+      accent: '#3e6b43',
+      text: '#14261b',
     },
   },
   'matcha-dark': {
@@ -133,8 +133,8 @@ export const THEME_PRESETS: Record<ThemeId, ThemeConfig> = {
     previewColors: {
       bg: '#fdf7f2',
       sidebar: '#f7ede4',
-      accent: '#c85a32',
-      text: '#341f17',
+      accent: '#b44822',
+      text: '#2a1610',
     },
   },
   'terracotta-dark': {
@@ -162,7 +162,7 @@ export const THEME_PRESETS: Record<ThemeId, ThemeConfig> = {
       bg: '#f7f7f8',
       sidebar: '#edeef0',
       accent: '#0f766e',
-      text: '#1e293b',
+      text: '#0f172a',
     },
   },
   'nordic-dark': {
@@ -189,8 +189,8 @@ export const THEME_PRESETS: Record<ThemeId, ThemeConfig> = {
     previewColors: {
       bg: '#faf5ea',
       sidebar: '#f2e8d5',
-      accent: '#d97706',
-      text: '#382a1d',
+      accent: '#a15504',
+      text: '#261a10',
     },
   },
   'amber-dark': {

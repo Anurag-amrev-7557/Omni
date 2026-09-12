@@ -64,7 +64,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             className="flex-1 bg-transparent text-xs text-[var(--text-main)] outline-none truncate"
           />
           <button
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--accent-primary)] text-white hover:bg-[var(--accent-hover)] transition-all flex-shrink-0"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--accent-primary)] text-[var(--accent-contrast-text)] hover:opacity-90 transition-all flex-shrink-0"
             onClick={handleCopy}
           >
             {copied ? <Check size={13} /> : <Copy size={13} />}

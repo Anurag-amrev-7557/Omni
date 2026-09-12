@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse, FileResponse
 from src.config.settings import settings
 from src.core.logging import logger
 from src.core.auth import require_user, set_current_user
-from src.core.security import sanitize_filename
+from src.core.security import sanitize_filename, sanitize_user_id_for_path, is_default_or_local_user
 from src.storage.vector_store import (
     get_collection_stats,
     delete_file_from_collection,
@@ -33,6 +33,7 @@ from src.storage.file_storage import (
     get_user_files,
 )
 from src.ingestion import get_pdf_page_count
+from src.ingestion.extractors import load_pages_from_bytes, SUPPORTED_EXTENSIONS
 from src.ingestion.service import ingest_file, extract_graph_for_file
 from src.graph import delete_document_graph
 
@@ -69,31 +70,69 @@ def get_documents(response: Response = None, user_id: str = Depends(require_user
                 "summary": doc.get("summary", "")
             })
 
-    # Also check local user directory
-    user_uploads_dir = get_user_uploads_dir(user_id)
-    if os.path.exists(user_uploads_dir):
-        for fname in sorted(os.listdir(user_uploads_dir)):
-            if fname not in seen and not fname.startswith("."):
-                fpath = os.path.join(user_uploads_dir, fname)
-                if os.path.isfile(fpath):
-                    seen.add(fname)
-                    size_mb = round(os.path.getsize(fpath) / (1024 * 1024), 2)
-                    pages = get_pdf_page_count(fpath) if fname.lower().endswith(".pdf") else 1
-                    available_files.append({
-                        "filename": fname,
-                        "size_mb": size_mb,
-                        "pages": pages,
-                        "indexed": fname in stats["files"],
-                        "status": "ready",
-                        "summary": "",
-                    })
+    # Also check local user directories
+    safe_uid = sanitize_user_id_for_path(user_id)
+    candidate_dirs = [
+        get_user_uploads_dir(user_id),
+        os.path.join("/tmp", "rag_uploads", safe_uid),
+        os.path.join(settings.UPLOADS_DIR, safe_uid),
+    ]
+    if is_default_or_local_user(user_id):
+        candidate_dirs.append(os.path.join(settings.UPLOADS_DIR, "default"))
+        candidate_dirs.append(os.path.join("/tmp", "rag_uploads", "default"))
+
+    for udir in candidate_dirs:
+        if os.path.exists(udir):
+            for fname in sorted(os.listdir(udir)):
+                if fname not in seen and not fname.startswith("."):
+                    fpath = os.path.join(udir, fname)
+                    if os.path.isfile(fpath):
+                        seen.add(fname)
+                        size_mb = round(os.path.getsize(fpath) / (1024 * 1024), 2)
+                        pages = get_pdf_page_count(fpath) if fname.lower().endswith(".pdf") else 1
+                        available_files.append({
+                            "filename": fname,
+                            "size_mb": size_mb,
+                            "pages": pages,
+                            "indexed": fname in stats.get("files", []),
+                            "status": "ready",
+                            "summary": "",
+                        })
+
+    # Always include files confirmed indexed in vector store (Qdrant)
+    for fname in stats.get("files", []):
+        if fname not in seen and not fname.startswith("."):
+            seen.add(fname)
+            available_files.append({
+                "filename": fname,
+                "size_mb": 0.0,
+                "pages": 1,
+                "indexed": True,
+                "status": "ready",
+                "summary": "",
+            })
 
     return {"documents": available_files}
 
 
-def _write_bytes_to_file(path: str, data: bytes):
-    with open(path, "wb") as f:
-        f.write(data)
+def _write_bytes_to_file(path: str, data: bytes) -> str:
+    """Safely writes bytes to disk, guaranteeing parent directory creation and fallback to /tmp."""
+    parent = os.path.dirname(path)
+    try:
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(data)
+        return path
+    except Exception as e:
+        logger.warning(f"Failed to write to {path} ({e}). Falling back to /tmp...")
+        filename = os.path.basename(path)
+        safe_dir = os.path.join("/tmp", "rag_uploads", "fallback")
+        os.makedirs(safe_dir, exist_ok=True)
+        fallback_path = os.path.join(safe_dir, filename)
+        with open(fallback_path, "wb") as f:
+            f.write(data)
+        return fallback_path
 
 
 async def _save_and_ingest_single_document(
@@ -102,30 +141,41 @@ async def _save_and_ingest_single_document(
     user_id: str,
     on_progress: Optional[Any] = None,
 ) -> dict:
-    """Unified storage, database registration, vector indexing, and background graph extraction."""
-    # 1. Supabase storage upload if configured
-    try:
-        await asyncio.to_thread(upload_bytes, content, f"users/{user_id}/{filename}")
-    except Exception as se:
-        logger.debug(f"Storage upload notice for {filename}: {se}")
+    """Unified storage, single-pass extraction, vector indexing, and non-blocking background graph extraction."""
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in SUPPORTED_EXTENSIONS:
+        raise ValueError(f"Unsupported file format '{ext}'")
+
+    # 1. Non-blocking cloud archival in background
+    async def _bg_cloud_backup(c=content, fn=filename, uid=user_id):
+        try:
+            await asyncio.to_thread(upload_bytes, c, f"users/{uid}/{fn}")
+        except Exception as se:
+            logger.debug(f"Storage upload notice for {fn}: {se}")
+    asyncio.create_task(_bg_cloud_backup())
 
     # 2. Local file persistence
     user_dir = get_user_uploads_dir(user_id)
     save_path = os.path.join(user_dir, filename)
-    await asyncio.to_thread(_write_bytes_to_file, save_path, content)
+    save_path = await asyncio.to_thread(_write_bytes_to_file, save_path, content)
 
-    # 3. Document metadata registration
-    page_count = await asyncio.to_thread(get_pdf_page_count, save_path) if filename.lower().endswith(".pdf") else 1
+    # 3. Single-pass in-memory page extraction
+    pages = await asyncio.to_thread(load_pages_from_bytes, content, ext)
+    if not pages:
+        raise ValueError(f"No text content could be extracted from {filename}.")
+    page_count = len(pages)
+
+    # 4. Document metadata registration
     await asyncio.to_thread(
         upsert_document_record,
         filename,
         user_id=user_id,
         size_bytes=len(content),
         page_count=page_count,
-        status="ready",
+        status="indexing",
     )
 
-    # 4. Ingest vectors
+    # 5. Ingest vectors reusing pre-extracted pages
     await asyncio.to_thread(delete_file_from_collection, filename, user_id=user_id)
     ingest_res = await asyncio.to_thread(
         ingest_file,
@@ -136,9 +186,10 @@ async def _save_and_ingest_single_document(
         extract_graph=False,
         generate_ai_summary=False,
         on_progress=on_progress,
+        preloaded_pages=pages,
     )
 
-    # 5. Update ready status & chunk counts
+    # 6. Update ready status & chunk counts
     await asyncio.to_thread(
         update_document_status,
         filename,
@@ -148,11 +199,12 @@ async def _save_and_ingest_single_document(
         summary=ingest_res.get("summary", ""),
     )
 
-    # 6. Fire-and-forget background graph extraction
+    # 7. Fire-and-forget background graph extraction reusing precomputed parent chunks
+    parent_chunks = ingest_res.get("parent_chunks")
     _sp, _fn, _uid = save_path, filename, user_id
-    async def _bg_graph(sp=_sp, fn=_fn, uid=_uid):
+    async def _bg_graph(sp=_sp, fn=_fn, uid=_uid, pc=parent_chunks):
         try:
-            await asyncio.to_thread(extract_graph_for_file, sp, fn, uid)
+            await asyncio.to_thread(extract_graph_for_file, sp, fn, uid, pc)
         except Exception as ge:
             logger.debug(f"Background graph extraction error for {fn}: {ge}")
     asyncio.create_task(_bg_graph())
@@ -162,37 +214,39 @@ async def _save_and_ingest_single_document(
 
 @router.post("/api/upload")
 async def upload_documents(files: List[UploadFile] = File(...), user_id: str = Depends(require_user)):
-    """Uploads and indexes multiple documents into user vault with size validation."""
+    """Uploads and indexes multiple documents with bounded concurrency and size validation."""
     set_current_user(user_id)
     max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
 
     ingested_count = 0
-    errors = []
-    processing_times = []
+    errors: List[str] = []
+    sem = asyncio.Semaphore(3)
 
-    for file in files:
+    async def _process_single(file: UploadFile):
+        nonlocal ingested_count
         try:
             filename = sanitize_filename(file.filename or "unknown")
         except ValueError as e:
             errors.append(f"Invalid filename: {str(e)}")
-            continue
+            return
 
         try:
             content = await file.read()
             if len(content) > max_bytes:
                 errors.append(f"{filename}: File too large (max {settings.MAX_UPLOAD_SIZE_MB}MB)")
-                continue
+                return
             if len(content) == 0:
                 errors.append(f"{filename}: File is empty")
-                continue
+                return
 
-            file_start = time.time()
-            await _save_and_ingest_single_document(filename, content, user_id)
-            ingested_count += 1
-            processing_times.append(time.time() - file_start)
+            async with sem:
+                await _save_and_ingest_single_document(filename, content, user_id)
+                ingested_count += 1
         except Exception as e:
             logger.error(f"Error ingesting {file.filename}: {e}", exc_info=True)
             errors.append(f"{file.filename}: {str(e)}")
+
+    await asyncio.gather(*[_process_single(f) for f in files])
 
     docs_res = await asyncio.to_thread(get_documents, user_id=user_id)
     updated_docs = docs_res.get("documents", [])
@@ -207,7 +261,7 @@ async def upload_documents(files: List[UploadFile] = File(...), user_id: str = D
 
 @router.post("/api/upload-stream")
 async def upload_document_stream(file: UploadFile = File(...), user_id: str = Depends(require_user)):
-    """Stream-based file upload with real-time SSE progress events."""
+    """Stream-based file upload with real-time SSE progress events and single-pass memory extraction."""
     set_current_user(user_id)
     max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
 
@@ -240,32 +294,31 @@ async def upload_document_stream(file: UploadFile = File(...), user_id: str = De
             except Exception as e:
                 logger.debug(f"Queue error: {e}")
 
-        # Upload to Supabase Storage
-        try:
-            await asyncio.to_thread(upload_bytes, content, f"users/{user_id}/{filename}")
-            await q.put({"type": "progress", "stage": "storage", "progress": 3, "message": "Stored in Supabase", "filename": filename})
-        except Exception as e:
-            await q.put({"type": "error", "error": f"Failed to store file: {str(e)}", "filename": filename})
-            yield json.dumps({"type": "error", "error": f"Failed to store file: {str(e)}", "filename": filename}) + "\n"
-            return
+        # 1. Non-blocking cloud archival
+        async def _bg_cloud_upload():
+            try:
+                await asyncio.to_thread(upload_bytes, content, f"users/{user_id}/{filename}")
+            except Exception as ce:
+                logger.debug(f"Cloud storage upload note for {filename}: {ce}")
+        asyncio.create_task(_bg_cloud_upload())
 
+        # 2. Local persistence
         user_dir = get_user_uploads_dir(user_id)
         save_path = os.path.join(user_dir, filename)
-        try:
-            await asyncio.to_thread(_write_bytes_to_file, save_path, content)
-        except Exception as e:
-            await q.put({"type": "error", "error": f"Failed to save file: {str(e)}", "filename": filename})
-            yield json.dumps({"type": "error", "error": f"Failed to save file: {str(e)}", "filename": filename}) + "\n"
-            return
+        save_path = await asyncio.to_thread(_write_bytes_to_file, save_path, content)
 
-        page_count = await asyncio.to_thread(get_pdf_page_count, save_path) if filename.lower().endswith(".pdf") else 1
+        # 3. Single-pass memory extraction
+        ext = os.path.splitext(filename)[1].lower()
+        pages = await asyncio.to_thread(load_pages_from_bytes, content, ext)
+        page_count = len(pages) if pages else 1
+
         await asyncio.to_thread(
             upsert_document_record,
             filename,
             user_id=user_id,
             size_bytes=len(content),
             page_count=page_count,
-            status="ready",
+            status="indexing",
         )
         await asyncio.to_thread(delete_file_from_collection, filename, user_id=user_id)
 
@@ -282,6 +335,7 @@ async def upload_document_stream(file: UploadFile = File(...), user_id: str = De
                     extract_graph=False,
                     generate_ai_summary=False,
                     on_progress=_progress_cb,
+                    preloaded_pages=pages,
                 )
                 await asyncio.to_thread(
                     update_document_status,
@@ -291,7 +345,7 @@ async def upload_document_stream(file: UploadFile = File(...), user_id: str = De
                     chunk_count=ingest_res.get("chunk_count", 0),
                     summary=ingest_res.get("summary", ""),
                 )
-                await q.put({"type": "done", "success": True, "filename": filename})
+                await q.put({"type": "done", "success": True, "filename": filename, "parent_chunks": ingest_res.get("parent_chunks")})
             except Exception as e:
                 logger.error(f"Ingestion error for {filename}: {e}", exc_info=True)
                 await q.put({"type": "error", "error": str(e), "filename": filename})
@@ -301,12 +355,15 @@ async def upload_document_stream(file: UploadFile = File(...), user_id: str = De
         while True:
             try:
                 item = await asyncio.wait_for(q.get(), timeout=300)
-                yield json.dumps(item) + "\n"
+                # Omit parent_chunks from stream json output to keep SSE payload ultra-light
+                stream_item = {k: v for k, v in item.items() if k != "parent_chunks"}
+                yield json.dumps(stream_item) + "\n"
                 if item.get("type") in ("done", "error"):
                     if item.get("type") == "done":
-                        async def _bg_graph():
+                        parent_chunks = item.get("parent_chunks")
+                        async def _bg_graph(sp=save_path, fn=filename, uid=user_id, pc=parent_chunks):
                             try:
-                                await asyncio.to_thread(extract_graph_for_file, save_path, filename, user_id)
+                                await asyncio.to_thread(extract_graph_for_file, sp, fn, uid, pc)
                             except Exception as ge:
                                 logger.debug(f"Background graph extraction error: {ge}")
                         asyncio.create_task(_bg_graph())

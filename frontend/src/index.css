@@ -31,16 +31,17 @@
   --border-hover: #4a4a52;
 
   --accent-primary: #da7756;
-  --accent-hover: #e08363;
+  --accent-hover: #e58767;
   --accent-subtle: rgba(218, 119, 86, 0.14);
-  --accent-contrast-text: #ffffff;
+  --accent-contrast-text: #121214;
+  --accent-text: #e28466;
   --selection-bg: #7e3820;
   --selection-text: #ffffff;
 
   --text-main: #f4f4f5;
   --text-sidebar-item: #d4d4d8;
-  --text-muted: #a1a1aa;
-  --text-dark: #71717a;
+  --text-muted: #a8a8b2;
+  --text-dark: #93939e;
 
   --status-active-bg: rgba(16, 185, 129, 0.12);
   --status-active-text: #34d399;
@@ -94,57 +95,58 @@
   --bg-hover: rgba(50, 45, 38, 0.06);
   --backdrop-color: rgba(40, 35, 30, 0.4);
 
-  --border-color: #e2dbce;
-  --border-input: #d4ccbd;
-  --border-hover: #c2b7a4;
+  --border-color: #e0d8cb;
+  --border-input: #d2c8b7;
+  --border-hover: #b8ad99;
 
-  --accent-primary: #da7756;
-  --accent-hover: #c45d3c;
-  --accent-subtle: rgba(218, 119, 86, 0.12);
+  --accent-primary: #b84c24;
+  --accent-hover: #a13f1b;
+  --accent-subtle: rgba(184, 76, 36, 0.12);
   --accent-contrast-text: #ffffff;
+  --accent-text: #b84c24;
   --selection-bg: #f4cfc3;
   --selection-text: #1a1512;
 
-  --text-main: #22201d;
-  --text-sidebar-item: #3c3933;
-  --text-muted: #706c64;
-  --text-dark: #9e9a90;
+  --text-main: #1c1a17;
+  --text-sidebar-item: #2d2b27;
+  --text-muted: #524e46;
+  --text-dark: #6b665c;
 
-  --status-active-bg: rgba(5, 150, 105, 0.1);
-  --status-active-text: #059669;
-  --status-active-border: rgba(5, 150, 105, 0.25);
+  --status-active-bg: rgba(4, 120, 87, 0.1);
+  --status-active-text: #047857;
+  --status-active-border: rgba(4, 120, 87, 0.25);
 
-  --kpi-corpus-bg: rgba(218, 119, 86, 0.1);
-  --kpi-corpus-text: #da7756;
-  --kpi-corpus-border: rgba(218, 119, 86, 0.25);
+  --kpi-corpus-bg: rgba(184, 76, 36, 0.1);
+  --kpi-corpus-text: #b84c24;
+  --kpi-corpus-border: rgba(184, 76, 36, 0.25);
 
-  --kpi-vector-bg: rgba(37, 99, 235, 0.1);
-  --kpi-vector-text: #2563eb;
-  --kpi-vector-border: rgba(37, 99, 235, 0.25);
+  --kpi-vector-bg: rgba(29, 78, 216, 0.1);
+  --kpi-vector-text: #1d4ed8;
+  --kpi-vector-border: rgba(29, 78, 216, 0.25);
 
-  --kpi-engine-bg: rgba(5, 150, 105, 0.1);
-  --kpi-engine-text: #059669;
-  --kpi-engine-border: rgba(5, 150, 105, 0.25);
+  --kpi-engine-bg: rgba(4, 120, 87, 0.1);
+  --kpi-engine-text: #047857;
+  --kpi-engine-border: rgba(4, 120, 87, 0.25);
 
-  --kpi-health-bg: rgba(147, 51, 234, 0.1);
+  --kpi-health-bg: rgba(126, 34, 206, 0.1);
   --kpi-health-text: #7e22ce;
-  --kpi-health-border: rgba(147, 51, 234, 0.25);
+  --kpi-health-border: rgba(126, 34, 206, 0.25);
 
-  --badge-pdf-bg: rgba(220, 38, 38, 0.1);
-  --badge-pdf-text: #dc2626;
-  --badge-pdf-border: rgba(220, 38, 38, 0.25);
+  --badge-pdf-bg: rgba(185, 28, 28, 0.1);
+  --badge-pdf-text: #b91c1c;
+  --badge-pdf-border: rgba(185, 28, 28, 0.25);
 
-  --badge-md-bg: rgba(37, 99, 235, 0.1);
-  --badge-md-text: #2563eb;
-  --badge-md-border: rgba(37, 99, 235, 0.25);
+  --badge-md-bg: rgba(29, 78, 216, 0.1);
+  --badge-md-text: #1d4ed8;
+  --badge-md-border: rgba(29, 78, 216, 0.25);
 
-  --badge-txt-bg: rgba(5, 150, 105, 0.1);
-  --badge-txt-text: #059669;
-  --badge-txt-border: rgba(5, 150, 105, 0.25);
+  --badge-txt-bg: rgba(4, 120, 87, 0.1);
+  --badge-txt-text: #047857;
+  --badge-txt-border: rgba(4, 120, 87, 0.25);
 
-  --danger-bg: rgba(220, 38, 38, 0.1);
-  --danger-text: #dc2626;
-  --danger-border: rgba(220, 38, 38, 0.25);
+  --danger-bg: rgba(185, 28, 28, 0.1);
+  --danger-text: #b91c1c;
+  --danger-border: rgba(185, 28, 28, 0.25);
 }
 
 /* 3. MATCHA LINEN (LIGHT) */
@@ -158,57 +160,58 @@
   --bg-hover: rgba(27, 50, 35, 0.06);
   --backdrop-color: rgba(27, 50, 35, 0.4);
 
-  --border-color: #d7e0cf;
-  --border-input: #c7d4be;
-  --border-hover: #b4c4aa;
+  --border-color: #d2ddc9;
+  --border-input: #c2d0b8;
+  --border-hover: #abbda1;
 
-  --accent-primary: #588157;
-  --accent-hover: #3a5a40;
-  --accent-subtle: rgba(88, 129, 87, 0.14);
+  --accent-primary: #3e6b43;
+  --accent-hover: #2e5332;
+  --accent-subtle: rgba(62, 107, 67, 0.14);
   --accent-contrast-text: #ffffff;
+  --accent-text: #3e6b43;
   --selection-bg: #cde0cb;
   --selection-text: #0e1e14;
 
-  --text-main: #1b3223;
-  --text-sidebar-item: #284431;
-  --text-muted: #53735d;
-  --text-dark: #7b9b84;
+  --text-main: #14261b;
+  --text-sidebar-item: #1f3827;
+  --text-muted: #435e4b;
+  --text-dark: #56755e;
 
-  --status-active-bg: rgba(88, 129, 87, 0.12);
-  --status-active-text: #3a5a40;
-  --status-active-border: rgba(88, 129, 87, 0.28);
+  --status-active-bg: rgba(45, 85, 53, 0.12);
+  --status-active-text: #2d5535;
+  --status-active-border: rgba(45, 85, 53, 0.28);
 
-  --kpi-corpus-bg: rgba(88, 129, 87, 0.12);
-  --kpi-corpus-text: #588157;
-  --kpi-corpus-border: rgba(88, 129, 87, 0.28);
+  --kpi-corpus-bg: rgba(62, 107, 67, 0.12);
+  --kpi-corpus-text: #3e6b43;
+  --kpi-corpus-border: rgba(62, 107, 67, 0.28);
 
-  --kpi-vector-bg: rgba(43, 108, 176, 0.1);
-  --kpi-vector-text: #2b6cb0;
-  --kpi-vector-border: rgba(43, 108, 176, 0.25);
+  --kpi-vector-bg: rgba(30, 90, 150, 0.1);
+  --kpi-vector-text: #1e5a96;
+  --kpi-vector-border: rgba(30, 90, 150, 0.25);
 
-  --kpi-engine-bg: rgba(88, 129, 87, 0.12);
-  --kpi-engine-text: #3a5a40;
-  --kpi-engine-border: rgba(88, 129, 87, 0.28);
+  --kpi-engine-bg: rgba(45, 85, 53, 0.12);
+  --kpi-engine-text: #2d5535;
+  --kpi-engine-border: rgba(45, 85, 53, 0.28);
 
-  --kpi-health-bg: rgba(124, 58, 237, 0.1);
-  --kpi-health-text: #7c3aed;
-  --kpi-health-border: rgba(124, 58, 237, 0.25);
+  --kpi-health-bg: rgba(109, 40, 217, 0.1);
+  --kpi-health-text: #6d28d9;
+  --kpi-health-border: rgba(109, 40, 217, 0.25);
 
-  --badge-pdf-bg: rgba(220, 38, 38, 0.1);
-  --badge-pdf-text: #dc2626;
-  --badge-pdf-border: rgba(220, 38, 38, 0.25);
+  --badge-pdf-bg: rgba(185, 28, 28, 0.1);
+  --badge-pdf-text: #b91c1c;
+  --badge-pdf-border: rgba(185, 28, 28, 0.25);
 
-  --badge-md-bg: rgba(43, 108, 176, 0.1);
-  --badge-md-text: #2b6cb0;
-  --badge-md-border: rgba(43, 108, 176, 0.25);
+  --badge-md-bg: rgba(30, 90, 150, 0.1);
+  --badge-md-text: #1e5a96;
+  --badge-md-border: rgba(30, 90, 150, 0.25);
 
-  --badge-txt-bg: rgba(88, 129, 87, 0.12);
-  --badge-txt-text: #3a5a40;
-  --badge-txt-border: rgba(88, 129, 87, 0.28);
+  --badge-txt-bg: rgba(45, 85, 53, 0.12);
+  --badge-txt-text: #2d5535;
+  --badge-txt-border: rgba(45, 85, 53, 0.28);
 
-  --danger-bg: rgba(220, 38, 38, 0.1);
-  --danger-text: #dc2626;
-  --danger-border: rgba(220, 38, 38, 0.25);
+  --danger-bg: rgba(185, 28, 28, 0.1);
+  --danger-text: #b91c1c;
+  --danger-border: rgba(185, 28, 28, 0.25);
 }
 
 /* 4. MATCHA FOREST (DARK) */
@@ -227,16 +230,17 @@
   --border-hover: #4d7a64;
 
   --accent-primary: #84cc16;
-  --accent-hover: #a3e635;
+  --accent-hover: #9ee82b;
   --accent-subtle: rgba(132, 204, 22, 0.16);
   --accent-contrast-text: #0e1a14;
+  --accent-text: #a3e635;
   --selection-bg: #234d2e;
   --selection-text: #ffffff;
 
   --text-main: #e6f4ea;
   --text-sidebar-item: #cce7d3;
-  --text-muted: #95c0a1;
-  --text-dark: #679273;
+  --text-muted: #a3caa9;
+  --text-dark: #85ab8c;
 
   --status-active-bg: rgba(132, 204, 22, 0.16);
   --status-active-text: #a3e635;
@@ -286,57 +290,58 @@
   --bg-hover: rgba(52, 31, 23, 0.06);
   --backdrop-color: rgba(52, 31, 23, 0.4);
 
-  --border-color: #ebd6c7;
-  --border-input: #dec3b0;
-  --border-hover: #cfa891;
+  --border-color: #ebd4c4;
+  --border-input: #dec0ad;
+  --border-hover: #cba28c;
 
-  --accent-primary: #c85a32;
-  --accent-hover: #b04620;
-  --accent-subtle: rgba(200, 90, 50, 0.14);
+  --accent-primary: #b44822;
+  --accent-hover: #9c3b19;
+  --accent-subtle: rgba(180, 72, 34, 0.14);
   --accent-contrast-text: #ffffff;
+  --accent-text: #b44822;
   --selection-bg: #f7d5c7;
   --selection-text: #24140e;
 
-  --text-main: #341f17;
-  --text-sidebar-item: #482c22;
-  --text-muted: #79574a;
-  --text-dark: #a07d6f;
+  --text-main: #2a1610;
+  --text-sidebar-item: #3b2118;
+  --text-muted: #634438;
+  --text-dark: #785548;
 
-  --status-active-bg: rgba(200, 90, 50, 0.12);
-  --status-active-text: #c85a32;
-  --status-active-border: rgba(200, 90, 50, 0.28);
+  --status-active-bg: rgba(180, 72, 34, 0.12);
+  --status-active-text: #b44822;
+  --status-active-border: rgba(180, 72, 34, 0.28);
 
-  --kpi-corpus-bg: rgba(200, 90, 50, 0.12);
-  --kpi-corpus-text: #c85a32;
-  --kpi-corpus-border: rgba(200, 90, 50, 0.28);
+  --kpi-corpus-bg: rgba(180, 72, 34, 0.12);
+  --kpi-corpus-text: #b44822;
+  --kpi-corpus-border: rgba(180, 72, 34, 0.28);
 
   --kpi-vector-bg: rgba(180, 83, 9, 0.1);
-  --kpi-vector-text: #b45309;
+  --kpi-vector-text: #92400e;
   --kpi-vector-border: rgba(180, 83, 9, 0.25);
 
   --kpi-engine-bg: rgba(16, 149, 106, 0.1);
-  --kpi-engine-text: #10956a;
+  --kpi-engine-text: #0d7a57;
   --kpi-engine-border: rgba(16, 149, 106, 0.25);
 
   --kpi-health-bg: rgba(147, 51, 234, 0.1);
-  --kpi-health-text: #9333ea;
+  --kpi-health-text: #7e22ce;
   --kpi-health-border: rgba(147, 51, 234, 0.25);
 
-  --badge-pdf-bg: rgba(220, 38, 38, 0.1);
-  --badge-pdf-text: #dc2626;
-  --badge-pdf-border: rgba(220, 38, 38, 0.25);
+  --badge-pdf-bg: rgba(185, 28, 28, 0.1);
+  --badge-pdf-text: #b91c1c;
+  --badge-pdf-border: rgba(185, 28, 28, 0.25);
 
   --badge-md-bg: rgba(180, 83, 9, 0.1);
-  --badge-md-text: #b45309;
+  --badge-md-text: #92400e;
   --badge-md-border: rgba(180, 83, 9, 0.25);
 
-  --badge-txt-bg: rgba(200, 90, 50, 0.12);
-  --badge-txt-text: #c85a32;
-  --badge-txt-border: rgba(200, 90, 50, 0.28);
+  --badge-txt-bg: rgba(180, 72, 34, 0.12);
+  --badge-txt-text: #b44822;
+  --badge-txt-border: rgba(180, 72, 34, 0.28);
 
-  --danger-bg: rgba(220, 38, 38, 0.1);
-  --danger-text: #dc2626;
-  --danger-border: rgba(220, 38, 38, 0.25);
+  --danger-bg: rgba(185, 28, 28, 0.1);
+  --danger-text: #b91c1c;
+  --danger-border: rgba(185, 28, 28, 0.25);
 }
 
 /* 6. EMBER TERRACOTTA (DARK) */
@@ -358,13 +363,14 @@
   --accent-hover: #ea9179;
   --accent-subtle: rgba(224, 122, 95, 0.16);
   --accent-contrast-text: #1a110e;
+  --accent-text: #e07a5f;
   --selection-bg: #6b3220;
   --selection-text: #ffffff;
 
   --text-main: #f7eee7;
   --text-sidebar-item: #ead8ce;
-  --text-muted: #bfa497;
-  --text-dark: #917568;
+  --text-muted: #cbb3a7;
+  --text-dark: #a98e81;
 
   --status-active-bg: rgba(224, 122, 95, 0.16);
   --status-active-text: #e07a5f;
@@ -414,21 +420,22 @@
   --bg-hover: rgba(30, 41, 59, 0.05);
   --backdrop-color: rgba(30, 41, 59, 0.35);
 
-  --border-color: #dbe0e6;
-  --border-input: #cbcfd7;
-  --border-hover: #b8bdc8;
+  --border-color: #d7dce4;
+  --border-input: #c6ccd7;
+  --border-hover: #b2b9c7;
 
   --accent-primary: #0f766e;
   --accent-hover: #115e59;
   --accent-subtle: rgba(15, 118, 110, 0.12);
   --accent-contrast-text: #ffffff;
+  --accent-text: #0f766e;
   --selection-bg: #bfe8e2;
   --selection-text: #0f172a;
 
-  --text-main: #1e293b;
-  --text-sidebar-item: #334155;
-  --text-muted: #64748b;
-  --text-dark: #94a3b8;
+  --text-main: #0f172a;
+  --text-sidebar-item: #1e293b;
+  --text-muted: #475569;
+  --text-dark: #5e6f85;
 
   --status-active-bg: rgba(15, 118, 110, 0.1);
   --status-active-text: #0f766e;
@@ -439,32 +446,32 @@
   --kpi-corpus-border: rgba(15, 118, 110, 0.25);
 
   --kpi-vector-bg: rgba(2, 132, 199, 0.1);
-  --kpi-vector-text: #0284c7;
+  --kpi-vector-text: #0369a1;
   --kpi-vector-border: rgba(2, 132, 199, 0.25);
 
   --kpi-engine-bg: rgba(15, 118, 110, 0.1);
   --kpi-engine-text: #0f766e;
   --kpi-engine-border: rgba(15, 118, 110, 0.25);
 
-  --kpi-health-bg: rgba(99, 102, 241, 0.1);
-  --kpi-health-text: #6366f1;
-  --kpi-health-border: rgba(99, 102, 241, 0.25);
+  --kpi-health-bg: rgba(79, 70, 229, 0.1);
+  --kpi-health-text: #4f46e5;
+  --kpi-health-border: rgba(79, 70, 229, 0.25);
 
-  --badge-pdf-bg: rgba(225, 29, 72, 0.1);
-  --badge-pdf-text: #e11d48;
-  --badge-pdf-border: rgba(225, 29, 72, 0.25);
+  --badge-pdf-bg: rgba(190, 18, 60, 0.1);
+  --badge-pdf-text: #be123c;
+  --badge-pdf-border: rgba(190, 18, 60, 0.25);
 
   --badge-md-bg: rgba(2, 132, 199, 0.1);
-  --badge-md-text: #0284c7;
+  --badge-md-text: #0369a1;
   --badge-md-border: rgba(2, 132, 199, 0.25);
 
   --badge-txt-bg: rgba(15, 118, 110, 0.1);
   --badge-txt-text: #0f766e;
   --badge-txt-border: rgba(15, 118, 110, 0.25);
 
-  --danger-bg: rgba(225, 29, 72, 0.1);
-  --danger-text: #e11d48;
-  --danger-border: rgba(225, 29, 72, 0.25);
+  --danger-bg: rgba(190, 18, 60, 0.1);
+  --danger-text: #be123c;
+  --danger-border: rgba(190, 18, 60, 0.25);
 }
 
 /* 8. NORDIC FJORD (DARK) */
@@ -486,13 +493,14 @@
   --accent-hover: #5eead4;
   --accent-subtle: rgba(45, 212, 191, 0.16);
   --accent-contrast-text: #090d19;
+  --accent-text: #2dd4bf;
   --selection-bg: #134e55;
   --selection-text: #ffffff;
 
   --text-main: #f1f5f9;
   --text-sidebar-item: #dbe4ee;
-  --text-muted: #94a3b8;
-  --text-dark: #64748b;
+  --text-muted: #a3b4c9;
+  --text-dark: #8fa2b8;
 
   --status-active-bg: rgba(45, 212, 191, 0.15);
   --status-active-text: #2dd4bf;
@@ -542,57 +550,58 @@
   --bg-hover: rgba(56, 42, 29, 0.06);
   --backdrop-color: rgba(56, 42, 29, 0.4);
 
-  --border-color: #dfd1b8;
-  --border-input: #d1c0a2;
-  --border-hover: #bfa986;
+  --border-color: #ded0b7;
+  --border-input: #cfc0a2;
+  --border-hover: #bda986;
 
-  --accent-primary: #d97706;
-  --accent-hover: #b45309;
-  --accent-subtle: rgba(217, 119, 6, 0.14);
+  --accent-primary: #a15504;
+  --accent-hover: #864402;
+  --accent-subtle: rgba(161, 85, 4, 0.14);
   --accent-contrast-text: #ffffff;
+  --accent-text: #a15504;
   --selection-bg: #fae3b2;
   --selection-text: #26190b;
 
-  --text-main: #382a1d;
-  --text-sidebar-item: #4c3a2a;
-  --text-muted: #7c6753;
-  --text-dark: #a6917d;
+  --text-main: #261a10;
+  --text-sidebar-item: #382618;
+  --text-muted: #63513f;
+  --text-dark: #75614d;
 
-  --status-active-bg: rgba(217, 119, 6, 0.12);
-  --status-active-text: #b45309;
-  --status-active-border: rgba(217, 119, 6, 0.28);
+  --status-active-bg: rgba(161, 85, 4, 0.12);
+  --status-active-text: #92400e;
+  --status-active-border: rgba(161, 85, 4, 0.28);
 
-  --kpi-corpus-bg: rgba(217, 119, 6, 0.12);
-  --kpi-corpus-text: #d97706;
-  --kpi-corpus-border: rgba(217, 119, 6, 0.28);
+  --kpi-corpus-bg: rgba(161, 85, 4, 0.12);
+  --kpi-corpus-text: #a15504;
+  --kpi-corpus-border: rgba(161, 85, 4, 0.28);
 
   --kpi-vector-bg: rgba(180, 83, 9, 0.1);
-  --kpi-vector-text: #b45309;
+  --kpi-vector-text: #92400e;
   --kpi-vector-border: rgba(180, 83, 9, 0.25);
 
   --kpi-engine-bg: rgba(13, 148, 136, 0.1);
-  --kpi-engine-text: #0d9488;
+  --kpi-engine-text: #0f766e;
   --kpi-engine-border: rgba(13, 148, 136, 0.25);
 
-  --kpi-health-bg: rgba(168, 85, 247, 0.1);
-  --kpi-health-text: #9333ea;
-  --kpi-health-border: rgba(168, 85, 247, 0.25);
+  --kpi-health-bg: rgba(126, 34, 206, 0.1);
+  --kpi-health-text: #7e22ce;
+  --kpi-health-border: rgba(126, 34, 206, 0.25);
 
-  --badge-pdf-bg: rgba(220, 38, 38, 0.1);
-  --badge-pdf-text: #dc2626;
-  --badge-pdf-border: rgba(220, 38, 38, 0.25);
+  --badge-pdf-bg: rgba(185, 28, 28, 0.1);
+  --badge-pdf-text: #b91c1c;
+  --badge-pdf-border: rgba(185, 28, 28, 0.25);
 
   --badge-md-bg: rgba(180, 83, 9, 0.1);
-  --badge-md-text: #b45309;
+  --badge-md-text: #92400e;
   --badge-md-border: rgba(180, 83, 9, 0.25);
 
-  --badge-txt-bg: rgba(217, 119, 6, 0.12);
-  --badge-txt-text: #b45309;
-  --badge-txt-border: rgba(217, 119, 6, 0.28);
+  --badge-txt-bg: rgba(161, 85, 4, 0.12);
+  --badge-txt-text: #a15504;
+  --badge-txt-border: rgba(161, 85, 4, 0.28);
 
-  --danger-bg: rgba(220, 38, 38, 0.1);
-  --danger-text: #dc2626;
-  --danger-border: rgba(220, 38, 38, 0.25);
+  --danger-bg: rgba(185, 28, 28, 0.1);
+  --danger-text: #b91c1c;
+  --danger-border: rgba(185, 28, 28, 0.25);
 }
 
 /* 10. DARK ROAST AMBER (DARK) */
@@ -614,13 +623,14 @@
   --accent-hover: #fbbf24;
   --accent-subtle: rgba(245, 158, 11, 0.16);
   --accent-contrast-text: #140e0a;
+  --accent-text: #fbbf24;
   --selection-bg: #69400f;
   --selection-text: #ffffff;
 
   --text-main: #f9f1e8;
   --text-sidebar-item: #ecdccb;
-  --text-muted: #b99e87;
-  --text-dark: #8c725d;
+  --text-muted: #c5ada1;
+  --text-dark: #a78e82;
 
   --status-active-bg: rgba(245, 158, 11, 0.15);
   --status-active-text: #f59e0b;
@@ -766,12 +776,12 @@ html, body {
   color: var(--text-main);
   margin-top: 1.25rem;
   margin-bottom: 0.5rem;
-  line-height: 1.3;
+  line-height: 1.35;
 }
 
-.omni-prose h1 { font-size: 1.35rem; }
-.omni-prose h2 { font-size: 1.2rem; }
-.omni-prose h3 { font-size: 1.05rem; }
+.omni-prose h1 { font-size: 1.4rem; }
+.omni-prose h2 { font-size: 1.22rem; }
+.omni-prose h3 { font-size: 1.08rem; }
 .omni-prose h4 { font-size: 0.95rem; }
 
 /* Lists formatting (Fix Tailwind reset) */
@@ -881,7 +891,7 @@ html, body {
   padding: 0.15rem 0.4rem;
   border-radius: 4px;
   font-size: 0.85em;
-  color: var(--accent-primary);
+  color: var(--accent-text, var(--accent-primary));
 }
 
 .omni-prose blockquote {
@@ -890,6 +900,48 @@ html, body {
   color: var(--text-muted);
   font-style: italic;
   margin: 0.85rem 0;
+}
+
+/* First child top margin reset */
+.omni-prose > :first-child {
+  margin-top: 0 !important;
+}
+
+/* Horizontal Divider / Rule Styling with Perfectly Balanced Symmetrical Placement */
+.omni-prose hr {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin-top: 1.4rem;
+  margin-bottom: 1.4rem;
+  opacity: 0.85;
+  clear: both;
+}
+
+/* Balance preceding block margins so space above divider equals space below */
+.omni-prose p + hr,
+.omni-prose ul + hr,
+.omni-prose ol + hr,
+.omni-prose table + hr,
+.omni-prose pre + hr,
+.omni-prose blockquote + hr,
+.omni-prose .omni-table-wrapper + hr {
+  margin-top: 0.55rem; /* 0.85rem preceding margin-bottom + 0.55rem = 1.4rem total space above */
+}
+
+/* Ensure elements immediately following hr start cleanly with 0 extra top margin */
+.omni-prose hr + * {
+  margin-top: 0 !important;
+}
+
+/* When a section heading or paragraph follows a divider, keep exact 1.4rem breathing room */
+.omni-prose hr + h1,
+.omni-prose hr + h2,
+.omni-prose hr + h3,
+.omni-prose hr + h4,
+.omni-prose hr + h5,
+.omni-prose hr + h6,
+.omni-prose hr + p {
+  margin-top: 0 !important;
 }
 
 /* Animations */
@@ -1037,5 +1089,8 @@ html, body {
   -ms-overflow-style: none !important; /* IE and Edge */
   scrollbar-width: none !important; /* Firefox and Standard Browsers */
 }
+
+
+
 
 

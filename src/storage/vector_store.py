@@ -45,8 +45,40 @@ def get_qdrant_client() -> QdrantClient:
     return _qdrant_client_instance
 
 
-def init_db():
+_indices_checked = False
+_db_initialized = False
+
+
+def ensure_payload_indices(client: Optional[QdrantClient] = None, col_name: Optional[str] = None, force: bool = False):
+    """Ensures all required payload indices exist in Qdrant for user isolation and filename filtering."""
+    global _indices_checked
+    if _indices_checked and not force:
+        return
+
+    if client is None:
+        client = get_qdrant_client()
+    if col_name is None:
+        col_name = settings.COLLECTION_NAME
+
+    for field_name in ["metadata.user_id", "user_id", "metadata.filename", "filename"]:
+        try:
+            client.create_payload_index(
+                collection_name=col_name,
+                field_name=field_name,
+                field_schema="keyword",
+            )
+            logger.info(f"Ensured payload index on '{field_name}' in '{col_name}'")
+        except Exception as idx_err:
+            logger.debug(f"Payload index creation note for {field_name}: {idx_err}")
+    _indices_checked = True
+
+
+def init_db(force: bool = False):
     """Ensures the Qdrant collection and payload indices exist for efficient tenant-isolated filtering."""
+    global _db_initialized
+    if _db_initialized and not force:
+        return
+
     client = get_qdrant_client()
     col_name = settings.COLLECTION_NAME
     try:
@@ -60,24 +92,19 @@ def init_db():
                 ),
             )
             logger.info(f"Created Qdrant collection '{col_name}'")
-
-            for field_name in ["metadata.user_id", "user_id", "metadata.filename", "filename"]:
-                try:
-                    client.create_payload_index(
-                        collection_name=col_name,
-                        field_name=field_name,
-                        field_schema="keyword",
-                    )
-                except Exception as idx_err:
-                    logger.debug(f"Payload index creation note for {field_name}: {idx_err}")
         else:
             logger.debug(f"Qdrant collection '{col_name}' ready")
+
+        # ALWAYS ensure payload indices exist, whether the collection was just created or already existed
+        ensure_payload_indices(client=client, col_name=col_name, force=force)
+        _db_initialized = True
     except Exception as e:
         logger.error(f"Error initializing Qdrant collection: {e}")
 
 
 def clear_collection():
     """Administrative utility to drop and recreate the entire Qdrant collection across all tenants."""
+    global _db_initialized, _indices_checked
     client = get_qdrant_client()
     col_name = settings.COLLECTION_NAME
     try:
@@ -89,6 +116,8 @@ def clear_collection():
                 distance=Distance.COSINE,
             ),
         )
+        _db_initialized = False
+        _indices_checked = False
         invalidate_stats_cache()
         logger.info(f"Qdrant collection '{col_name}' cleared successfully.")
     except Exception as e:
@@ -162,6 +191,8 @@ def invalidate_stats_cache(user_id: Optional[str] = None):
         key = normalize_user_id(user_id)
         _stats_cache.pop(key, None)
         _stats_cache.pop(str(user_id), None)
+        _stats_cache.pop("default", None)
+        _stats_cache.pop(settings.DEFAULT_LOCAL_USER, None)
     else:
         _stats_cache.clear()
 
@@ -216,5 +247,40 @@ def get_collection_stats(user_id: Optional[str] = None) -> Dict[str, Any]:
         _stats_cache[cache_key] = (now, res)
         return res
     except Exception as e:
+        err_str = str(e)
+        if "index required" in err_str.lower() or "index" in err_str.lower():
+            logger.warning(f"Missing Qdrant index detected during stats query: {e}. Auto-creating indices and retrying...")
+            try:
+                ensure_payload_indices(client=client, col_name=col_name, force=True)
+                files = set()
+                user_points_count = 0
+                offset = None
+                while True:
+                    scroll_res = client.scroll(
+                        collection_name=col_name,
+                        limit=100,
+                        offset=offset,
+                        scroll_filter=scroll_filter,
+                        with_payload=True,
+                        with_vectors=False,
+                    )
+                    points, next_offset = scroll_res if scroll_res else ([], None)
+                    for p in points:
+                        user_points_count += 1
+                        if not p.payload:
+                            continue
+                        fname = p.payload.get("metadata", {}).get("filename") or p.payload.get("filename")
+                        if fname:
+                            files.add(fname)
+                    if next_offset is None:
+                        break
+                    offset = next_offset
+
+                res = {"total_chunks": user_points_count, "files": sorted(list(files))}
+                _stats_cache[cache_key] = (now, res)
+                return res
+            except Exception as retry_e:
+                logger.error(f"Failed retry of collection stats after creating indices: {retry_e}")
+
         logger.error(f"Error getting collection stats: {e}")
         return {"total_chunks": 0, "files": []}

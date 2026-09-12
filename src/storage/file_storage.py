@@ -32,19 +32,37 @@ def get_supabase_client() -> Optional[Client]:
 
 
 def get_user_uploads_dir(user_id: Optional[str] = None) -> str:
-    """Returns the dedicated directory for uploaded documents for the specified user."""
+    """Returns the dedicated directory for uploaded documents for the specified user.
+    Guarantees that the returned directory exists and is writable, automatically
+    falling back to /tmp/rag_uploads if the configured path (e.g. /var/data on Render)
+    does not exist or is not writable.
+    """
     safe_uid = sanitize_user_id_for_path(user_id)
+
+    # Candidate directories in order of preference
+    candidates = []
     if settings.ENVIRONMENT == "production":
-        user_dir = os.path.join("/tmp", "rag_uploads", safe_uid)
+        candidates.append(os.path.join("/tmp", "rag_uploads", safe_uid))
+        if settings.UPLOADS_DIR:
+            candidates.append(os.path.join(settings.UPLOADS_DIR, safe_uid))
     else:
-        user_dir = os.path.join(settings.UPLOADS_DIR, safe_uid)
+        if settings.UPLOADS_DIR:
+            candidates.append(os.path.join(settings.UPLOADS_DIR, safe_uid))
+        candidates.append(os.path.join("/tmp", "rag_uploads", safe_uid))
 
-    try:
-        os.makedirs(user_dir, exist_ok=True)
-    except Exception as e:
-        logger.debug(f"Could not create upload directory {user_dir}: {e}")
+    for candidate in candidates:
+        try:
+            os.makedirs(candidate, exist_ok=True)
+            if os.path.isdir(candidate) and os.access(candidate, os.W_OK):
+                return candidate
+        except Exception as e:
+            logger.warning(f"Upload directory '{candidate}' is inaccessible ({e}). Trying fallback...")
 
-    return user_dir
+    # Final fallback: system temporary directory
+    import tempfile
+    fallback = os.path.join(tempfile.gettempdir(), "rag_uploads", safe_uid)
+    os.makedirs(fallback, exist_ok=True)
+    return fallback
 
 
 def resolve_document_path(filename: str, user_id: Optional[str] = None) -> Optional[str]:
@@ -56,11 +74,20 @@ def resolve_document_path(filename: str, user_id: Optional[str] = None) -> Optio
 
     safe_uid = sanitize_user_id_for_path(user_id)
     user_dir = get_user_uploads_dir(user_id)
-    local_path = os.path.join(user_dir, safe_name)
 
-    # 1. Local disk match in user's folder
-    if os.path.isfile(local_path):
-        return local_path
+    # 1. Local disk match across user directory candidates
+    candidate_paths = [
+        os.path.join(user_dir, safe_name),
+        os.path.join("/tmp", "rag_uploads", safe_uid, safe_name),
+    ]
+    if settings.UPLOADS_DIR:
+        candidate_paths.append(os.path.join(settings.UPLOADS_DIR, safe_uid, safe_name))
+
+    for cp in candidate_paths:
+        if os.path.isfile(cp):
+            return cp
+
+    local_path = os.path.join(user_dir, safe_name)
 
     # 2. Check Supabase Storage under user prefix
     client = get_supabase_client()
