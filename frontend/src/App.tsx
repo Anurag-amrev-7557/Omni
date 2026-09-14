@@ -185,9 +185,19 @@ export default function App() {
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string>('');
-  const showToast = useCallback((msg: string) => {
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = useCallback((msg: string, duration = 2600) => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(''), 2600);
+    if (msg && duration > 0) {
+      toastTimerRef.current = setTimeout(() => {
+        setToastMessage('');
+        toastTimerRef.current = null;
+      }, duration);
+    }
   }, []);
 
   // Custom Hooks
@@ -511,6 +521,26 @@ export default function App() {
       uploadFiles(filesToUpload);
     }
 
+    let coldStartTimer: ReturnType<typeof setTimeout> | null = null;
+    let coldStartNotified = false;
+
+    // Detect free-tier server cold starts (Render free tier spins down after 15m inactivity, taking 30–50s on wake up)
+    coldStartTimer = setTimeout(() => {
+      coldStartNotified = true;
+      showToast("⚡ Server waking up from free-tier inactivity sleep... First response may take 30–50s.", 14000);
+      setMessages(prev => {
+        const updated = [...prev];
+        const lastIdx = updated.length - 1;
+        if (lastIdx >= 0 && updated[lastIdx].role === 'assistant' && !updated[lastIdx].content) {
+          updated[lastIdx] = {
+            ...updated[lastIdx],
+            statusMessage: "Waking up server from free-tier inactivity sleep (~30–50s)..."
+          };
+        }
+        return updated;
+      });
+    }, 5000);
+
     try {
       const token = await getAuthToken();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -540,6 +570,14 @@ export default function App() {
       }
 
       if (!response.body) throw new Error("No response body");
+
+      if (coldStartTimer) {
+        clearTimeout(coldStartTimer);
+        coldStartTimer = null;
+      }
+      if (coldStartNotified) {
+        showToast("✓ Server connected! Generating answer...", 2500);
+      }
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
       let targetContent = '';
@@ -650,6 +688,10 @@ export default function App() {
 
       loadSessions();
     } catch (e: any) {
+      if (coldStartTimer) {
+        clearTimeout(coldStartTimer);
+        coldStartTimer = null;
+      }
       console.error("Stream error:", e);
       showToast("Error generating response: " + (e?.message || "Failed"));
       setMessages(prev => {
@@ -664,6 +706,10 @@ export default function App() {
         return updated;
       });
     } finally {
+      if (coldStartTimer) {
+        clearTimeout(coldStartTimer);
+        coldStartTimer = null;
+      }
       setIsStreaming(false);
       isStreamingRef.current = false;
     }
@@ -675,7 +721,16 @@ export default function App() {
   return (
     <div className="omni-layout font-sans">
       {/* Toast Notifications */}
-      <Toast message={toastMessage} />
+      <Toast 
+        message={toastMessage} 
+        onClose={() => {
+          if (toastTimerRef.current) {
+            clearTimeout(toastTimerRef.current);
+            toastTimerRef.current = null;
+          }
+          setToastMessage('');
+        }} 
+      />
 
       {/* Left Sidebar */}
       <Sidebar

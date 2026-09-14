@@ -146,6 +146,39 @@ export const apiFetch = async (path: string, options: RequestInit = {}) => {
   }
 };
 
+export async function readNDJSONStream<T = any>(
+  response: Response,
+  onItem: (item: T) => void
+): Promise<void> {
+  if (!response.body) throw new Error("Response body is not readable");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        onItem(JSON.parse(trimmed));
+      } catch (e) {
+        console.error("Error parsing stream line:", e, trimmed);
+      }
+    }
+  }
+  if (buffer.trim()) {
+    try {
+      onItem(JSON.parse(buffer.trim()));
+    } catch {}
+  }
+}
+
 export const api = {
   // Session APIs
   async getSessions(): Promise<ChatSession[]> {
@@ -409,36 +442,13 @@ export const api = {
       const error = await res.json().catch(() => ({ detail: 'Upload stream failed' }));
       throw new Error(error.detail || `Upload failed with status ${res.status}`);
     }
-    if (!res.body) throw new Error("Response body is not readable");
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
     let completed = false;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const parsed = JSON.parse(line);
-          onProgress(parsed);
-          if (parsed.type === 'done' && parsed.success) {
-            completed = true;
-          } else if (parsed.type === 'error') {
-            throw new Error(parsed.error || 'Server error during ingestion');
-          }
-        } catch (e: any) {
-          if (e.message && e.message.includes('Server error')) throw e;
-          console.error("Error parsing upload stream line:", e, line);
-        }
-      }
-    }
+    await readNDJSONStream(res, (parsed) => {
+      onProgress(parsed);
+      if (parsed.type === 'done' && parsed.success) completed = true;
+      if (parsed.type === 'error') throw new Error(parsed.error || 'Server error during ingestion');
+    });
 
     return { success: completed, filename: file.name };
   },
@@ -456,33 +466,12 @@ export const api = {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
       throw new Error(err.detail || `Sync failed (${res.status})`);
     }
-    if (!res.body) throw new Error("Response body is not readable");
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
     let finalResult = null;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const parsed = JSON.parse(line);
-          onProgress(parsed);
-          if (parsed.type === 'done') {
-            finalResult = parsed;
-          }
-        } catch (e) {
-          console.error("Error parsing sync stream line:", e, line);
-        }
-      }
-    }
+    await readNDJSONStream(res, (parsed) => {
+      onProgress(parsed);
+      if (parsed.type === 'done') finalResult = parsed;
+    });
     return finalResult;
   },
 };

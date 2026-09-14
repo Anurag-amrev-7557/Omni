@@ -1,13 +1,14 @@
 import unittest
-import httpx
+from fastapi.testclient import TestClient
+from src.api.app import app
 
 
 class TestApiContracts(unittest.TestCase):
-    """Verifies API endpoints contract compliance against the live server."""
+    """Verifies API endpoints contract compliance in-memory."""
 
     @classmethod
     def setUpClass(cls):
-        cls.client = httpx.Client(base_url="http://127.0.0.1:8000", timeout=25.0)
+        cls.client = TestClient(app)
 
     @classmethod
     def tearDownClass(cls):
