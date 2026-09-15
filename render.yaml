@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: omni-rag
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: bash start.sh
+    envVars:
+      - key: PORT
+        value: 10000
