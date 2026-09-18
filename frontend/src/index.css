@@ -1,0 +1,1096 @@
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, ::before, ::after {
+    border-color: var(--border-color);
+  }
+}
+
+/* =========================================================
+   COMPREHENSIVE DESIGN TOKENS (LIGHT & DARK PAIRS)
+========================================================= */
+
+/* 1. OBSIDIAN CHARCOAL (DEFAULT DARK) */
+:root,
+[data-theme="dark"] {
+  --bg-dark: #161616;
+  --bg-sidebar: #131316;
+  --bg-card: #1c1c1f;
+  --bg-input: #252528;
+  --bg-user-bubble: #27272a;
+  --bg-modal: #18181b;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --backdrop-color: rgba(0, 0, 0, 0.7);
+
+  --border-color: #2e2e32;
+  --border-input: #38383e;
+  --border-hover: #4a4a52;
+
+  --accent-primary: #da7756;
+  --accent-hover: #e58767;
+  --accent-subtle: rgba(218, 119, 86, 0.14);
+  --accent-contrast-text: #121214;
+  --accent-text: #e28466;
+  --selection-bg: #7e3820;
+  --selection-text: #ffffff;
+
+  --text-main: #f4f4f5;
+  --text-sidebar-item: #d4d4d8;
+  --text-muted: #a8a8b2;
+  --text-dark: #93939e;
+
+  --status-active-bg: rgba(16, 185, 129, 0.12);
+  --status-active-text: #34d399;
+  --status-active-border: rgba(16, 185, 129, 0.25);
+
+  --kpi-corpus-bg: rgba(218, 119, 86, 0.12);
+  --kpi-corpus-text: #da7756;
+  --kpi-corpus-border: rgba(218, 119, 86, 0.25);
+
+  --kpi-vector-bg: rgba(59, 130, 246, 0.12);
+  --kpi-vector-text: #60a5fa;
+  --kpi-vector-border: rgba(59, 130, 246, 0.25);
+
+  --kpi-engine-bg: rgba(16, 185, 129, 0.12);
+  --kpi-engine-text: #34d399;
+  --kpi-engine-border: rgba(16, 185, 129, 0.25);
+
+  --kpi-health-bg: rgba(168, 85, 247, 0.12);
+  --kpi-health-text: #c084fc;
+  --kpi-health-border: rgba(168, 85, 247, 0.25);
+
+  --badge-pdf-bg: rgba(239, 68, 68, 0.12);
+  --badge-pdf-text: #f87171;
+  --badge-pdf-border: rgba(239, 68, 68, 0.25);
+
+  --badge-md-bg: rgba(59, 130, 246, 0.12);
+  --badge-md-text: #60a5fa;
+  --badge-md-border: rgba(59, 130, 246, 0.25);
+
+  --badge-txt-bg: rgba(16, 185, 129, 0.12);
+  --badge-txt-text: #34d399;
+  --badge-txt-border: rgba(16, 185, 129, 0.25);
+
+  --danger-bg: rgba(239, 68, 68, 0.12);
+  --danger-text: #f87171;
+  --danger-border: rgba(239, 68, 68, 0.25);
+
+  --font-serif: 'Lora', 'Georgia', serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-code: 'JetBrains Mono', monospace;
+}
+
+/* 2. WARM CREAM PARCHMENT (LIGHT) */
+[data-theme="light"] {
+  --bg-dark: #fbfaf5;
+  --bg-sidebar: #f3efe6;
+  --bg-card: #f7f3eb;
+  --bg-input: #f2ebe0;
+  --bg-user-bubble: #ede4d4;
+  --bg-modal: #fcfbfa;
+  --bg-hover: rgba(50, 45, 38, 0.06);
+  --backdrop-color: rgba(40, 35, 30, 0.4);
+
+  --border-color: #e0d8cb;
+  --border-input: #d2c8b7;
+  --border-hover: #b8ad99;
+
+  --accent-primary: #b84c24;
+  --accent-hover: #a13f1b;
+  --accent-subtle: rgba(184, 76, 36, 0.12);
+  --accent-contrast-text: #ffffff;
+  --accent-text: #b84c24;
+  --selection-bg: #f4cfc3;
+  --selection-text: #1a1512;
+
+  --text-main: #1c1a17;
+  --text-sidebar-item: #2d2b27;
+  --text-muted: #524e46;
+  --text-dark: #6b665c;
+
+  --status-active-bg: rgba(4, 120, 87, 0.1);
+  --status-active-text: #047857;
+  --status-active-border: rgba(4, 120, 87, 0.25);
+
+  --kpi-corpus-bg: rgba(184, 76, 36, 0.1);
+  --kpi-corpus-text: #b84c24;
+  --kpi-corpus-border: rgba(184, 76, 36, 0.25);
+
+  --kpi-vector-bg: rgba(29, 78, 216, 0.1);
+  --kpi-vector-text: #1d4ed8;
+  --kpi-vector-border: rgba(29, 78, 216, 0.25);
+
+  --kpi-engine-bg: rgba(4, 120, 87, 0.1);
+  --kpi-engine-text: #047857;
+  --kpi-engine-border: rgba(4, 120, 87, 0.25);
+
+  --kpi-health-bg: rgba(126, 34, 206, 0.1);
+  --kpi-health-text: #7e22ce;
+  --kpi-health-border: rgba(126, 34, 206, 0.25);
+
+  --badge-pdf-bg: rgba(185, 28, 28, 0.1);
+  --badge-pdf-text: #b91c1c;
+  --badge-pdf-border: rgba(185, 28, 28, 0.25);
+
+  --badge-md-bg: rgba(29, 78, 216, 0.1);
+  --badge-md-text: #1d4ed8;
+  --badge-md-border: rgba(29, 78, 216, 0.25);
+
+  --badge-txt-bg: rgba(4, 120, 87, 0.1);
+  --badge-txt-text: #047857;
+  --badge-txt-border: rgba(4, 120, 87, 0.25);
+
+  --danger-bg: rgba(185, 28, 28, 0.1);
+  --danger-text: #b91c1c;
+  --danger-border: rgba(185, 28, 28, 0.25);
+}
+
+/* 3. MATCHA LINEN (LIGHT) */
+[data-theme="matcha"] {
+  --bg-dark: #f5f7f2;
+  --bg-sidebar: #e9eee4;
+  --bg-card: #ffffff;
+  --bg-input: #e6ede0;
+  --bg-user-bubble: #e0e9d9;
+  --bg-modal: #ffffff;
+  --bg-hover: rgba(27, 50, 35, 0.06);
+  --backdrop-color: rgba(27, 50, 35, 0.4);
+
+  --border-color: #d2ddc9;
+  --border-input: #c2d0b8;
+  --border-hover: #abbda1;
+
+  --accent-primary: #3e6b43;
+  --accent-hover: #2e5332;
+  --accent-subtle: rgba(62, 107, 67, 0.14);
+  --accent-contrast-text: #ffffff;
+  --accent-text: #3e6b43;
+  --selection-bg: #cde0cb;
+  --selection-text: #0e1e14;
+
+  --text-main: #14261b;
+  --text-sidebar-item: #1f3827;
+  --text-muted: #435e4b;
+  --text-dark: #56755e;
+
+  --status-active-bg: rgba(45, 85, 53, 0.12);
+  --status-active-text: #2d5535;
+  --status-active-border: rgba(45, 85, 53, 0.28);
+
+  --kpi-corpus-bg: rgba(62, 107, 67, 0.12);
+  --kpi-corpus-text: #3e6b43;
+  --kpi-corpus-border: rgba(62, 107, 67, 0.28);
+
+  --kpi-vector-bg: rgba(30, 90, 150, 0.1);
+  --kpi-vector-text: #1e5a96;
+  --kpi-vector-border: rgba(30, 90, 150, 0.25);
+
+  --kpi-engine-bg: rgba(45, 85, 53, 0.12);
+  --kpi-engine-text: #2d5535;
+  --kpi-engine-border: rgba(45, 85, 53, 0.28);
+
+  --kpi-health-bg: rgba(109, 40, 217, 0.1);
+  --kpi-health-text: #6d28d9;
+  --kpi-health-border: rgba(109, 40, 217, 0.25);
+
+  --badge-pdf-bg: rgba(185, 28, 28, 0.1);
+  --badge-pdf-text: #b91c1c;
+  --badge-pdf-border: rgba(185, 28, 28, 0.25);
+
+  --badge-md-bg: rgba(30, 90, 150, 0.1);
+  --badge-md-text: #1e5a96;
+  --badge-md-border: rgba(30, 90, 150, 0.25);
+
+  --badge-txt-bg: rgba(45, 85, 53, 0.12);
+  --badge-txt-text: #2d5535;
+  --badge-txt-border: rgba(45, 85, 53, 0.28);
+
+  --danger-bg: rgba(185, 28, 28, 0.1);
+  --danger-text: #b91c1c;
+  --danger-border: rgba(185, 28, 28, 0.25);
+}
+
+/* 4. MATCHA FOREST (DARK) */
+[data-theme="matcha-dark"] {
+  --bg-dark: #14221a;
+  --bg-sidebar: #0e1a14;
+  --bg-card: #1c3026;
+  --bg-input: #253e31;
+  --bg-user-bubble: #284436;
+  --bg-modal: #15261d;
+  --bg-hover: rgba(230, 244, 234, 0.07);
+  --backdrop-color: rgba(14, 26, 20, 0.8);
+
+  --border-color: #2b493a;
+  --border-input: #385d4b;
+  --border-hover: #4d7a64;
+
+  --accent-primary: #84cc16;
+  --accent-hover: #9ee82b;
+  --accent-subtle: rgba(132, 204, 22, 0.16);
+  --accent-contrast-text: #0e1a14;
+  --accent-text: #a3e635;
+  --selection-bg: #234d2e;
+  --selection-text: #ffffff;
+
+  --text-main: #e6f4ea;
+  --text-sidebar-item: #cce7d3;
+  --text-muted: #a3caa9;
+  --text-dark: #85ab8c;
+
+  --status-active-bg: rgba(132, 204, 22, 0.16);
+  --status-active-text: #a3e635;
+  --status-active-border: rgba(132, 204, 22, 0.3);
+
+  --kpi-corpus-bg: rgba(132, 204, 22, 0.14);
+  --kpi-corpus-text: #a3e635;
+  --kpi-corpus-border: rgba(132, 204, 22, 0.28);
+
+  --kpi-vector-bg: rgba(56, 189, 248, 0.14);
+  --kpi-vector-text: #7dd3fc;
+  --kpi-vector-border: rgba(56, 189, 248, 0.28);
+
+  --kpi-engine-bg: rgba(52, 211, 153, 0.14);
+  --kpi-engine-text: #6ee7b7;
+  --kpi-engine-border: rgba(52, 211, 153, 0.28);
+
+  --kpi-health-bg: rgba(192, 132, 252, 0.14);
+  --kpi-health-text: #d8b4fe;
+  --kpi-health-border: rgba(192, 132, 252, 0.28);
+
+  --badge-pdf-bg: rgba(248, 113, 113, 0.15);
+  --badge-pdf-text: #fca5a5;
+  --badge-pdf-border: rgba(248, 113, 113, 0.3);
+
+  --badge-md-bg: rgba(56, 189, 248, 0.15);
+  --badge-md-text: #7dd3fc;
+  --badge-md-border: rgba(56, 189, 248, 0.3);
+
+  --badge-txt-bg: rgba(132, 204, 22, 0.15);
+  --badge-txt-text: #a3e635;
+  --badge-txt-border: rgba(132, 204, 22, 0.3);
+
+  --danger-bg: rgba(248, 113, 113, 0.15);
+  --danger-text: #fca5a5;
+  --danger-border: rgba(248, 113, 113, 0.3);
+}
+
+/* 5. TUSCAN TERRACOTTA (LIGHT) */
+[data-theme="terracotta"] {
+  --bg-dark: #fdf7f2;
+  --bg-sidebar: #f7ede4;
+  --bg-card: #ffffff;
+  --bg-input: #f4e3d7;
+  --bg-user-bubble: #eedacb;
+  --bg-modal: #ffffff;
+  --bg-hover: rgba(52, 31, 23, 0.06);
+  --backdrop-color: rgba(52, 31, 23, 0.4);
+
+  --border-color: #ebd4c4;
+  --border-input: #dec0ad;
+  --border-hover: #cba28c;
+
+  --accent-primary: #b44822;
+  --accent-hover: #9c3b19;
+  --accent-subtle: rgba(180, 72, 34, 0.14);
+  --accent-contrast-text: #ffffff;
+  --accent-text: #b44822;
+  --selection-bg: #f7d5c7;
+  --selection-text: #24140e;
+
+  --text-main: #2a1610;
+  --text-sidebar-item: #3b2118;
+  --text-muted: #634438;
+  --text-dark: #785548;
+
+  --status-active-bg: rgba(180, 72, 34, 0.12);
+  --status-active-text: #b44822;
+  --status-active-border: rgba(180, 72, 34, 0.28);
+
+  --kpi-corpus-bg: rgba(180, 72, 34, 0.12);
+  --kpi-corpus-text: #b44822;
+  --kpi-corpus-border: rgba(180, 72, 34, 0.28);
+
+  --kpi-vector-bg: rgba(180, 83, 9, 0.1);
+  --kpi-vector-text: #92400e;
+  --kpi-vector-border: rgba(180, 83, 9, 0.25);
+
+  --kpi-engine-bg: rgba(16, 149, 106, 0.1);
+  --kpi-engine-text: #0d7a57;
+  --kpi-engine-border: rgba(16, 149, 106, 0.25);
+
+  --kpi-health-bg: rgba(147, 51, 234, 0.1);
+  --kpi-health-text: #7e22ce;
+  --kpi-health-border: rgba(147, 51, 234, 0.25);
+
+  --badge-pdf-bg: rgba(185, 28, 28, 0.1);
+  --badge-pdf-text: #b91c1c;
+  --badge-pdf-border: rgba(185, 28, 28, 0.25);
+
+  --badge-md-bg: rgba(180, 83, 9, 0.1);
+  --badge-md-text: #92400e;
+  --badge-md-border: rgba(180, 83, 9, 0.25);
+
+  --badge-txt-bg: rgba(180, 72, 34, 0.12);
+  --badge-txt-text: #b44822;
+  --badge-txt-border: rgba(180, 72, 34, 0.28);
+
+  --danger-bg: rgba(185, 28, 28, 0.1);
+  --danger-text: #b91c1c;
+  --danger-border: rgba(185, 28, 28, 0.25);
+}
+
+/* 6. EMBER TERRACOTTA (DARK) */
+[data-theme="terracotta-dark"] {
+  --bg-dark: #211714;
+  --bg-sidebar: #1a110e;
+  --bg-card: #2c1f1b;
+  --bg-input: #382722;
+  --bg-user-bubble: #3d2b25;
+  --bg-modal: #221815;
+  --bg-hover: rgba(247, 238, 231, 0.07);
+  --backdrop-color: rgba(26, 17, 14, 0.8);
+
+  --border-color: #422f29;
+  --border-input: #543c34;
+  --border-hover: #6e4e44;
+
+  --accent-primary: #e07a5f;
+  --accent-hover: #ea9179;
+  --accent-subtle: rgba(224, 122, 95, 0.16);
+  --accent-contrast-text: #1a110e;
+  --accent-text: #e07a5f;
+  --selection-bg: #6b3220;
+  --selection-text: #ffffff;
+
+  --text-main: #f7eee7;
+  --text-sidebar-item: #ead8ce;
+  --text-muted: #cbb3a7;
+  --text-dark: #a98e81;
+
+  --status-active-bg: rgba(224, 122, 95, 0.16);
+  --status-active-text: #e07a5f;
+  --status-active-border: rgba(224, 122, 95, 0.3);
+
+  --kpi-corpus-bg: rgba(224, 122, 95, 0.14);
+  --kpi-corpus-text: #e07a5f;
+  --kpi-corpus-border: rgba(224, 122, 95, 0.28);
+
+  --kpi-vector-bg: rgba(245, 158, 11, 0.14);
+  --kpi-vector-text: #fbbf24;
+  --kpi-vector-border: rgba(245, 158, 11, 0.28);
+
+  --kpi-engine-bg: rgba(52, 211, 153, 0.14);
+  --kpi-engine-text: #6ee7b7;
+  --kpi-engine-border: rgba(52, 211, 153, 0.28);
+
+  --kpi-health-bg: rgba(192, 132, 252, 0.14);
+  --kpi-health-text: #d8b4fe;
+  --kpi-health-border: rgba(192, 132, 252, 0.28);
+
+  --badge-pdf-bg: rgba(248, 113, 113, 0.15);
+  --badge-pdf-text: #fca5a5;
+  --badge-pdf-border: rgba(248, 113, 113, 0.3);
+
+  --badge-md-bg: rgba(245, 158, 11, 0.15);
+  --badge-md-text: #fbbf24;
+  --badge-md-border: rgba(245, 158, 11, 0.3);
+
+  --badge-txt-bg: rgba(224, 122, 95, 0.15);
+  --badge-txt-text: #e07a5f;
+  --badge-txt-border: rgba(224, 122, 95, 0.3);
+
+  --danger-bg: rgba(248, 113, 113, 0.15);
+  --danger-text: #fca5a5;
+  --danger-border: rgba(248, 113, 113, 0.3);
+}
+
+/* 7. NORDIC CASHMERE (LIGHT) */
+[data-theme="nordic"] {
+  --bg-dark: #f7f7f8;
+  --bg-sidebar: #edeef0;
+  --bg-card: #ffffff;
+  --bg-input: #e7e8eb;
+  --bg-user-bubble: #e0e1e6;
+  --bg-modal: #ffffff;
+  --bg-hover: rgba(30, 41, 59, 0.05);
+  --backdrop-color: rgba(30, 41, 59, 0.35);
+
+  --border-color: #d7dce4;
+  --border-input: #c6ccd7;
+  --border-hover: #b2b9c7;
+
+  --accent-primary: #0f766e;
+  --accent-hover: #115e59;
+  --accent-subtle: rgba(15, 118, 110, 0.12);
+  --accent-contrast-text: #ffffff;
+  --accent-text: #0f766e;
+  --selection-bg: #bfe8e2;
+  --selection-text: #0f172a;
+
+  --text-main: #0f172a;
+  --text-sidebar-item: #1e293b;
+  --text-muted: #475569;
+  --text-dark: #5e6f85;
+
+  --status-active-bg: rgba(15, 118, 110, 0.1);
+  --status-active-text: #0f766e;
+  --status-active-border: rgba(15, 118, 110, 0.25);
+
+  --kpi-corpus-bg: rgba(15, 118, 110, 0.1);
+  --kpi-corpus-text: #0f766e;
+  --kpi-corpus-border: rgba(15, 118, 110, 0.25);
+
+  --kpi-vector-bg: rgba(2, 132, 199, 0.1);
+  --kpi-vector-text: #0369a1;
+  --kpi-vector-border: rgba(2, 132, 199, 0.25);
+
+  --kpi-engine-bg: rgba(15, 118, 110, 0.1);
+  --kpi-engine-text: #0f766e;
+  --kpi-engine-border: rgba(15, 118, 110, 0.25);
+
+  --kpi-health-bg: rgba(79, 70, 229, 0.1);
+  --kpi-health-text: #4f46e5;
+  --kpi-health-border: rgba(79, 70, 229, 0.25);
+
+  --badge-pdf-bg: rgba(190, 18, 60, 0.1);
+  --badge-pdf-text: #be123c;
+  --badge-pdf-border: rgba(190, 18, 60, 0.25);
+
+  --badge-md-bg: rgba(2, 132, 199, 0.1);
+  --badge-md-text: #0369a1;
+  --badge-md-border: rgba(2, 132, 199, 0.25);
+
+  --badge-txt-bg: rgba(15, 118, 110, 0.1);
+  --badge-txt-text: #0f766e;
+  --badge-txt-border: rgba(15, 118, 110, 0.25);
+
+  --danger-bg: rgba(190, 18, 60, 0.1);
+  --danger-text: #be123c;
+  --danger-border: rgba(190, 18, 60, 0.25);
+}
+
+/* 8. NORDIC FJORD (DARK) */
+[data-theme="nordic-dark"] {
+  --bg-dark: #0f172a;
+  --bg-sidebar: #090d19;
+  --bg-card: #182236;
+  --bg-input: #202e47;
+  --bg-user-bubble: #253654;
+  --bg-modal: #111a2e;
+  --bg-hover: rgba(241, 245, 249, 0.07);
+  --backdrop-color: rgba(9, 13, 25, 0.8);
+
+  --border-color: #273956;
+  --border-input: #344c70;
+  --border-hover: #486591;
+
+  --accent-primary: #2dd4bf;
+  --accent-hover: #5eead4;
+  --accent-subtle: rgba(45, 212, 191, 0.16);
+  --accent-contrast-text: #090d19;
+  --accent-text: #2dd4bf;
+  --selection-bg: #134e55;
+  --selection-text: #ffffff;
+
+  --text-main: #f1f5f9;
+  --text-sidebar-item: #dbe4ee;
+  --text-muted: #a3b4c9;
+  --text-dark: #8fa2b8;
+
+  --status-active-bg: rgba(45, 212, 191, 0.15);
+  --status-active-text: #2dd4bf;
+  --status-active-border: rgba(45, 212, 191, 0.3);
+
+  --kpi-corpus-bg: rgba(45, 212, 191, 0.14);
+  --kpi-corpus-text: #2dd4bf;
+  --kpi-corpus-border: rgba(45, 212, 191, 0.28);
+
+  --kpi-vector-bg: rgba(56, 189, 248, 0.14);
+  --kpi-vector-text: #7dd3fc;
+  --kpi-vector-border: rgba(56, 189, 248, 0.28);
+
+  --kpi-engine-bg: rgba(52, 211, 153, 0.14);
+  --kpi-engine-text: #6ee7b7;
+  --kpi-engine-border: rgba(52, 211, 153, 0.28);
+
+  --kpi-health-bg: rgba(165, 180, 252, 0.14);
+  --kpi-health-text: #c7d2fe;
+  --kpi-health-border: rgba(165, 180, 252, 0.28);
+
+  --badge-pdf-bg: rgba(248, 113, 113, 0.15);
+  --badge-pdf-text: #fca5a5;
+  --badge-pdf-border: rgba(248, 113, 113, 0.3);
+
+  --badge-md-bg: rgba(56, 189, 248, 0.15);
+  --badge-md-text: #7dd3fc;
+  --badge-md-border: rgba(56, 189, 248, 0.3);
+
+  --badge-txt-bg: rgba(45, 212, 191, 0.15);
+  --badge-txt-text: #2dd4bf;
+  --badge-txt-border: rgba(45, 212, 191, 0.3);
+
+  --danger-bg: rgba(248, 113, 113, 0.15);
+  --danger-text: #fca5a5;
+  --danger-border: rgba(248, 113, 113, 0.3);
+}
+
+/* 9. VINTAGE SEPIA & AMBER (LIGHT) */
+[data-theme="amber"] {
+  --bg-dark: #faf5ea;
+  --bg-sidebar: #f2e8d5;
+  --bg-card: #ffffff;
+  --bg-input: #ece1cb;
+  --bg-user-bubble: #e4d7bf;
+  --bg-modal: #ffffff;
+  --bg-hover: rgba(56, 42, 29, 0.06);
+  --backdrop-color: rgba(56, 42, 29, 0.4);
+
+  --border-color: #ded0b7;
+  --border-input: #cfc0a2;
+  --border-hover: #bda986;
+
+  --accent-primary: #a15504;
+  --accent-hover: #864402;
+  --accent-subtle: rgba(161, 85, 4, 0.14);
+  --accent-contrast-text: #ffffff;
+  --accent-text: #a15504;
+  --selection-bg: #fae3b2;
+  --selection-text: #26190b;
+
+  --text-main: #261a10;
+  --text-sidebar-item: #382618;
+  --text-muted: #63513f;
+  --text-dark: #75614d;
+
+  --status-active-bg: rgba(161, 85, 4, 0.12);
+  --status-active-text: #92400e;
+  --status-active-border: rgba(161, 85, 4, 0.28);
+
+  --kpi-corpus-bg: rgba(161, 85, 4, 0.12);
+  --kpi-corpus-text: #a15504;
+  --kpi-corpus-border: rgba(161, 85, 4, 0.28);
+
+  --kpi-vector-bg: rgba(180, 83, 9, 0.1);
+  --kpi-vector-text: #92400e;
+  --kpi-vector-border: rgba(180, 83, 9, 0.25);
+
+  --kpi-engine-bg: rgba(13, 148, 136, 0.1);
+  --kpi-engine-text: #0f766e;
+  --kpi-engine-border: rgba(13, 148, 136, 0.25);
+
+  --kpi-health-bg: rgba(126, 34, 206, 0.1);
+  --kpi-health-text: #7e22ce;
+  --kpi-health-border: rgba(126, 34, 206, 0.25);
+
+  --badge-pdf-bg: rgba(185, 28, 28, 0.1);
+  --badge-pdf-text: #b91c1c;
+  --badge-pdf-border: rgba(185, 28, 28, 0.25);
+
+  --badge-md-bg: rgba(180, 83, 9, 0.1);
+  --badge-md-text: #92400e;
+  --badge-md-border: rgba(180, 83, 9, 0.25);
+
+  --badge-txt-bg: rgba(161, 85, 4, 0.12);
+  --badge-txt-text: #a15504;
+  --badge-txt-border: rgba(161, 85, 4, 0.28);
+
+  --danger-bg: rgba(185, 28, 28, 0.1);
+  --danger-text: #b91c1c;
+  --danger-border: rgba(185, 28, 28, 0.25);
+}
+
+/* 10. DARK ROAST AMBER (DARK) */
+[data-theme="amber-dark"] {
+  --bg-dark: #1b140e;
+  --bg-sidebar: #140e0a;
+  --bg-card: #251b14;
+  --bg-input: #31231a;
+  --bg-user-bubble: #37281e;
+  --bg-modal: #1c140f;
+  --bg-hover: rgba(249, 241, 232, 0.07);
+  --backdrop-color: rgba(20, 14, 10, 0.8);
+
+  --border-color: #3b2b20;
+  --border-input: #4d382a;
+  --border-hover: #674b39;
+
+  --accent-primary: #f59e0b;
+  --accent-hover: #fbbf24;
+  --accent-subtle: rgba(245, 158, 11, 0.16);
+  --accent-contrast-text: #140e0a;
+  --accent-text: #fbbf24;
+  --selection-bg: #69400f;
+  --selection-text: #ffffff;
+
+  --text-main: #f9f1e8;
+  --text-sidebar-item: #ecdccb;
+  --text-muted: #c5ada1;
+  --text-dark: #a78e82;
+
+  --status-active-bg: rgba(245, 158, 11, 0.15);
+  --status-active-text: #f59e0b;
+  --status-active-border: rgba(245, 158, 11, 0.3);
+
+  --kpi-corpus-bg: rgba(245, 158, 11, 0.14);
+  --kpi-corpus-text: #f59e0b;
+  --kpi-corpus-border: rgba(245, 158, 11, 0.28);
+
+  --kpi-vector-bg: rgba(234, 88, 12, 0.14);
+  --kpi-vector-text: #fb923c;
+  --kpi-vector-border: rgba(234, 88, 12, 0.28);
+
+  --kpi-engine-bg: rgba(20, 184, 166, 0.14);
+  --kpi-engine-text: #2dd4bf;
+  --kpi-engine-border: rgba(20, 184, 166, 0.28);
+
+  --kpi-health-bg: rgba(192, 132, 252, 0.14);
+  --kpi-health-text: #d8b4fe;
+  --kpi-health-border: rgba(192, 132, 252, 0.28);
+
+  --badge-pdf-bg: rgba(248, 113, 113, 0.15);
+  --badge-pdf-text: #fca5a5;
+  --badge-pdf-border: rgba(248, 113, 113, 0.3);
+
+  --badge-md-bg: rgba(234, 88, 12, 0.15);
+  --badge-md-text: #fb923c;
+  --badge-md-border: rgba(234, 88, 12, 0.3);
+
+  --badge-txt-bg: rgba(245, 158, 11, 0.15);
+  --badge-txt-text: #f59e0b;
+  --badge-txt-border: rgba(245, 158, 11, 0.3);
+
+  --danger-bg: rgba(248, 113, 113, 0.15);
+  --danger-text: #fca5a5;
+  --danger-border: rgba(248, 113, 113, 0.3);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* =========================================================
+   THEME-AWARE TEXT SELECTION (WCAG AAA CONTRAST)
+========================================================= */
+::selection {
+  background-color: var(--selection-bg);
+  color: var(--selection-text);
+}
+
+::-moz-selection {
+  background-color: var(--selection-bg);
+  color: var(--selection-text);
+}
+
+input::selection,
+textarea::selection,
+code::selection,
+pre::selection {
+  background-color: var(--selection-bg);
+  color: var(--selection-text);
+}
+
+html, body {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+/* Base Layout Classes */
+.omni-layout {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-dark);
+}
+
+/* Markdown Prose Styling */
+.omni-prose {
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  line-height: 1.68;
+  color: var(--text-main);
+}
+
+.omni-prose p {
+  margin-bottom: 0.85rem;
+}
+
+.omni-prose p:last-child {
+  margin-bottom: 0;
+}
+
+.omni-prose {
+  font-family: var(--font-sans);
+}
+
+[data-chat-font="Anthropic Serif"] .omni-prose {
+  font-family: var(--font-serif) !important;
+}
+
+[data-chat-font="JetBrains Mono"] .omni-prose {
+  font-family: var(--font-code) !important;
+}
+
+.omni-prose h1, .omni-prose h2, .omni-prose h3, .omni-prose h4 {
+  font-weight: 600;
+  color: var(--text-main);
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.35;
+}
+
+.omni-prose h1 { font-size: 1.4rem; }
+.omni-prose h2 { font-size: 1.22rem; }
+.omni-prose h3 { font-size: 1.08rem; }
+.omni-prose h4 { font-size: 0.95rem; }
+
+/* Lists formatting (Fix Tailwind reset) */
+.omni-prose ul {
+  list-style-type: disc !important;
+  margin-left: 1.5rem !important;
+  margin-bottom: 0.85rem !important;
+  padding-left: 0.25rem !important;
+}
+
+.omni-prose ol {
+  list-style-type: decimal !important;
+  margin-left: 1.5rem !important;
+  margin-bottom: 0.85rem !important;
+  padding-left: 0.25rem !important;
+}
+
+.omni-prose ul ul {
+  list-style-type: circle !important;
+  margin-top: 0.25rem !important;
+  margin-bottom: 0.25rem !important;
+}
+
+.omni-prose ol ol {
+  list-style-type: lower-alpha !important;
+  margin-top: 0.25rem !important;
+  margin-bottom: 0.25rem !important;
+}
+
+.omni-prose li {
+  margin-bottom: 0.35rem;
+  line-height: 1.6;
+}
+
+.omni-prose li::marker {
+  color: var(--accent-primary);
+}
+
+.omni-prose li > p {
+  margin-bottom: 0.35rem;
+  display: inline;
+}
+
+/* Tables formatting */
+.omni-prose table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 1rem 0 1.2rem 0;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+  font-size: 0.88rem;
+  background: var(--bg-card);
+}
+
+.omni-prose thead {
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.omni-prose th {
+  font-weight: 600;
+  color: var(--text-main);
+  text-align: left;
+  padding: 0.65rem 0.9rem;
+  font-size: 0.82rem;
+  border-bottom: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  letter-spacing: 0.02em;
+}
+
+.omni-prose td {
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  color: var(--text-main);
+}
+
+.omni-prose th:last-child,
+.omni-prose td:last-child {
+  border-right: none;
+}
+
+.omni-prose tr:last-child td {
+  border-bottom: none;
+}
+
+.omni-prose tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.omni-prose pre {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  font-family: var(--font-code);
+  font-size: 0.84rem;
+  margin: 0.85rem 0;
+}
+
+.omni-prose code {
+  font-family: var(--font-code);
+  background: var(--bg-input);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.85em;
+  color: var(--accent-text, var(--accent-primary));
+}
+
+.omni-prose blockquote {
+  border-left: 3px solid var(--accent-primary);
+  padding-left: 0.85rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0.85rem 0;
+}
+
+/* First child top margin reset */
+.omni-prose > :first-child {
+  margin-top: 0 !important;
+}
+
+/* Horizontal Divider / Rule Styling with Perfectly Balanced Symmetrical Placement */
+.omni-prose hr {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin-top: 1.4rem;
+  margin-bottom: 1.4rem;
+  opacity: 0.85;
+  clear: both;
+}
+
+/* Balance preceding block margins so space above divider equals space below */
+.omni-prose p + hr,
+.omni-prose ul + hr,
+.omni-prose ol + hr,
+.omni-prose table + hr,
+.omni-prose pre + hr,
+.omni-prose blockquote + hr,
+.omni-prose .omni-table-wrapper + hr {
+  margin-top: 0.55rem; /* 0.85rem preceding margin-bottom + 0.55rem = 1.4rem total space above */
+}
+
+/* Ensure elements immediately following hr start cleanly with 0 extra top margin */
+.omni-prose hr + * {
+  margin-top: 0 !important;
+}
+
+/* When a section heading or paragraph follows a divider, keep exact 1.4rem breathing room */
+.omni-prose hr + h1,
+.omni-prose hr + h2,
+.omni-prose hr + h3,
+.omni-prose hr + h4,
+.omni-prose hr + h5,
+.omni-prose hr + h6,
+.omni-prose hr + p {
+  margin-top: 0 !important;
+}
+
+/* Animations */
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin-animation {
+  animation: spinSlow 1.5s linear infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.pulse-animation {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.slide-in-right {
+  animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* Directionally-Aware Physical Sliding Dropdown Animations */
+
+/* 1. Downward Popovers (Triggered from Top: Header Theme Menu, Vault Toolbar Sort) */
+@keyframes slideDownIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdown-popover-top,
+.dropdown-popover {
+  animation: slideDownIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: top;
+}
+
+/* 2. Upward Popovers (Triggered from Bottom: Model Selector, Sidebar User Profile, Bottom Controls) */
+@keyframes slideUpIn {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdown-popover-bottom {
+  animation: slideUpIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: bottom;
+}
+
+/* Sliding Window Emerging from Behind Input */
+@keyframes slideUpBehind {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.slide-up-behind {
+  animation: slideUpBehind 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: bottom center;
+}
+
+/* Physical Sliding Window Emerging and Exiting Into Slot (Clipped by Input Boundary) */
+@keyframes pureSlideUpBehind {
+  0% {
+    transform: translateY(105%);
+  }
+  100% {
+    transform: translateY(0%);
+  }
+}
+
+@keyframes pureSlideDownBehind {
+  0% {
+    transform: translateY(0%);
+  }
+  100% {
+    transform: translateY(105%);
+  }
+}
+
+.pure-slide-up {
+  animation: pureSlideUpBehind 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.pure-slide-down {
+  animation: pureSlideDownBehind 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Smooth Scale-In Entry for Document Tiles */
+@keyframes popIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.pop-in {
+  animation: popIn 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Cross-Browser Scrollbar Hiding Utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none !important; /* IE and Edge */
+  scrollbar-width: none !important; /* Firefox and Standard Browsers */
+}
+
+
+
+
+
