@@ -1,0 +1,51 @@
+---
+description: Document Naming and Ingestion Consistency Prevention
+globs: ["src/**/*.py", "frontend/src/**/*.ts", "frontend/src/**/*.tsx"]
+---
+
+## 🚨 Document Naming and Ingestion Consistency Prevention
+
+### **Problem**:
+When a document is uploaded, it appears twice in the Knowledge Vault list (e.g. one clean filename stuck indefinitely in "Indexing...", and one prefixed filename like `guest_<session>_<filename>` marked as "Indexed").
+
+### **Root Cause**:
+1. **Prefixed File System Paths Leaking into Vector Metadata**: Upload handlers saving to temporary paths with unique prefixes (`temp_uploads/guest_<id>_file.pdf`) called `ingest_file(save_path)` without explicitly passing `filename=filename`. `ingest_file` fell back to `os.path.basename(save_path)`, recording the internal prefixed string into Qdrant chunks (`metadata.filename`).
+2. **Metadata Key Desynchronization Across Storage Tiers**:
+   - Supabase storage and frontend optimistic state used the clean filename (`file.pdf`).
+   - Qdrant vectors and `/api/stats` recorded the prefixed filename (`guest_<id>_file.pdf`).
+   - When `/api/documents` reconciled files, the clean filename was missing from `stats["files"]`, keeping it stuck in `indexed: false` ("Indexing..."), while step 5 added the prefixed filename as a second "Indexed" file.
+
+### **Prevention Rule**:
+
+```python
+# ❌ WRONG - Saving file with internal prefix and letting ingest_file deduce the filename from path
+save_path = os.path.join(temp_dir, f"{user_id}_{filename}")
+with open(save_path, "wb") as f:
+    f.write(content)
+ingest_file(save_path, user_id) # metadata.filename becomes "{user_id}_{filename}"!
+
+# ❌ WRONG - Ingesting without passing file_bytes when content is already in memory
+ingest_file(save_path, user_id=user_id) # Requires re-reading from disk and re-parsing
+
+# ✅ CORRECT - Always explicitly pass clean filename and file_bytes to ingestion
+user_uploads_dir = get_user_uploads_dir(user_id)
+os.makedirs(user_uploads_dir, exist_ok=True)
+save_path = os.path.join(user_uploads_dir, filename) # Clean filename in user's isolated directory
+with open(save_path, "wb") as f:
+    f.write(content)
+
+ingest_file(
+    save_path,
+    user_id=user_id,
+    file_bytes=content,      # In-memory instant processing
+    filename=filename,       # Explicit clean name guarantee
+    extract_graph=False,     # Fast primary upload path (<1s)
+    generate_ai_summary=False,
+    on_progress=progress_cb
+)
+```
+
+### **Implementation**:
+1. In all upload routes (`/api/upload`, `/api/upload-stream`), never prefix file paths with user IDs or timestamps in ways that can propagate to metadata. Store files in user-scoped directories (`data/uploaded_docs/<user_id>/<clean_filename>`).
+2. Always pass `filename=filename` explicitly to ingestion and graph extraction routines.
+3. In document reconciliation (`get_documents`), filter out any legacy internal prefixed filenames (`fname.startswith("guest_") and "_" in fname[6:]`).

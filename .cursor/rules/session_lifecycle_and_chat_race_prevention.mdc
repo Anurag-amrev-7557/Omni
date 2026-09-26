@@ -1,0 +1,62 @@
+---
+description: Session Lifecycle and Chat Race Condition Prevention
+globs: ["frontend/src/**/*.ts", "frontend/src/**/*.tsx"]
+---
+
+## 🚨 Session Lifecycle and Chat Race Condition Prevention
+
+### **Problem**:
+When a user clicks "New Chat", types a prompt, and submits, the chat canvas suddenly flashes/resets, wiping the user message and assistant placeholder back to empty default state.
+Similarly, when a user deletes a thread and refreshes the page, the deleted thread flickers back into view before vanishing.
+
+### **Root Cause**:
+1. **New Chat Remote Promotion Race**: In optimistic chat UIs, submitting a prompt under an unsaved session (`sessionId = null`) generates a temporary local ID (`sess-<timestamp>`). When the backend returns the permanent server ID (`api.createSession`), updating `currentSessionId` triggers `useEffect([currentSessionId]) -> loadMessages(newId)`. Because the session is brand new on the server, `getMessages` returns `[]`, which calls `setMessages([])` and wipes out the user's prompt and active stream mid-flight!
+2. **Missing LocalStorage Sync on Deletion**: `localStorage.getItem('omni_sessions_cache')` was only written during initial fetch, never when sessions were deleted or mutated. On reload, frame 0 hydration pulled the stale cached list containing the deleted thread until the background network request resolved.
+
+### **Prevention Rule**:
+
+```tsx
+// ❌ WRONG - Promoting session ID triggers loadMessages that wipes active stream
+const handleSendPrompt = async () => {
+  setMessages([userMsg, assistantMsg]);
+  const newSess = await api.createSession(...);
+  setCurrentSessionId(newSess.session_id); // Triggers useEffect([currentSessionId]) -> loadMessages -> setMessages([])!
+};
+
+// ❌ WRONG - Deleting session without updating cache
+const handleDeleteSession = (id) => {
+  setSessions(sessions.filter(s => s.session_id !== id));
+  // Missing localStorage.setItem('omni_sessions_cache', ...)
+};
+
+// ✅ CORRECT - Use ref guard to skip redundant loadMessages when promoting active sessions
+const skipNextMessageLoadRef = useRef<string | null>(null);
+
+useEffect(() => {
+  if (currentSessionId) {
+    if (skipNextMessageLoadRef.current === currentSessionId) {
+      skipNextMessageLoadRef.current = null;
+      return;
+    }
+    loadMessages(currentSessionId);
+  }
+}, [currentSessionId, loadMessages]);
+
+// Set skip guard before updating session ID
+skipNextMessageLoadRef.current = newSess.session_id;
+setCurrentSessionId(newSess.session_id);
+
+// ✅ CORRECT - Synchronously keep sessions cache updated
+useEffect(() => {
+  try {
+    localStorage.setItem('omni_sessions_cache', JSON.stringify(sessions));
+  } catch {}
+}, [sessions]);
+```
+
+### **Implementation**:
+1. Guard all `loadMessages` calls: do not execute when `isStreaming` is active or when the session was just initiated locally.
+2. Unconditionally sync `sessions` to `localStorage` on any state update so frame 0 paints are always strictly in sync with deletions and additions.
+3. Cache message histories by session (`omni_msgs_${sessionId}`) and persist the active session ID (`omni_active_session_id`) to provide instant 0ms rendering on reload and session switching without layout flash.
+4. Guard `onAuthStateChange` listeners so they do not wipe local active sessions or messages on background events (like `TOKEN_REFRESHED` or initial checks) unless the user identity actually changes (`newUserId !== previousUserId`).
+5. Ensure backend database connection pools release connections via `try ... finally: _release_pg_connection(conn)` instead of destroying them with `conn.close()`.

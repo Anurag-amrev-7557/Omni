@@ -1,0 +1,47 @@
+---
+description: Prevention rule for missing cloud dependencies and masked module import errors
+globs: ["src/**/*.py", "requirements.txt"]
+alwaysApply: true
+---
+
+# 🚨 Python Cloud Deployment Module Import Prevention
+
+### Problem
+During cloud deployment on Render/Railway, Uvicorn crashes at startup with:
+```
+File "/opt/render/project/src/src/api.py", line 20, in <module>
+from auth import require_user, set_current_user
+ModuleNotFoundError: No module named 'auth'
+```
+
+### Root Cause
+1. **Masked ImportError**: A `try: from src.X import ... except ImportError: from X import ...` block catches ANY internal `ImportError` (e.g. `ModuleNotFoundError: No module named 'jwt'` inside `auth.py`), masking the real missing package and attempting a fallback import that fails with a misleading error.
+2. **Missing Dependencies in requirements.txt**: Modules imported by runtime code (e.g., `PyJWT`, `cryptography`) were not declared in `requirements.txt`, so fresh cloud virtual environments do not install them.
+3. **sys.path Discrepancies**: The working directory in cloud containers can be either repository root or `src/`, requiring both `ROOT_DIR` and `SRC_DIR` to be in `sys.path`.
+
+### Prevention Rule
+
+```
+# ❌ WRONG - Blind try/except fallback that masks missing sub-dependencies
+try:
+    from src.auth import require_user
+except ImportError:
+    from auth import require_user  # Masks underlying ModuleNotFoundError inside auth.py
+
+# ✅ CORRECT - Add SRC_DIR to sys.path, make sub-dependencies resilient with fallbacks, and track in requirements.txt
+SRC_DIR = os.path.abspath(os.path.dirname(__file__))
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
+
+# Inside auth.py:
+try:
+    import jwt
+    HAS_JWT = True
+except ImportError:
+    HAS_JWT = False  # Graceful fallback so server startup never crashes
+```
+
+### Implementation
+1. **Requirements Hygiene**: Always ensure third-party packages like `PyJWT[crypto]` and `cryptography` are explicitly declared in `requirements.txt`.
+2. **Resilient Imports**: When integrating optional services (like external auth), provide a default/guest fallback instead of raising uncaught import exceptions during Uvicorn startup.
+3. **Dual sys.path**: Always add both root and `src` to `sys.path` at the top of web entrypoints (`src/api.py`).

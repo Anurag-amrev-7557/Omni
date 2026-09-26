@@ -1,0 +1,68 @@
+---
+description: Prevention rule for beforeunload cleanup wiping user data on refresh and redundant DDL execution on database queries
+globs: ["src/**/*.py", "frontend/src/**/*.tsx", "frontend/src/**/*.ts"]
+---
+
+## 🚨 **Guest Lifecycle & DB Initialization Prevention**
+
+### **Problem**: 
+When refreshing the browser in local non-auth / guest mode:
+1. `beforeunload` event handler fired a destructive cleanup beacon to `/api/guest/cleanup`, wiping documents, vectors, and chats from disk and Qdrant while the new page request was concurrently trying to load them.
+2. The endpoint `/api/documents` required physical files to exist locally to return items found in Qdrant vector index `stats["files"]`, causing the Knowledge Vault to appear completely empty while the sidebar badge showed `4`.
+3. Every call to `get_all_sessions()` executed `init_chat_db()`, running redundant DDL statements (`CREATE TABLE IF NOT EXISTS`, 4x `CREATE INDEX IF NOT EXISTS`) against Neon PostgreSQL, causing multi-second delays on page load.
+4. Clicking "New chat" created empty `New Chat` database records with 0 messages, causing multiple duplicate "New Chat" tabs to pile up in chat history.
+
+### **Root Cause**:
+- Browsers trigger `beforeunload` on page refresh, not just on tab closure. Destructive teardowns must not be bound unconditionally to `beforeunload`.
+- Query handlers must never execute DDL on every request. DDL must be cached with an initialization flag.
+- Chat session persistence should be deferred until the first user prompt is submitted, rather than creating database rows on a simple "New chat" button click.
+
+### **Prevention Rules**:
+
+```typescript
+// ❌ WRONG: Wiping guest data on beforeunload (fires on every F5 / page reload)
+window.addEventListener('beforeunload', () => {
+  navigator.sendBeacon('/api/guest/cleanup');
+});
+
+// ✅ CORRECT: Clean up only on explicit user action or background TTL, never on beforeunload
+// User data remains intact across page reloads.
+```
+
+```python
+# ❌ WRONG: Running DDL migrations on every read query
+def get_all_sessions():
+    init_chat_db() # Runs CREATE TABLE / INDEX queries on every GET request!
+    ...
+
+# ✅ CORRECT: Guard DDL execution with an in-memory boolean flag
+_chat_db_initialized = False
+
+def init_chat_db():
+    global _chat_db_initialized
+    if _chat_db_initialized:
+        return
+    _chat_db_initialized = True
+    ...
+```
+
+```python
+# ❌ WRONG: Dropping indexed files from /api/documents if local file is missing
+for fname in stats["files"]:
+    fpath = resolve_document_path(fname)
+    if fpath and os.path.exists(fpath):
+        process_file(fpath, fname)
+    # File is dropped if not cached locally!
+
+# ✅ CORRECT: Guarantee that all indexed files in Qdrant stats are returned
+for fname in stats["files"]:
+    if fname not in seen and not fname.startswith("."):
+        seen.add(fname)
+        available_files.append({
+            "filename": fname,
+            "size_mb": 0.2,
+            "pages": 1,
+            "indexed": True,
+            "status": "ready"
+        })
+```

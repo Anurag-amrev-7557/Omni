@@ -1,0 +1,30 @@
+---
+description: Prevents invalid FastAPI Response type annotations that crash application startup
+globs: src/api/**/*.py
+---
+
+## 🚨 FastAPI Response Parameter Prevention
+
+### **Problem**: Application startup crash with `FastAPIError: Invalid args for response field!`
+```
+fastapi.exceptions.FastAPIError: Invalid args for response field! Hint: check that starlette.responses.Response | None is a valid Pydantic field type.
+```
+
+### **Root Cause**:
+In FastAPI path operations, the Starlette `Response` object is injected by FastAPI when typed exactly as `response: Response`. If annotated as `response: Optional[Response] = None` or `response: Response | None`, FastAPI attempts to interpret it as a Pydantic request field or response model schema rather than injecting the request's `Response` instance, crashing application startup.
+
+### **Prevention Rule**:
+```python
+# ❌ WRONG - Optional[Response] or default None confuses FastAPI dependency resolution
+@router.get("/api/endpoint")
+def my_endpoint(response: Optional[Response] = None, user_id: str = Depends(require_user)):
+    ...
+
+# ✅ CORRECT - Direct Response type annotation for Starlette response injection
+@router.get("/api/endpoint")
+def my_endpoint(response: Response, user_id: str = Depends(require_user)):
+    ...
+```
+
+### **Implementation**:
+Always declare Starlette's `Response` parameter without `Optional` or default `= None` when modifying response headers, cookies, or status codes in endpoint handlers.

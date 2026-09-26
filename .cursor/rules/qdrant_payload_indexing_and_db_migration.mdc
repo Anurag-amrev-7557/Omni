@@ -1,0 +1,55 @@
+---
+description: Prevention of missing Qdrant payload indices and unmigrated relational database columns
+globs: src/storage/**/*.py, src/retrieval/**/*.py
+alwaysApply: false
+---
+
+## 🚨 **Qdrant Payload Indexing & Database Schema Evolution Prevention**
+
+### **Problem 1: Missing Qdrant Payload Indices**
+```
+Error getting collection stats: Unexpected Response: 400 (Bad Request)
+Raw response content:
+b'{"status":{"error":"Bad request: Index required but not found for \\"user_id\\" of one of the following types: [keyword]. Help: Create an index for this key or use a different filter."}}'
+```
+
+### **Root Cause**:
+In remote Qdrant clusters (Qdrant Cloud), filtering points with `FieldCondition` on unindexed fields (e.g. `user_id`, `metadata.user_id`, `filename`, `metadata.filename`) is rejected with a 400 Bad Request if a payload index does not exist. If index creation is only called during `create_collection`, pre-existing collections miss the index.
+
+### **Prevention Rule**:
+```python
+# ❌ WRONG - Only creating payload indices if the collection was newly created
+if col_name not in collections:
+    client.create_collection(...)
+    client.create_payload_index(...)
+
+# ✅ CORRECT - Ensure payload indices are created for both new AND existing collections, with auto-retry
+def ensure_payload_indices(client, col_name):
+    for field in ["metadata.user_id", "user_id", "metadata.filename", "filename"]:
+        try:
+            client.create_payload_index(collection_name=col_name, field_name=field, field_schema="keyword")
+        except Exception:
+            pass
+```
+
+---
+
+### **Problem 2: Unmigrated Columns in Existing PostgreSQL / SQLite Tables**
+```
+get_user_documents error: column "summary" does not exist
+LINE 2: ... SELECT filename, size_bytes, page_count, status, summary, c...
+```
+
+### **Root Cause**:
+`CREATE TABLE IF NOT EXISTS` is a no-op if the table was created by an older version of the codebase. Adding new columns to queries without migrating existing tables causes queries to fail.
+
+### **Prevention Rule**:
+```sql
+-- ❌ WRONG - Assuming CREATE TABLE IF NOT EXISTS updates schema
+CREATE TABLE IF NOT EXISTS documents (...);
+
+-- ✅ CORRECT - Run idempotent column migrations on startup
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS summary TEXT;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS chunk_count INT DEFAULT 0;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS error TEXT;
+```

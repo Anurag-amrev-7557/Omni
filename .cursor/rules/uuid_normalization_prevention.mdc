@@ -1,0 +1,38 @@
+---
+description: Prevention rule for PostgreSQL UUID column syntax errors with guest and non-UUID user identifiers
+globs: ["src/**/*.py"]
+alwaysApply: true
+---
+
+# 🚨 PostgreSQL UUID Column Syntax Error Prevention
+
+### Problem
+When writing queries to PostgreSQL databases (Neon, Supabase, RDS) with `UUID` column types, passing string identifiers such as `"guest_12345"` or `"default_user"` causes database crashes:
+```
+psycopg2.errors.InvalidTextRepresentation: invalid input syntax for type uuid: "guest_12345"
+```
+
+### Root Cause
+PostgreSQL strictly validates that values inserted or queried against `UUID` columns conform to RFC 4122 (32 hexadecimal digits formatted as 8-4-4-4-12). Arbitrary string guest IDs or legacy usernames fail schema validation.
+
+### Prevention Rule
+
+```python
+# ❌ WRONG - Passing unvalidated strings directly into PostgreSQL UUID columns
+cursor.execute("INSERT INTO chat_sessions (session_id, user_id) VALUES (%s, %s)", (session_id, user_id))
+
+# ✅ CORRECT - Normalize user_id to a deterministic UUIDv5 if not already a valid UUID
+import uuid
+
+def normalize_user_id(user_id: str | None) -> str:
+    DEFAULT_USER = "10d2f529-3fae-4a29-9a5e-312876700ff9"
+    if not user_id or user_id in ("default_user", "local", "guest"):
+        return DEFAULT_USER
+    try:
+        return str(uuid.UUID(str(user_id)))
+    except (ValueError, TypeError):
+        return str(uuid.uuid5(uuid.NAMESPACE_DNS, str(user_id)))
+```
+
+### Implementation
+Always use `normalize_user_id(user_id)` before passing any user identifier to PostgreSQL database queries, foreign keys, or vector payload filters.
