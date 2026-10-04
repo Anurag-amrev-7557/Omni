@@ -29,7 +29,6 @@ export const useSpeech = (showToast: (msg: string) => void) => {
   };
 
   const startVoiceDictation = (onTranscript: (text: string) => void) => {
-    // @ts-ignore
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       showToast("Voice dictation is not supported in this browser");

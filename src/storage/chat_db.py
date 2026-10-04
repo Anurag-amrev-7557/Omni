@@ -4,6 +4,7 @@ Supports persistence on cloud deployments and offline local development with
 strict per-user tenant isolation.
 """
 from collections import OrderedDict
+import concurrent.futures
 import contextvars
 from datetime import datetime
 import json
@@ -18,11 +19,11 @@ from src.storage.relational_db import get_db_cursor
 
 DEFAULT_LOCAL_USER = settings.DEFAULT_LOCAL_USER
 
-# Fast in-memory message cache with thread safety and LRU eviction
 _messages_cache: OrderedDict[str, List[Dict[str, Any]]] = OrderedDict()
 _cache_lock = threading.Lock()
 _MAX_CACHE_SESSIONS = 500
 _MAX_MESSAGES_PER_SESSION = 100
+_persist_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="chat-persist")
 
 
 def _touch_and_store_in_cache(
@@ -190,16 +191,16 @@ def _persist_message_to_db(session_id: str, role: str, content: str, contexts: O
         with get_db_cursor(commit=True) as (conn, cur, p):
             ts = now if p == "%s" else now.isoformat()
 
-            cur.execute(f"SELECT 1 FROM chat_sessions WHERE session_id = {p}", (session_id,))
-            if not cur.fetchone():
-                cur.execute(
-                    f"INSERT INTO chat_sessions (session_id, user_id, title, created_at) VALUES ({p}, {p}, {p}, {p}) ON CONFLICT (session_id) DO NOTHING",
-                    (session_id, norm_user, short_title, ts)
-                )
+            # Ensure chat session exists without an extra SELECT query
+            cur.execute(
+                f"INSERT INTO chat_sessions (session_id, user_id, title, created_at) VALUES ({p}, {p}, {p}, {p}) ON CONFLICT (session_id) DO NOTHING",
+                (session_id, norm_user, short_title, ts)
+            )
 
             if role == "user":
-                cur.execute(f"SELECT COUNT(*) FROM chat_messages WHERE session_id = {p}", (session_id,))
-                if cur.fetchone()[0] == 0:
+                # Check if first message using LIMIT 1 instead of counting all messages
+                cur.execute(f"SELECT 1 FROM chat_messages WHERE session_id = {p} LIMIT 1", (session_id,))
+                if not cur.fetchone():
                     cur.execute(f"UPDATE chat_sessions SET title = {p} WHERE session_id = {p}", (short_title, session_id))
 
             cur.execute(
@@ -232,18 +233,21 @@ def _safe_persist_worker(session_id: str, role: str, content: str, contexts: Opt
 
 
 def save_message_async(session_id: str, role: str, content: str, contexts: Optional[List[dict]] = None, user_id: Optional[str] = None):
-    """Updates in-memory cache immediately and persists to DB asynchronously in background thread."""
+    """Updates in-memory cache immediately and persists to DB asynchronously in background thread pool."""
     msg = {"role": role, "content": content, "contexts": contexts}
     with _cache_lock:
         _touch_and_store_in_cache(session_id, append_message=msg)
 
     ctx = contextvars.copy_context()
-    threading.Thread(
-        target=ctx.run,
-        args=(_safe_persist_worker, session_id, role, content, contexts, user_id),
-        daemon=True,
-        name=f"chat-persist-{session_id[:8]}",
-    ).start()
+    _persist_executor.submit(
+        ctx.run,
+        _safe_persist_worker,
+        session_id,
+        role,
+        content,
+        contexts,
+        user_id,
+    )
 
 
 def get_session_messages(session_id: str) -> List[Dict[str, Any]]:

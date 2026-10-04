@@ -26,7 +26,6 @@ def compute_pagerank(nodes: list[dict], links: list[dict], iterations: int = 20,
         out_links[src].append(tgt)
         in_links[tgt].append(src)
 
-    # Initial PageRank
     pr = {nid: 1.0 / num_nodes for nid in node_ids}
 
     for _ in range(iterations):
@@ -38,7 +37,6 @@ def compute_pagerank(nodes: list[dict], links: list[dict], iterations: int = 20,
             new_pr[nid] = (1 - d) / num_nodes + d * (incoming_sum + dangling_sum / num_nodes)
         pr = new_pr
 
-    # Scale so average is around 1.0
     avg_val = sum(pr.values()) / max(1, len(pr))
     if avg_val > 0:
         pr = {nid: round(val / avg_val, 3) for nid, val in pr.items()}
@@ -51,10 +49,8 @@ def detect_louvain_communities(nodes: list[dict], links: list[dict]) -> dict[str
     if not node_ids:
         return {}
 
-    # Initialize each node in its own community
     community = {nid: i for i, nid in enumerate(node_ids)}
 
-    # Build adjacency
     adj = defaultdict(lambda: defaultdict(float))
     total_weight = 0.0
 
@@ -69,11 +65,9 @@ def detect_louvain_communities(nodes: list[dict], links: list[dict]) -> dict[str
     if total_weight == 0:
         return {nid: 0 for nid in node_ids}
 
-    # Optimization loop
     m2 = 2.0 * total_weight
     node_degrees = {nid: sum(adj[nid].values()) for nid in node_ids}
 
-    # Maintain running total degree per community for O(1) modularity evaluation
     comm_tot = defaultdict(float)
     for nid in node_ids:
         comm_tot[community[nid]] += node_degrees[nid]
@@ -89,12 +83,10 @@ def detect_louvain_communities(nodes: list[dict], links: list[dict]) -> dict[str
             best_gain = 0.0
             ki = node_degrees[nid]
 
-            # Calculate edge weights to neighbor communities
             comm_weights = defaultdict(float)
             for neighbor, weight in adj[nid].items():
                 comm_weights[community[neighbor]] += weight
 
-            # Modularity gain evaluation in O(1) per neighbor community
             for target_comm, ki_in in comm_weights.items():
                 sigma_tot = comm_tot[target_comm]
                 if target_comm == current_comm:
@@ -110,7 +102,6 @@ def detect_louvain_communities(nodes: list[dict], links: list[dict]) -> dict[str
                 community[nid] = best_comm
                 improved = True
 
-    # Renumber communities consecutively from 0 to N-1
     unique_comms = sorted(list(set(community.values())))
     comm_map = {old: new for new, old in enumerate(unique_comms)}
     return {nid: comm_map[comm] for nid, comm in community.items()}
@@ -133,17 +124,14 @@ def run_community_detection_and_summaries(user_id: str | None = None) -> dict:
     if not nodes:
         return {"status": "empty", "communities": []}
 
-    # 1. PageRank & Degrees
     pagerank_scores = compute_pagerank(nodes, links)
     deg_map = defaultdict(int)
     for l in links:
         deg_map[l["source"]] += 1
         deg_map[l["target"]] += 1
 
-    # 2. Louvain Communities
     comm_assignments = detect_louvain_communities(nodes, links)
 
-    # 3. Batch Update Entities in DB
     entity_updates = [
         {
             "entity_id": n["id"],
@@ -155,82 +143,28 @@ def run_community_detection_and_summaries(user_id: str | None = None) -> dict:
     ]
     update_entity_metrics(entity_updates, user_id=uid)
 
-    # 4. Generate Community Summaries Concurrently
     id_to_name = {n["id"]: n["name"] for n in nodes}
     comms_grouped = defaultdict(list)
     for n in nodes:
         cid = comm_assignments.get(n["id"], 0)
         comms_grouped[cid].append(n)
 
-    # Sort communities by size (largest first)
     sorted_comms = sorted(comms_grouped.items(), key=lambda item: len(item[1]), reverse=True)
 
-    def process_single_community(item):
-        cid, cnodes = item
+    community_records = []
+    for cid, cnodes in sorted_comms:
         key_entity_names = [cn["name"] for cn in sorted(cnodes, key=lambda x: pagerank_scores.get(x["id"], 0), reverse=True)[:6]]
         title = f"{key_entity_names[0]} & Related Systems" if key_entity_names else f"Community {cid}"
-
-        cnode_ids = {cn["id"] for cn in cnodes}
-        crelations = [
-            f"{l.get('type')}: ({id_to_name.get(l['source'], 'Entity')} -> {id_to_name.get(l['target'], 'Entity')})"
-            for l in links if l["source"] in cnode_ids and l["target"] in cnode_ids
-        ][:6]
-
         summary_text = f"Topical cluster focusing on {', '.join(key_entity_names)}."
         findings = [f"Interconnects {name}" for name in key_entity_names[:3]]
 
-        # Only invoke LLM for significant clusters (3+ entities)
-        if len(cnodes) >= 3 and key_entity_names:
-            community_prompt = COMMUNITY_SUMMARY_PROMPT.format(
-                title=title,
-                entities=", ".join(key_entity_names),
-                relations="; ".join(crelations) or "Hierarchically clustered concepts"
-            )
-            raw_summary = invoke_groq_with_fallback(
-                community_prompt,
-                max_tokens=250,
-                temperature=0.2,
-                models=settings.DEFAULT_LLM_MODELS,
-                timeout=4.0,
-            )
-            if raw_summary:
-                raw_summary = re.sub(r'<think>[\s\S]*?</think>', '', raw_summary).strip()
-                if raw_summary:
-                    summary_text = raw_summary
-                    parsed_findings = [line.strip('- *') for line in raw_summary.split('\n') if line.strip().startswith('-')]
-                    if parsed_findings:
-                        findings = parsed_findings
-
-        return {
+        community_records.append({
             "community_id": cid,
             "level": 0,
             "title": title,
             "summary": summary_text,
             "key_entities": key_entity_names,
             "findings": findings[:4],
-        }
-
-    community_records = []
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        futures = [executor.submit(process_single_community, item) for item in sorted_comms[:8]]
-        for future in as_completed(futures):
-            try:
-                res = future.result(timeout=6.0)
-                community_records.append(res)
-            except Exception as exc:
-                pass
-
-    # Add remaining small clusters with template summaries
-    for cid, cnodes in sorted_comms[8:]:
-        key_entity_names = [cn["name"] for cn in sorted(cnodes, key=lambda x: pagerank_scores.get(x["id"], 0), reverse=True)[:4]]
-        title = f"{key_entity_names[0]} Group" if key_entity_names else f"Cluster {cid}"
-        community_records.append({
-            "community_id": cid,
-            "level": 0,
-            "title": title,
-            "summary": f"Group of related entities: {', '.join(key_entity_names)}.",
-            "key_entities": key_entity_names,
-            "findings": [f"Contains {n}" for n in key_entity_names[:2]],
         })
 
     save_community_clusters(community_records, user_id=uid)

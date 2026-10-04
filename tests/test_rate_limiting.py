@@ -23,18 +23,15 @@ class TestRateLimiting(unittest.TestCase):
         user_b = "user-beta-222"
 
         with patch.object(settings, "RATE_LIMIT_CHAT_PER_MINUTE", 2):
-            # User A uses quota
             allowed, _ = test_limiter.is_allowed(user_a, action="chat")
             self.assertTrue(allowed)
             allowed, _ = test_limiter.is_allowed(user_a, action="chat")
             self.assertTrue(allowed)
 
-            # User A 3rd request should fail
             allowed, retry_after = test_limiter.is_allowed(user_a, action="chat")
             self.assertFalse(allowed)
             self.assertGreater(retry_after, 0)
 
-            # User B should be completely unaffected
             allowed_b, _ = test_limiter.is_allowed(user_b, action="chat")
             self.assertTrue(allowed_b)
 
@@ -44,7 +41,6 @@ class TestRateLimiting(unittest.TestCase):
         user_2 = "rate-test-user-2"
 
         with patch.object(settings, "RATE_LIMIT_CHAT_PER_MINUTE", 2):
-            # User 1 makes 2 requests
             for _ in range(2):
                 res = self.client.post(
                     "/api/chat/stream",
@@ -53,7 +49,6 @@ class TestRateLimiting(unittest.TestCase):
                 )
                 self.assertEqual(res.status_code, 200)
 
-            # User 1 makes 3rd request -> Must receive 429
             res_exceeded = self.client.post(
                 "/api/chat/stream",
                 json={"session_id": "test-sess", "prompt": "Hello again"},
@@ -63,7 +58,6 @@ class TestRateLimiting(unittest.TestCase):
             self.assertIn("Rate limit exceeded for chat", res_exceeded.json()["detail"])
             self.assertIn("Retry-After", res_exceeded.headers)
 
-            # User 2 makes a request -> Must succeed with 200
             res_user2 = self.client.post(
                 "/api/chat/stream",
                 json={"session_id": "test-sess-2", "prompt": "Hello from user 2"},
@@ -76,7 +70,6 @@ class TestRateLimiting(unittest.TestCase):
         search_user = "search-rate-user"
 
         with patch.object(settings, "RATE_LIMIT_SEARCH_PER_MINUTE", 1):
-            # 1st web search request succeeds
             res1 = self.client.post(
                 "/api/chat/stream",
                 json={"session_id": "test-sess", "prompt": "Search query", "web_search": True},
@@ -84,7 +77,6 @@ class TestRateLimiting(unittest.TestCase):
             )
             self.assertEqual(res1.status_code, 200)
 
-            # 2nd web search request fails with 429 for search action
             res2 = self.client.post(
                 "/api/chat/stream",
                 json={"session_id": "test-sess", "prompt": "Another search", "web_search": True},

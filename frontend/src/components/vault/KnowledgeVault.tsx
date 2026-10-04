@@ -66,7 +66,6 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = React.memo(({
   const mdCount = documents.filter(d => d.filename.toLowerCase().endsWith('.md')).length;
   const txtCount = documents.filter(d => d.filename.toLowerCase().endsWith('.txt')).length;
 
-  // In-Header Column Sorting Handler
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
@@ -104,7 +103,6 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = React.memo(({
       return sortDirection === 'asc' ? comparison : -comparison;
     });
 
-  // Multi-Selection Logic
   const handleToggleSelect = (filename: string) => {
     setSelectedFilenames(prev => 
       prev.includes(filename) 
@@ -140,7 +138,6 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = React.memo(({
     }
   };
 
-  // Full-Window Drag & Drop Handlers
   const handleWindowDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     if (!isDragOverWindow) setIsDragOverWindow(true);
@@ -167,7 +164,6 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = React.memo(({
       onDragLeave={handleWindowDragLeave}
       onDrop={handleWindowDrop}
     >
-      {/* Full-Page Drag-and-Drop Active Overlay */}
       {isDragOverWindow && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-8 bg-[var(--bg-dark)]/90 backdrop-blur-md border-2 border-dashed border-[var(--accent-primary)] animate-pulse pointer-events-none">
           <div className="text-center">
@@ -184,11 +180,9 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = React.memo(({
         </div>
       )}
 
-      {/* Main Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto px-6 py-6 md:px-10 md:py-8">
         <div className="w-full space-y-4">
           
-          {/* Prominent Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[var(--border-color)]">
             <div>
               <div className="flex items-center gap-2.5 mb-1">
@@ -213,7 +207,6 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = React.memo(({
               </p>
             </div>
 
-            {/* Header Action Buttons */}
             <div className="flex items-center gap-2 flex-shrink-0">
               <button
                 className="h-9 px-3.5 rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-main)] hover:bg-[var(--bg-hover)] text-[13px] font-medium transition-colors inline-flex items-center gap-2 cursor-pointer shadow-2xs active:scale-[0.98]"
@@ -243,7 +236,6 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = React.memo(({
             </div>
           </div>
 
-          {/* Search & Filter Toolbar */}
           <VaultToolbar
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
@@ -257,7 +249,6 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = React.memo(({
             }}
           />
 
-          {/* Prominent Enterprise Data Table */}
           <VaultDocList
             documents={filteredDocuments}
             selectedFilenames={selectedFilenames}
@@ -277,7 +268,6 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = React.memo(({
         </div>
       </div>
 
-      {/* Docked Bottom Status & Metrics Ribbon with Integrated Bulk Actions */}
       <VaultBottomRibbon
         totalFiles={documents.length}
         totalMb={totalMb}
@@ -303,7 +293,6 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = React.memo(({
         }}
       />
 
-      {/* Dedicated Upload Modal */}
       <VaultUploadModal
         isOpen={isUploadModalOpen}
         onClose={() => {
@@ -316,7 +305,6 @@ export const KnowledgeVault: React.FC<KnowledgeVaultProps> = React.memo(({
         showToast={showToast}
       />
 
-      {/* GitHub Connector Modal */}
       <GitHubConnectorModal
         isOpen={isGitHubModalOpen}
         onClose={() => setIsGitHubModalOpen(false)}

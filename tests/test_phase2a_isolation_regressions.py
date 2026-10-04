@@ -22,12 +22,6 @@ from src.core.security import (
 )
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# FIX 1: Zero-hit / no-user fallback leak
-# Old behaviour: hybrid_search(query, user_id=None) resolved to DEFAULT_LOCAL_USER
-#                and ran a real vector search scoped to that user's vault.
-# Fixed behaviour: returns [] immediately when no real user is supplied.
-# ──────────────────────────────────────────────────────────────────────────────
 class TestFix1_ZeroHitFallbackLeak(unittest.TestCase):
     """hybrid_search must never touch the vector store when user_id is absent."""
 
@@ -48,7 +42,6 @@ class TestFix1_ZeroHitFallbackLeak(unittest.TestCase):
         result = hybrid_search("what is the revenue forecast?", user_id=None)
 
         self.assertEqual(result, [], "Expected [] when no user_id is supplied.")
-        # The vector store must NOT have been instantiated or queried.
         mock_vs_cls.assert_not_called()
 
     @patch("src.retrieval.service.get_qdrant_client")
@@ -74,7 +67,6 @@ class TestFix1_ZeroHitFallbackLeak(unittest.TestCase):
         must NOT search it.  This test uses the no-arg path (user_id=None)."""
         from src.retrieval.service import hybrid_search
 
-        # Simulate context user being the sentinel (default dev user)
         with patch("src.retrieval.service.get_current_user", return_value=settings.DEFAULT_LOCAL_USER):
             result = hybrid_search("any query", user_id=None)
 
@@ -88,7 +80,6 @@ class TestFix1_ZeroHitFallbackLeak(unittest.TestCase):
         """Passing a real, non-sentinel user_id must NOT be blocked — search proceeds normally."""
         mock_vs_instance = MagicMock()
         mock_vs_cls.return_value = mock_vs_instance
-        # Return one fake hit so we can verify it flows through.
         fake_doc = MagicMock()
         fake_doc.page_content = "Company revenue grew 18% YoY."
         fake_doc.metadata = {"filename": "financials.pdf", "page": 3}
@@ -99,10 +90,8 @@ class TestFix1_ZeroHitFallbackLeak(unittest.TestCase):
         real_user = "a8098c1a-f86e-11da-bd1a-00112444be1e"
         result = hybrid_search("revenue", k=1, user_id=real_user)
 
-        # Vector store must have been called.
         mock_vs_cls.assert_called_once()
         mock_vs_instance.similarity_search_with_score.assert_called_once()
-        # At least one result returned.
         self.assertGreater(len(result), 0)
 
     @patch("src.retrieval.service.get_qdrant_client")
@@ -115,7 +104,6 @@ class TestFix1_ZeroHitFallbackLeak(unittest.TestCase):
         and must NOT fall back to searching without a filter (old behaviour)."""
         mock_vs_instance = MagicMock()
         mock_vs_cls.return_value = mock_vs_instance
-        # User A has zero matching vectors.
         mock_vs_instance.similarity_search_with_score.return_value = []
 
         from src.retrieval.service import hybrid_search
@@ -123,16 +111,8 @@ class TestFix1_ZeroHitFallbackLeak(unittest.TestCase):
         result = hybrid_search("confidential report", user_id="user_a_uuid_00001")
 
         self.assertEqual(result, [])
-        # similarity_search_with_score called exactly once — no retry without filter.
         self.assertEqual(mock_vs_instance.similarity_search_with_score.call_count, 1)
 
-    # ── TEST 29 ──────────────────────────────────────────────────────────────
-    # Fix 1 edge case: explicit sentinel values passed as user_id argument.
-    # Old guard: `if is_default_or_local_user(norm_uid) and not user_id`
-    #   — only caught falsy raw values; "default_user" is truthy, so it
-    #   slipped through and searched the DEFAULT_LOCAL_USER's vault.
-    # New guard: also checks is_default_or_local_user on the RAW arg.
-    # ─────────────────────────────────────────────────────────────────────────
     @patch("src.retrieval.service.get_qdrant_client")
     @patch("src.retrieval.service.init_db")
     @patch("src.retrieval.service.QdrantVectorStore")
@@ -150,7 +130,7 @@ class TestFix1_ZeroHitFallbackLeak(unittest.TestCase):
         for sentinel in (
             "default_user",
             "00000000-0000-0000-0000-000000000000",
-            settings.DEFAULT_LOCAL_USER,  # the actual placeholder UUID
+            settings.DEFAULT_LOCAL_USER,
         ):
             with self.subTest(sentinel=sentinel):
                 mock_vs_cls.reset_mock()
@@ -163,12 +143,6 @@ class TestFix1_ZeroHitFallbackLeak(unittest.TestCase):
                 mock_vs_cls.assert_not_called()
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# FIX 2: Hardcoded scroll_filter = None in get_collection_stats
-# Old behaviour: scroll_filter was always None, returning ALL users' files.
-# Fixed behaviour: scroll filter is always set to user's FieldCondition when
-#                  user_id is provided; stats for no-user context return empty.
-# ──────────────────────────────────────────────────────────────────────────────
 class TestFix2_CollectionStatsLeak(unittest.TestCase):
     """get_collection_stats must never scroll the entire collection without a filter."""
 
@@ -194,7 +168,6 @@ class TestFix2_CollectionStatsLeak(unittest.TestCase):
         scroll_filter = kw.get("scroll_filter")
         self.assertIsNotNone(scroll_filter, "scroll_filter must not be None when user_id is supplied.")
         self.assertIsInstance(scroll_filter, Filter)
-        # Filter must reference the user_id field.
         keys = [c.key for c in (scroll_filter.should or []) if hasattr(c, "key")]
         self.assertTrue(
             any("user_id" in k for k in keys),
@@ -204,7 +177,6 @@ class TestFix2_CollectionStatsLeak(unittest.TestCase):
     @patch("src.storage.vector_store.get_qdrant_client")
     def test_stats_with_no_user_returns_empty_not_all_users(self, mock_getter):
         """When user_id=None, stats must return empty rather than dumping every user's filenames."""
-        # Build a mock that returns data from "other users" if called unfiltered.
         mock_client = self._setup_mock_client(
             mock_getter,
             points=[
@@ -216,15 +188,6 @@ class TestFix2_CollectionStatsLeak(unittest.TestCase):
 
         stats = get_collection_stats(user_id=None)
 
-        # scroll must be called with scroll_filter=None (unauthenticated path is
-        # intentionally allowed to scan, but this test validates the generation
-        # service never calls it without a user — see Fix 1 + generation/service.py).
-        # The KEY invariant here: the generation service always passes norm_uid.
-        # For the storage layer itself, scroll_filter=None IS the documented fallback
-        # for local/dev mode, so we only assert that when a real user is passed,
-        # a real filter follows (tested above).
-        # This test documents what the no-user behaviour IS (empty or unfiltered dev mode)
-        # so a future refactor doesn't accidentally change it silently.
         self.assertIn("files", stats)
         self.assertIn("total_chunks", stats)
 
@@ -239,8 +202,6 @@ class TestFix2_CollectionStatsLeak(unittest.TestCase):
 
         def scoped_scroll(**kw):
             filt = kw.get("scroll_filter")
-            # Simulate Qdrant honouring the filter: return points only for the
-            # user that matches the filter's MatchValue.
             if filt and filt.should:
                 for cond in filt.should:
                     if hasattr(cond, "match") and hasattr(cond.match, "value"):
@@ -267,11 +228,6 @@ class TestFix2_CollectionStatsLeak(unittest.TestCase):
         self.assertNotIn("gina_only.pdf", stats_harry["files"])
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# FIX 3: /api/reset wiped the shared Qdrant collection for all users
-# Old behaviour: called clear_collection() → client.delete_collection()
-# Fixed behaviour: calls delete_user_vectors(user_id) → scoped payload-filter delete
-# ──────────────────────────────────────────────────────────────────────────────
 class TestFix3_ResetScopedToUser(unittest.TestCase):
     """POST /api/reset must never drop the global Qdrant collection."""
 
@@ -293,14 +249,11 @@ class TestFix3_ResetScopedToUser(unittest.TestCase):
 
         result = reset_user_workspace(user_id="user_iris_abc")
 
-        # Must call the scoped vector deletion.
         mock_del_vectors.assert_called_once()
         called_uid = mock_del_vectors.call_args[0][0] if mock_del_vectors.call_args[0] else \
                      mock_del_vectors.call_args[1].get("user_id") or mock_del_vectors.call_args[0][0]
-        # The UID passed must be the normalized form of 'user_iris_abc'
         self.assertEqual(called_uid, normalize_user_id("user_iris_abc"))
 
-        # Response must include new session ID.
         self.assertTrue(result.get("success"))
         self.assertIn("new_session_id", result)
 
@@ -313,7 +266,6 @@ class TestFix3_ResetScopedToUser(unittest.TestCase):
         mock_client = MagicMock()
         mock_getter.return_value = mock_client
 
-        # Calling clear_collection directly (admin path) works fine.
         clear_collection()
         mock_client.delete_collection.assert_called_once_with(
             collection_name=settings.COLLECTION_NAME
@@ -332,9 +284,7 @@ class TestFix3_ResetScopedToUser(unittest.TestCase):
 
         reset_user_workspace(user_id="user_jack_001")
 
-        # Exactly one scoped delete call.
         self.assertEqual(mock_del_vecs.call_count, 1)
-        # The UID in the call must be user_jack's, not anything else.
         uid_used = (
             mock_del_vecs.call_args[0][0]
             if mock_del_vecs.call_args[0]
@@ -343,12 +293,6 @@ class TestFix3_ResetScopedToUser(unittest.TestCase):
         self.assertEqual(uid_used, normalize_user_id("user_jack_001"))
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# FIX 4: Cross-user vector deletion for guest/local users
-# Old behaviour: delete_files_from_collection(filenames, user_id=None) issued a
-#               filename-only Qdrant filter — deleted the file for EVERY user.
-# Fixed behaviour: user_id=None raises ValueError immediately.
-# ──────────────────────────────────────────────────────────────────────────────
 class TestFix4_ScopedFileDeletion(unittest.TestCase):
     """delete_files_from_collection must always require a non-empty user_id."""
 
@@ -386,7 +330,6 @@ class TestFix4_ScopedFileDeletion(unittest.TestCase):
         with self.assertRaises(ValueError):
             delete_files_from_collection(["private.pdf"], user_id=None)
 
-        # Qdrant's delete must not have been called.
         mock_client.delete.assert_not_called()
 
     @patch("src.storage.vector_store.get_qdrant_client")
@@ -397,16 +340,13 @@ class TestFix4_ScopedFileDeletion(unittest.TestCase):
 
         from src.storage.vector_store import delete_files_from_collection
 
-        # Should not raise — guest IDs are valid scopes.
         delete_files_from_collection(["upload.pdf"], user_id="guest_xy9abc123")
 
-        # Qdrant delete must have been called exactly once with a filter.
         mock_client.delete.assert_called_once()
         _, kw = mock_client.delete.call_args
         selector = kw.get("points_selector")
         self.assertIsNotNone(selector)
         self.assertIsInstance(selector, Filter)
-        # Filter must be a must=[user_cond, file_cond] compound.
         self.assertTrue(
             hasattr(selector, "must") and selector.must,
             "Expected a 'must' compound filter (user AND file conditions).",
@@ -430,21 +370,12 @@ class TestFix4_ScopedFileDeletion(unittest.TestCase):
             _, kw = c
             filters_used.append(kw["points_selector"])
 
-        # Both filters must be compound (user AND file), not a bare filename match.
         for f in filters_used:
             self.assertIsNotNone(f.must, "Scoped delete must use a must=[user, file] filter.")
 
-        # The two filters must be distinct objects (different user scope).
         self.assertIsNot(filters_used[0], filters_used[1])
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# FIX 5: NULL user_id treated as globally visible in docs_db
-# Old behaviour: queries used WHERE user_id = %s OR user_id IS NULL
-#               so any NULL-owner row was readable/deletable by anyone.
-# Fixed behaviour: schema has user_id NOT NULL; no OR IS NULL clauses exist;
-#               rows can only be read/deleted by their exact owner.
-# ──────────────────────────────────────────────────────────────────────────────
 class TestFix5_NullUserIdNotGloballyVisible(unittest.TestCase):
     """documents table must enforce NOT NULL and no OR user_id IS NULL queries."""
 
@@ -453,7 +384,6 @@ class TestFix5_NullUserIdNotGloballyVisible(unittest.TestCase):
         import sqlite3
         import tempfile, os
 
-        # Initialise a fresh in-memory docs DB and verify column nullability.
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             tmp_path = f.name
         try:
@@ -474,7 +404,6 @@ class TestFix5_NullUserIdNotGloballyVisible(unittest.TestCase):
                     UNIQUE (filename, user_id)
                 );
             """)
-            # Attempting to insert with NULL user_id must fail.
             with self.assertRaises(sqlite3.IntegrityError):
                 conn.execute(
                     "INSERT INTO documents (filename, user_id) VALUES (?, ?)",
@@ -530,7 +459,6 @@ class TestFix5_NullUserIdNotGloballyVisible(unittest.TestCase):
             "User A must not see User B's document even if schema allowed NULL previously.",
         )
 
-        # Cleanup
         delete_document_record("b_private.pdf", user_id=uid_b)
 
     def test_insert_without_owner_is_rejected(self):
@@ -542,8 +470,6 @@ class TestFix5_NullUserIdNotGloballyVisible(unittest.TestCase):
             delete_document_record,
         )
 
-        # normalize_user_id(None) → DEFAULT_LOCAL_USER, so the row is filed under
-        # that sentinel rather than NULL.  Verify it is NOT visible to an unrelated user.
         upsert_document_record("orphan_doc.pdf", user_id=None, size_bytes=100, page_count=1)
 
         unrelated_user = "completely-different-user-xyz"
@@ -554,13 +480,9 @@ class TestFix5_NullUserIdNotGloballyVisible(unittest.TestCase):
             "A document upserted with user_id=None must not be visible to an unrelated user.",
         )
 
-        # Cleanup under sentinel
         delete_document_record("orphan_doc.pdf", user_id=None)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Cross-cutting: verify the security choke-point (core/security.py) itself
-# ──────────────────────────────────────────────────────────────────────────────
 class TestSecurityChokePoint(unittest.TestCase):
     """build_user_filter must raise rather than silently allow an empty user_id."""
 

@@ -24,7 +24,6 @@ class TestAsyncWrapping(unittest.IsolatedAsyncioTestCase):
              patch("src.api.routes.documents.update_document_status") as mock_update_status, \
              patch("src.api.routes.documents.get_documents", return_value={"documents": [{"filename": "test_async.txt"}]}) as mock_get_docs:
 
-            # Concurrently run upload alongside an async heartbeat
             heartbeat_ticks = []
 
             async def heartbeat():
@@ -38,10 +37,8 @@ class TestAsyncWrapping(unittest.IsolatedAsyncioTestCase):
 
             self.assertTrue(res["success"])
             self.assertEqual(res["ingested_count"], 1)
-            # Verify event loop remained unblocked allowing heartbeat task to tick
             self.assertGreaterEqual(len(heartbeat_ticks), 1)
 
-            # Confirm every blocking target was reached
             mock_upload.assert_called_once()
             mock_upsert.assert_called_once()
             mock_del_vec.assert_called_once()
@@ -60,16 +57,13 @@ class TestAsyncWrapping(unittest.IsolatedAsyncioTestCase):
 
             save_message_async(sess_id, role, content, user_id="test-uid")
 
-            # Allow daemon thread a short moment to execute and hit the mocked error
             import time
             time.sleep(0.05)
 
-            # In-memory cache must still reflect the message immediately
             cached = get_session_messages(sess_id)
             self.assertEqual(len(cached), 1)
             self.assertEqual(cached[0]["content"], content)
 
-            # The error must have been logged
             mock_log_error.assert_called_once()
             self.assertIn("Failed to asynchronously persist chat message", mock_log_error.call_args[0][0])
 

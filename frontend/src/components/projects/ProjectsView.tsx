@@ -67,11 +67,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = React.memo(({
   return (
     <div className="relative flex flex-col h-full w-full bg-[var(--bg-dark)] select-none fade-in overflow-hidden">
       
-      {/* Main Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto px-6 py-6 md:px-10 md:py-8">
         <div className="w-full space-y-4">
           
-          {/* Prominent Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-[var(--border-color)]">
             <div>
               <div className="flex items-center gap-2.5 mb-1">
@@ -96,7 +94,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = React.memo(({
               </p>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex items-center gap-2.5 flex-shrink-0">
               <button
                 className="h-9 px-4 rounded-lg bg-[var(--accent-primary)] text-[var(--accent-contrast-text)] hover:opacity-95 text-[13px] font-medium transition-all inline-flex items-center gap-2 cursor-pointer shadow-xs active:scale-[0.98]"
@@ -108,7 +105,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = React.memo(({
             </div>
           </div>
 
-          {/* Search & Filter Toolbar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 select-none">
             <div className="relative w-full sm:w-80">
               <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
@@ -153,7 +149,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = React.memo(({
             </div>
           </div>
 
-          {/* Project Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
             {filteredProjects.map((project) => {
               const isActive = project.id === activeProjectId;
@@ -167,7 +162,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = React.memo(({
                   }`}
                 >
                   <div>
-                    {/* Card Header */}
                     <div className="flex items-start justify-between gap-3 mb-2.5">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div 
@@ -203,14 +197,12 @@ export const ProjectsView: React.FC<ProjectsViewProps> = React.memo(({
                       )}
                     </div>
 
-                    {/* Description */}
                     <p className="text-[12.5px] text-[var(--text-muted)] leading-relaxed line-clamp-3 mb-4">
                       {project.description}
                     </p>
                   </div>
 
                   <div>
-                    {/* Meta Details */}
                     <div className="flex items-center justify-between py-2.5 border-t border-[var(--border-color)] text-[11.5px] text-[var(--text-muted)] mb-3">
                       <div className="flex items-center gap-1.5 font-mono">
                         <FileText size={12.5} />
@@ -226,7 +218,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = React.memo(({
                       </div>
                     </div>
 
-                    {/* Actions */}
                     <div className="flex items-center gap-2">
                       <button
                         className="flex-1 h-8.5 flex items-center justify-center gap-1.5 rounded-lg bg-[var(--bg-input)] border border-[var(--border-color)] hover:bg-[var(--bg-hover)] text-[12.5px] font-medium text-[var(--text-main)] transition-colors cursor-pointer active:scale-[0.98]"
@@ -265,11 +256,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = React.memo(({
         </div>
       </div>
 
-      {/* Docked Bottom Status & Metrics Ribbon */}
       <footer className="h-12 min-h-[48px] border-t border-[var(--border-color)] bg-[var(--bg-card)] flex items-center justify-between select-none flex-shrink-0 shadow-2xs">
         <div className="max-w-6xl mx-auto w-full px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 overflow-hidden">
           
-          {/* Left: Workspaces Count & Active */}
           <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 rounded-xl bg-[var(--bg-input)] border border-[var(--border-color)] shadow-2xs flex-shrink-0">
             <Folder size={13} className="text-[var(--accent-primary)]" />
             <span className="text-[12px] sm:text-[12.5px] font-semibold text-[var(--text-main)]">
@@ -280,7 +269,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = React.memo(({
             </span>
           </div>
 
-          {/* Middle: Linked Docs & Research Chats */}
           <div className="hidden md:flex items-center gap-3 px-3 py-1 rounded-xl bg-[var(--bg-input)] border border-[var(--border-color)] shadow-2xs">
             <div className="flex items-center gap-1.5">
               <FileText size={14} className="text-blue-500" />
@@ -297,7 +285,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = React.memo(({
             </div>
           </div>
 
-          {/* Right: Partition Status */}
           <div className="flex items-center gap-2 sm:gap-3 px-2.5 sm:px-3 py-1 rounded-xl bg-[var(--bg-input)] border border-[var(--border-color)] shadow-2xs flex-shrink-0">
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
@@ -308,7 +295,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = React.memo(({
         </div>
       </footer>
 
-      {/* Create Project Workspace Modal */}
       {isCreateModalOpen && (
         <div 
           className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm fade-in select-none"

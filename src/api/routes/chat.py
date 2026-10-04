@@ -5,6 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
+from src.config.settings import settings
 from src.core.logging import logger
 from src.core.auth import require_user, set_current_user
 from src.core.rate_limit import limiter
@@ -27,7 +28,6 @@ def stream_chat(data: ChatStreamRequest, user_id: str = Depends(require_user)):
     """Streams token-by-token RAG answer generation with live citations and status events."""
     set_current_user(user_id)
 
-    # Enforce per-user rate limits
     limiter.check_or_raise(user_id, action="chat")
     if data.web_search:
         limiter.check_or_raise(user_id, action="search")
@@ -42,10 +42,12 @@ def stream_chat(data: ChatStreamRequest, user_id: str = Depends(require_user)):
 
     def sse_event_generator():
         try:
-            status_msg = "Searching vault & live web via Tavily..." if web_search else "Searching knowledge vault..."
+            if web_search and not settings.TAVILY_API_KEY.strip():
+                status_msg = "Searching vault (TAVILY_API_KEY not configured for live web)..."
+            else:
+                status_msg = "Searching vault & live web via Tavily..." if web_search else "Searching knowledge vault..."
             yield f"data: {json.dumps({'type': 'status', 'message': status_msg})}\n\n"
 
-            # 1. Fetch past messages and record new user question
             try:
                 save_message_async(session_id, "user", prompt, user_id=user_id)
                 messages = get_session_messages(session_id)
@@ -53,7 +55,6 @@ def stream_chat(data: ChatStreamRequest, user_id: str = Depends(require_user)):
                 logger.warning(f"Chat history notice: {hist_err}")
                 messages = []
 
-            # 2. Retrieve user-scoped contexts and assemble prompt
             try:
                 prompt_str, retrieved_contexts = prepare_context_and_prompt(
                     query=prompt,
@@ -67,10 +68,8 @@ def stream_chat(data: ChatStreamRequest, user_id: str = Depends(require_user)):
                 prompt_str = prompt
                 retrieved_contexts = []
 
-            # 3. Stream retrieved contexts metadata
             yield f"data: {json.dumps({'type': 'contexts', 'contexts': retrieved_contexts})}\n\n"
 
-            # 4. Stream response tokens
             full_text_chunks = []
             stream_gen = answer_query_stream(
                 query=prompt,
@@ -85,7 +84,6 @@ def stream_chat(data: ChatStreamRequest, user_id: str = Depends(require_user)):
 
             full_text = "".join(full_text_chunks)
 
-            # 5. Record assistant response in database
             try:
                 save_message_async(session_id, "assistant", full_text, retrieved_contexts, user_id=user_id)
             except Exception as save_err:

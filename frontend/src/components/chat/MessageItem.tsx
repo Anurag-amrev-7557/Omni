@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Copy, Check, RotateCw, Edit3, Volume2, FileText, ChevronDown, ExternalLink, Sparkles } from 'lucide-react';
+import { Copy, Check, RotateCw, Edit3, Volume2, FileText, ChevronDown, ExternalLink, Sparkles, Globe } from 'lucide-react';
 import { ChatMessage, ContextChunk } from '../../types/chat';
 import { FormatBadge } from '../common/FormatBadge';
 import { DocumentSquareTile } from '../common/DocumentSquareTile';
@@ -13,7 +13,7 @@ interface MessageItemProps {
   isStreaming: boolean;
   onRetry: (content: string) => void;
   onEdit: (content: string) => void;
-  onInspectDoc: (chunk: { filename: string; content?: string; page?: number }) => void;
+  onInspectDoc: (chunk: { filename: string; content?: string; page?: number; url?: string; is_web?: boolean }) => void;
   onReadAloud: (content: string) => void;
   showToast: (msg: string) => void;
 }
@@ -24,13 +24,14 @@ interface ParsedCitation {
   filename: string;
   page?: string;
   quote?: string;
+  url?: string;
+  is_web?: boolean;
 }
 
 function parseSingleCitation(rawItem: string, fallbackIdx: number): ParsedCitation | null {
   const item = rawItem.trim();
   if (!item || item === '---') return null;
 
-  // 1. Extract Citation ID: e.g. [1], [2], 1., 2.
   let id = '';
   let numId = fallbackIdx;
   const idMatch = item.match(/(?:\[(\d+)\]|^[-*•\s]*(\d+)[.)])/);
@@ -41,44 +42,49 @@ function parseSingleCitation(rawItem: string, fallbackIdx: number): ParsedCitati
     id = String(fallbackIdx);
   }
 
-  // 2. Extract page info: *(Page 1)*, (Page 1), *(p. 1)*, (p. 1), Page 1, p. 1
   let page: string | undefined = undefined;
   const pageMatch = item.match(/(?:\*?\(?\s*(?:Page|p\.)\s*(\d+)\s*\)?\*?)/i);
   if (pageMatch) {
     page = pageMatch[1];
   }
 
-  // 3. Separate quote/excerpt from filename & metadata
   let filename = '';
   let quote = '';
+  let url: string | undefined = undefined;
+  let is_web = false;
 
   const dividerRegex = /(?:(?:\*\*\s*|\*\s*|\)\s*|\s)[—–-]\s*|:\s+)(["“*]?[\s\S]+)$/;
   const match = item.match(dividerRegex);
 
+  let fileMeta = match ? item.slice(0, match.index).trim() : item;
   if (match) {
     quote = match[1];
-    let fileMeta = item.slice(0, match.index).trim();
-    fileMeta = fileMeta
-      .replace(/(?:\*?\(?\s*(?:Page|p\.)\s*\d+\s*\)?\*?)/gi, '')
-      .replace(/^[-*•\s\d.[\]]+/, '')
-      .replace(/\[\d+\]/g, '')
-      .replace(/\*\*|\*|`|\[|\]/g, '')
-      .trim();
-    filename = fileMeta;
   } else {
     const quoteMatch = item.match(/(["“][^"”]+["”])/);
     if (quoteMatch) {
       quote = quoteMatch[1];
-      let fileMeta = item.slice(0, quoteMatch.index).trim();
-      fileMeta = fileMeta
+      fileMeta = item.slice(0, quoteMatch.index).trim();
+    }
+  }
+
+  const mdLinkMatch = fileMeta.match(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/);
+  if (mdLinkMatch) {
+    filename = mdLinkMatch[1].trim();
+    url = mdLinkMatch[2].trim();
+    is_web = true;
+  } else {
+    const urlMatch = fileMeta.match(/(https?:\/\/[^\s)]+)/);
+    if (urlMatch) {
+      url = urlMatch[1].trim();
+      is_web = true;
+      filename = fileMeta
+        .replace(urlMatch[0], '')
         .replace(/(?:\*?\(?\s*(?:Page|p\.)\s*\d+\s*\)?\*?)/gi, '')
         .replace(/^[-*•\s\d.[\]]+/, '')
-        .replace(/\[\d+\]/g, '')
-        .replace(/\*\*|\*|`|\[|\]|—|–|:/g, '')
-        .trim();
-      filename = fileMeta;
+        .replace(/\*\*|\*|`|\[|\]|\(|\)/g, '')
+        .trim() || url;
     } else {
-      filename = item
+      filename = fileMeta
         .replace(/(?:\*?\(?\s*(?:Page|p\.)\s*\d+\s*\)?\*?)/gi, '')
         .replace(/^[-*•\s\d.[\]]+/, '')
         .replace(/\[\d+\]/g, '')
@@ -88,8 +94,12 @@ function parseSingleCitation(rawItem: string, fallbackIdx: number): ParsedCitati
   }
 
   filename = filename.replace(/^[-*•—–:\s]+/, '').replace(/[-*•—–:\s]+$/, '').trim();
+  if (filename.startsWith('[Web]') || filename.startsWith('http://') || filename.startsWith('https://')) {
+    is_web = true;
+  }
+
   if (!filename || filename.toLowerCase() === 'document' || filename.toLowerCase() === 'cited document') {
-    filename = 'Referenced Document';
+    filename = is_web ? 'Web Source' : 'Referenced Document';
   }
 
   if (quote) {
@@ -108,10 +118,11 @@ function parseSingleCitation(rawItem: string, fallbackIdx: number): ParsedCitati
     filename,
     page,
     quote: quote && quote !== filename ? quote : undefined,
+    url,
+    is_web,
   };
 }
 
-// Static markdown components definition to prevent React from remounting the DOM on every streamed token
 const MARKDOWN_COMPONENTS: import('react-markdown').Components = {
   a: ({ href: _href, children }) => (
     <span className="text-[var(--accent-primary)] font-medium cursor-pointer underline hover:text-[var(--accent-hover)] transition-colors">
@@ -190,7 +201,6 @@ export const MessageItem = React.memo<MessageItemProps>(({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Parse User Prompt & Referenced Vault Documents
   const { userPrompt, referencedFiles } = useMemo(() => {
     if (message.role !== 'user') return { userPrompt: message.content, referencedFiles: [] };
 
@@ -215,7 +225,6 @@ export const MessageItem = React.memo<MessageItemProps>(({
     return { userPrompt: message.content, referencedFiles: [] };
   }, [message]);
 
-  // Parse Assistant Response: Extract and Structure "References & Sources"
   const { bodyText, parsedCitations } = useMemo(() => {
     if (message.role !== 'assistant') return { bodyText: message.content, parsedCitations: [] };
 
@@ -248,14 +257,29 @@ export const MessageItem = React.memo<MessageItemProps>(({
     citationBlocks.forEach((item, index) => {
       const parsed = parseSingleCitation(item, index + 1);
       if (parsed) {
+        if (message.contexts && message.contexts.length > 0) {
+          const matchedCtx = message.contexts.find(c => 
+            (parsed.url && c.url === parsed.url) ||
+            (c.filename && parsed.filename && c.filename.toLowerCase() === parsed.filename.toLowerCase()) ||
+            (c.filename && parsed.filename && c.filename.toLowerCase().includes(parsed.filename.toLowerCase()))
+          ) || message.contexts[parsed.numId - 1];
+
+          if (matchedCtx) {
+            if (matchedCtx.url) parsed.url = matchedCtx.url;
+            if (matchedCtx.is_web || matchedCtx.url || matchedCtx.filename?.startsWith('[Web]')) {
+              parsed.is_web = true;
+            }
+            if (!parsed.quote && matchedCtx.content) {
+              parsed.quote = matchedCtx.content;
+            }
+          }
+        }
         citations.push(parsed);
       }
     });
 
-    // Sort numerically by ID
     citations.sort((a, b) => a.numId - b.numId);
 
-    // Deduplicate
     const seen = new Set<string>();
     const deduplicated: ParsedCitation[] = [];
     for (const c of citations) {
@@ -269,11 +293,9 @@ export const MessageItem = React.memo<MessageItemProps>(({
     return { bodyText: body, parsedCitations: deduplicated };
   }, [message]);
 
-  // 1. USER MESSAGE RENDER (Detached square document preview blocks above bubble)
   if (message.role === 'user') {
     return (
       <div className="w-full flex flex-col items-end my-4 fade-in select-none">
-        {/* Detached True Square Document Preview Blocks Above User Query Bubble */}
         {referencedFiles.length > 0 && (
           <div className="flex flex-wrap items-center justify-end gap-2.5 mb-2">
             {referencedFiles.map(fn => (
@@ -286,14 +308,12 @@ export const MessageItem = React.memo<MessageItemProps>(({
           </div>
         )}
 
-        {/* Clean User Query Bubble */}
         <div className="max-w-[85%] sm:max-w-[80%] rounded-2xl rounded-tr-sm bg-[var(--bg-user-bubble)] text-[var(--text-main)] border border-[var(--border-color)] text-sm shadow-sm leading-relaxed px-4 py-2.5 select-text">
           <div className="text-[14.5px] leading-relaxed text-[var(--text-main)] font-sans whitespace-pre-wrap break-words">
             {userPrompt}
           </div>
         </div>
 
-        {/* User Prompt Action Icons */}
         <div className="flex items-center gap-1.5 mt-1 px-1 text-[11px] text-[var(--text-muted)]">
           <button 
             className="p-1.5 rounded-lg hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
@@ -321,13 +341,17 @@ export const MessageItem = React.memo<MessageItemProps>(({
     );
   }
 
-  // 2. ASSISTANT MESSAGE RENDER
-  // If actively streaming and no text has arrived yet, show the orbiting orb loader with live status message
   if (isLastAssistant && isStreaming && !bodyText.trim()) {
+    const orbState = message.statusMessage?.toLowerCase().includes('search') 
+      ? 'searching' 
+      : message.statusMessage?.toLowerCase().includes('graph') 
+      ? 'connecting' 
+      : undefined;
+
     return (
       <div className="w-full flex flex-col my-5 fade-in">
         <div className="py-3 flex items-center gap-3">
-          <OrbitingOrbLoader size="md" />
+          <OrbitingOrbLoader size="md" state={orbState} />
           {message.statusMessage && (
             <span className="text-xs text-[var(--text-muted)] animate-pulse font-sans">
               {message.statusMessage}
@@ -340,7 +364,6 @@ export const MessageItem = React.memo<MessageItemProps>(({
 
   return (
     <div className="w-full flex flex-col my-5 fade-in">
-      {/* Markdown Content Body with full GFM List and Table Formatting */}
       <div className="omni-prose max-w-none text-sm text-[var(--text-main)] leading-relaxed font-sans">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
@@ -353,7 +376,6 @@ export const MessageItem = React.memo<MessageItemProps>(({
         )}
       </div>
 
-      {/* MINIMALIST GROUNDED REFERENCES & SOURCES */}
       {parsedCitations.length > 0 && (
         <div className="mt-3.5 pt-3 border-t border-[var(--border-color)]">
           <div 
@@ -392,13 +414,14 @@ export const MessageItem = React.memo<MessageItemProps>(({
                   <div 
                     key={cit.id}
                     onClick={() => onInspectDoc({
-                       filename: cit.filename,
+                      filename: cit.filename,
                       content: cit.quote,
-                      page: cit.page ? parseInt(cit.page, 10) : undefined
+                      page: cit.page ? parseInt(cit.page, 10) : undefined,
+                      url: cit.url,
+                      is_web: cit.is_web,
                     })}
                     className="group relative flex flex-col gap-1.5 p-3 rounded-xl bg-[var(--bg-card)]/70 hover:bg-[var(--bg-hover)] border border-[var(--border-color)] hover:border-[var(--border-hover)] transition-all cursor-pointer shadow-2xs"
                   >
-                    {/* Top Meta Row */}
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0 truncate">
                         <span className="w-5 h-5 rounded-md bg-[var(--accent-subtle)] text-[var(--accent-primary)] font-mono text-[11px] font-bold flex items-center justify-center flex-shrink-0">
@@ -408,7 +431,13 @@ export const MessageItem = React.memo<MessageItemProps>(({
                         <span className="text-[12.5px] font-medium text-[var(--text-main)] truncate group-hover:text-[var(--accent-primary)] transition-colors">
                           {cit.filename}
                         </span>
-                        {cit.page && (
+                        {cit.is_web && (
+                          <span className="text-[10.5px] font-medium text-[var(--accent-primary)] bg-[var(--accent-subtle)] px-1.5 py-0.5 rounded flex items-center gap-1 flex-shrink-0">
+                            <Globe size={10} />
+                            <span>Web</span>
+                          </span>
+                        )}
+                        {cit.page && !cit.is_web && (
                           <span className="text-[11px] font-mono text-[var(--text-muted)] bg-[var(--bg-input)] px-1.5 py-0.5 rounded border border-[var(--border-color)] flex-shrink-0">
                             p. {cit.page}
                           </span>
@@ -422,17 +451,18 @@ export const MessageItem = React.memo<MessageItemProps>(({
                           onInspectDoc({
                             filename: cit.filename,
                             content: cit.quote,
-                            page: cit.page ? parseInt(cit.page, 10) : undefined
+                            page: cit.page ? parseInt(cit.page, 10) : undefined,
+                            url: cit.url,
+                            is_web: cit.is_web,
                           });
                         }}
-                        title="Inspect document"
+                        title={cit.is_web ? "Inspect web preview" : "Inspect document"}
                       >
                         <span>View</span>
                         <ExternalLink size={11} />
                       </button>
                     </div>
 
-                    {/* Clean Quoted Excerpt */}
                     {cit.quote && (
                       <div className="mt-0.5 pl-2.5 ml-1 border-l-2 border-[var(--accent-primary)]/50 text-[12px] leading-relaxed text-[var(--text-muted)] group-hover:text-[var(--text-main)]/90 transition-colors select-text font-normal">
                         &ldquo;{cit.quote}&rdquo;
@@ -446,7 +476,6 @@ export const MessageItem = React.memo<MessageItemProps>(({
         </div>
       )}
 
-      {/* RETRIEVED GROUNDING CONTEXT SOURCES ACCORDION */}
       {message.contexts && message.contexts.length > 0 && (
         <div className="mt-2.5 pt-2.5 border-t border-[var(--border-color)]">
           <div 
@@ -482,11 +511,18 @@ export const MessageItem = React.memo<MessageItemProps>(({
               <div className="flex flex-col gap-1.5 pt-0.5">
                 {message.contexts.map((ctx: ContextChunk, idx: number) => {
                   const fname = ctx.filename || ctx.source || 'document';
+                  const isWebCtx = Boolean(ctx.is_web || ctx.url || fname.startsWith('[Web]'));
                   return (
                     <div 
                       key={idx}
                       className="flex items-center justify-between p-2.5 rounded-xl bg-[var(--bg-card)]/50 hover:bg-[var(--bg-hover)] border border-[var(--border-color)] hover:border-[var(--border-hover)] text-xs cursor-pointer transition-all group"
-                      onClick={() => onInspectDoc({ filename: fname, content: ctx.parent_content || ctx.content, page: ctx.page })}
+                      onClick={() => onInspectDoc({
+                        filename: fname,
+                        content: ctx.parent_content || ctx.content,
+                        page: ctx.page,
+                        url: ctx.url,
+                        is_web: isWebCtx,
+                      })}
                     >
                       <div className="flex items-center gap-2 truncate pr-2">
                         <span className="w-4.5 h-4.5 rounded text-[11px] font-bold bg-[var(--bg-input)] text-[var(--text-muted)] font-mono flex items-center justify-center flex-shrink-0">
@@ -496,7 +532,13 @@ export const MessageItem = React.memo<MessageItemProps>(({
                         <span className="font-medium text-[var(--text-main)] truncate text-[12px] group-hover:text-[var(--accent-primary)] transition-colors">
                           {fname}
                         </span>
-                        {ctx.page && (
+                        {isWebCtx && (
+                          <span className="text-[10px] font-medium text-[var(--accent-primary)] bg-[var(--accent-subtle)] px-1.5 py-0.2 rounded flex items-center gap-1 flex-shrink-0">
+                            <Globe size={10} />
+                            <span>Live Web</span>
+                          </span>
+                        )}
+                        {ctx.page && !isWebCtx && (
                           <span className="text-[11px] font-mono text-[var(--text-muted)] bg-[var(--bg-input)] px-1.5 py-0.5 rounded flex-shrink-0">
                             p. {ctx.page}
                           </span>
@@ -518,7 +560,6 @@ export const MessageItem = React.memo<MessageItemProps>(({
         </div>
       )}
 
-      {/* Message Actions Bar - Render ONLY when the whole response has arrived fully */}
       {(!isStreaming || !isLastAssistant) && bodyText.trim().length > 0 && (
         <div className="flex items-center gap-2 mt-2 text-[var(--text-muted)] text-xs select-none fade-in">
           <button 

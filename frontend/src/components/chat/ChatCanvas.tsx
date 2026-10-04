@@ -78,12 +78,10 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
       return;
     }
 
-    // Smooth fluid glide: step 30% of remaining distance (minimum 2px for responsive line tracking)
     el.scrollTop = el.scrollTop + Math.max(2, diff * 0.3);
     rafIdRef.current = requestAnimationFrame(stepScroll);
   }, []);
 
-  // Smooth gliding motion during token streaming; instant lock on finished messages
   useLayoutEffect(() => {
     const el = scrollContainerRef.current;
     if (!el || !isNearBottomRef.current) return;
@@ -101,7 +99,6 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
     }
   }, [messages, isStreaming, stepScroll]);
 
-  // Clean up RAF on unmount
   useEffect(() => {
     return () => {
       if (rafIdRef.current !== null) {
@@ -110,7 +107,6 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
     };
   }, []);
 
-  // Hardware wheel tracking: pause if user wheels up, resume if user scrolls to bottom
   const handleWheel = (e: React.WheelEvent) => {
     const el = scrollContainerRef.current;
     if (!el) return;
@@ -137,7 +133,6 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
     }
   };
 
-  // Reset to bottom on session change
   useEffect(() => {
     isNearBottomRef.current = true;
     if (scrollContainerRef.current) {
@@ -159,7 +154,6 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[var(--bg-dark)]">
-      {/* Scrollable Message Feed */}
       <div 
         ref={scrollContainerRef}
         onScroll={handleScroll}
@@ -167,10 +161,8 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
         className="flex-1 overflow-y-auto px-4 sm:px-6 pt-6 pb-6"
       >
         <div className="max-w-4xl mx-auto w-full">
-          {/* Loading Skeleton when switching sessions */}
           {isLoadingMessages && messages.length === 0 ? (
             <div className="flex flex-col gap-6 py-4 animate-in fade-in duration-200">
-              {/* User Prompt Skeleton */}
               <div className="flex justify-end">
                 <div className="max-w-[70%] rounded-2xl rounded-tr-xs bg-[var(--bg-card)] border border-[var(--border-color)] px-4 py-3 shadow-xs animate-pulse flex flex-col gap-2">
                   <div className="h-3.5 w-48 rounded bg-[var(--border-color)]/70" />
@@ -178,7 +170,6 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
                 </div>
               </div>
 
-              {/* Assistant Response Skeleton */}
               <div className="flex gap-3.5 items-start">
                 <div className="w-7 h-7 rounded-lg bg-[var(--accent-subtle)] flex items-center justify-center flex-shrink-0 animate-pulse">
                   <div className="w-3.5 h-3.5 rounded-full bg-[var(--accent-primary)]/40" />
@@ -189,7 +180,6 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
                   <div className="h-3.5 w-[70%] rounded bg-[var(--border-color)]/50" />
                   <div className="h-3.5 w-[90%] rounded bg-[var(--border-color)]/60" />
                   
-                  {/* Context pills skeleton */}
                   <div className="flex gap-2 pt-2 border-t border-[var(--border-color)]">
                     <div className="h-5 w-28 rounded-full bg-[var(--bg-input)]" />
                     <div className="h-5 w-36 rounded-full bg-[var(--bg-input)]" />
@@ -219,7 +209,6 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
             )
           ) : null}
 
-          {/* Message List */}
           {messages.map((msg, idx) => {
             const isLastAssistant = idx === messages.length - 1 && msg.role === 'assistant';
             return (
@@ -240,9 +229,7 @@ export const ChatCanvas: React.FC<ChatCanvasProps> = ({
         </div>
       </div>
 
-      {/* Docked Bottom Input Area */}
       <div className="flex-shrink-0 relative z-20 bg-[var(--bg-dark)] pb-4 pt-1 px-4 sm:px-6">
-        {/* Subtle, soft gradient fade directly above the input boundary */}
         <div className="absolute inset-x-0 bottom-full h-6 pointer-events-none bg-gradient-to-t from-[var(--bg-dark)] to-transparent" />
 
         <div className="w-full max-w-4xl mx-auto">

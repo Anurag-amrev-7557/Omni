@@ -64,11 +64,9 @@ export const GitHubConnectorModal: React.FC<GitHubConnectorModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Preview state
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
 
-  // Real-time streaming sync state
   const [syncCurrent, setSyncCurrent] = useState(0);
   const [syncTotal, setSyncTotal] = useState(0);
   const [currentSyncPath, setCurrentSyncPath] = useState('');
@@ -160,7 +158,6 @@ export const GitHubConnectorModal: React.FC<GitHubConnectorModalProps> = ({
             ...prev,
           ]);
 
-          // Immediately inject entry into the knowledge vault table
           if (event.status === 'success' && event.filename) {
             onAddDocument?.({
               filename: event.filename,
@@ -204,7 +201,6 @@ export const GitHubConnectorModal: React.FC<GitHubConnectorModalProps> = ({
     }
   };
 
-  // Group files by top-level directory
   const groupedFiles = preview?.files.reduce<Record<string, GitHubFile[]>>((acc, file) => {
     const parts = file.path.split('/');
     const group = parts.length > 1 ? parts[0] : '(root)';
@@ -230,7 +226,6 @@ export const GitHubConnectorModal: React.FC<GitHubConnectorModalProps> = ({
         className="w-full max-w-xl rounded-2xl bg-[var(--bg-modal)] border border-[var(--border-color)] shadow-2xl flex flex-col max-h-[85vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[var(--border-color)]">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-[var(--accent-subtle)] flex items-center justify-center">
@@ -259,9 +254,7 @@ export const GitHubConnectorModal: React.FC<GitHubConnectorModalProps> = ({
           </button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {/* Error */}
           {error && (
             <div className="flex items-start gap-2 p-3 mb-4 rounded-xl bg-red-500/8 border border-red-500/20 text-[12.5px] text-red-400">
               <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
@@ -269,7 +262,6 @@ export const GitHubConnectorModal: React.FC<GitHubConnectorModalProps> = ({
             </div>
           )}
 
-          {/* Step: Input */}
           {step === 'input' && (
             <div className="space-y-3.5">
               <div>
@@ -335,10 +327,8 @@ export const GitHubConnectorModal: React.FC<GitHubConnectorModalProps> = ({
             </div>
           )}
 
-          {/* Step: Preview */}
           {step === 'preview' && preview && (
             <div className="space-y-3">
-              {/* Stats row */}
               <div className="flex items-center gap-3 text-[12px] text-[var(--text-muted)]">
                 <span className="font-medium text-[var(--text-main)]">{preview.matched_count} files</span>
                 <span>·</span>
@@ -353,7 +343,6 @@ export const GitHubConnectorModal: React.FC<GitHubConnectorModalProps> = ({
                 )}
               </div>
 
-              {/* Select all toggle */}
               <button
                 className="text-[12px] font-medium text-[var(--accent-primary)] hover:underline cursor-pointer"
                 onClick={toggleAll}
@@ -361,7 +350,6 @@ export const GitHubConnectorModal: React.FC<GitHubConnectorModalProps> = ({
                 {selectedPaths.size === preview.files.length ? 'Deselect All' : 'Select All'}
               </button>
 
-              {/* Grouped file tree */}
               <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-1">
                 {Object.entries(groupedFiles)
                   .sort(([a], [b]) => a.localeCompare(b))
@@ -403,10 +391,8 @@ export const GitHubConnectorModal: React.FC<GitHubConnectorModalProps> = ({
             </div>
           )}
 
-          {/* Step: Syncing with Live Progress */}
           {step === 'syncing' && (
             <div className="py-4 space-y-4">
-              {/* Progress Card */}
               <div className="p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] space-y-2.5">
                 <div className="flex items-center justify-between text-[12.5px] font-medium text-[var(--text-main)]">
                   <span className="flex items-center gap-2">
@@ -418,7 +404,6 @@ export const GitHubConnectorModal: React.FC<GitHubConnectorModalProps> = ({
                   </span>
                 </div>
 
-                {/* Progress Bar */}
                 <div className="w-full h-2 rounded-full bg-[var(--bg-input)] overflow-hidden">
                   <div
                     className="h-full bg-[var(--accent-primary)] transition-all duration-300 rounded-full"
@@ -436,7 +421,6 @@ export const GitHubConnectorModal: React.FC<GitHubConnectorModalProps> = ({
                 </div>
               </div>
 
-              {/* Live Streaming Feed */}
               {streamedFiles.length > 0 && (
                 <div className="space-y-1.5">
                   <div className="text-[12px] font-semibold text-[var(--text-main)] px-0.5 flex items-center justify-between">
@@ -474,7 +458,6 @@ export const GitHubConnectorModal: React.FC<GitHubConnectorModalProps> = ({
             </div>
           )}
 
-          {/* Step: Done */}
           {step === 'done' && syncResult && (
             <div className="space-y-4">
               <div className="flex flex-col items-center text-center py-6">
@@ -490,7 +473,6 @@ export const GitHubConnectorModal: React.FC<GitHubConnectorModalProps> = ({
                 </p>
               </div>
 
-              {/* Ingested files summary */}
               {syncResult.ingested_files.length > 0 && (
                 <div className="max-h-32 overflow-y-auto space-y-0.5">
                   {syncResult.ingested_files.map((f) => (
@@ -502,7 +484,6 @@ export const GitHubConnectorModal: React.FC<GitHubConnectorModalProps> = ({
                 </div>
               )}
 
-              {/* Failed files */}
               {syncResult.failed_files.length > 0 && (
                 <div className="max-h-24 overflow-y-auto space-y-0.5">
                   {syncResult.failed_files.map((f) => (
@@ -517,7 +498,6 @@ export const GitHubConnectorModal: React.FC<GitHubConnectorModalProps> = ({
           )}
         </div>
 
-        {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--border-color)]">
           <div className="text-[12px] text-[var(--text-muted)]">
             {step === 'input' && 'Step 1 of 3 · Connect'}

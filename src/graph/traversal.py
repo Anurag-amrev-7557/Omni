@@ -33,7 +33,6 @@ def traverse_subgraph(
 
     keywords = extract_query_keywords(query)
 
-    # Match Seed Entities
     matched_nodes = []
     for n in nodes:
         name_lower = n["name"].lower()
@@ -63,7 +62,6 @@ def traverse_subgraph(
 
     nodes_map = {n["id"]: n for n in nodes}
 
-    # 1-Hop and 2-Hop Traversal
     current_frontier = set(seed_ids)
     for hop in range(1, max_hops + 1):
         next_frontier = set()
@@ -98,7 +96,6 @@ def traverse_subgraph(
         if not current_frontier:
             break
 
-    # Build Graph Context Chunks for LLM prompt augmentation
     graph_contexts = []
     for h in provenance_hops[:6]:
         snippet_text = (

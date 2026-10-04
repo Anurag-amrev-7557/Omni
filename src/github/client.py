@@ -10,7 +10,6 @@ from typing import Optional, List, Tuple
 from src.core.auth import get_ssl_context
 from src.ingestion.extractors import SUPPORTED_EXTENSIONS
 
-# Directories and files to automatically ignore
 IGNORED_PATTERNS = {
     ".git", ".github", "node_modules", "dist", "build",
     "target", ".venv", "venv", "__pycache__", ".next",
@@ -134,22 +133,18 @@ def fetch_repo_tree(
         path = item.get("path", "")
         size = item.get("size", 0)
 
-        # Ignore non-matching paths
         path_parts = path.split("/")
         if any(part in IGNORED_PATTERNS for part in path_parts):
             continue
 
-        # Subfolder filter
         if subfolder_clean and not path.startswith(subfolder_clean + "/") and path != subfolder_clean:
             continue
 
-        # Extension filter
         _, ext = os.path.splitext(path)
         ext_lower = ext.lower()
         if ext_lower not in allowed_exts:
             continue
 
-        # Skip files that are unusually large for RAG text extraction (> 3MB)
         if size > 3 * 1024 * 1024:
             continue
 

@@ -20,7 +20,6 @@ class TestEnterpriseRAG(unittest.TestCase):
         self.assertIn("Project 2", parents[0].page_content)
         self.assertIn("Project 3", parents[0].page_content)
         self.assertTrue(len(children) > 1)
-        # Verify contextual enrichment
         self.assertIn("Document: test.pdf (Page 1)", children[0].page_content)
 
     def test_adaptive_chunking_large_document(self):
@@ -59,7 +58,6 @@ class TestEnterpriseRAG(unittest.TestCase):
         mock_vstore.return_value = mock_inst
 
         results = hybrid_search("test query", k=5, user_id="test-uid-12345")
-        # Should have exactly 2 distinct parent windows, not duplicate AAA
         self.assertEqual(len(results), 2)
         parent_ids = [r["parent_id"] for r in results]
         self.assertEqual(parent_ids, ["parent_AAA", "parent_BBB"])

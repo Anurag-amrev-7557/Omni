@@ -43,7 +43,6 @@ def split_hierarchical_chunks(
     total_chars = sum(len(p.page_content) for p in pages)
     parent_splitter = get_parent_splitter()
 
-    # Adaptive: Preserve whole pages if single page or brief document
     if len(pages) == 1 or total_chars <= 4000:
         parent_docs = []
         for p in pages:

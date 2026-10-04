@@ -1,6 +1,5 @@
 """Centralized Repository of All LLM Prompt Templates for Omni RAG."""
 
-# 1. RAG Grounding & Answer Generation Prompt
 GROUNDING_RAG_PROMPT = """You are an expert technical analyst. Answer the user's question using the provided context and vault manifest below.
 
 CRITICAL PRESENTATION & CITATION INSTRUCTIONS:
@@ -22,7 +21,6 @@ Context:
 Question: {query}
 """
 
-# 2. Vault Inventory Manifest Only (when no vector content matched)
 VAULT_INVENTORY_PROMPT = """You are an expert technical analyst. The user is asking about the contents of the Knowledge Vault.
 Use the manifest below to list and describe the documents currently available:
 
@@ -31,7 +29,6 @@ Use the manifest below to list and describe the documents currently available:
 Question: {query}
 """
 
-# 2b. Conversational Greetings and Pleasantries
 CONVERSATIONAL_GREETING_PROMPT = """You are Omni RAG, an intelligent AI research assistant equipped with a Knowledge Vault of documents and hybrid search capabilities.
 The user is reaching out with a greeting or opening inquiry: "{query}".
 
@@ -40,7 +37,6 @@ Respond warmly, concisely, and helpfully. Let the user know you are ready to ana
 {instructions_clause}
 """
 
-# 2c. Vault Empty General Answer Prompt
 VAULT_EMPTY_PROMPT = """You are Omni RAG, an intelligent AI research assistant.
 There are currently no documents uploaded in the Knowledge Vault.
 The user is asking: "{query}".
@@ -54,7 +50,6 @@ At the very end of your response, add a brief note reminding the user:
 
 
 
-# 3. Conversational Memory Query Reformulation
 QUERY_REFORMULATION_PROMPT = """Rephrase this follow-up question into a standalone search query based on chat history. Output ONLY the rephrased query without quotes or preamble.
 
 Chat History:
@@ -63,18 +58,15 @@ Chat History:
 Follow-Up: {query}
 Standalone Query:"""
 
-# 4. Multi-Topic Query Decomposition
 QUERY_DECOMPOSITION_PROMPT = """Break this multi-topic search query into separate standalone search queries separated by a pipe character (|). Output ONLY the pipe-separated queries.
 Example: Compare revenue of Acme and CEO background -> Acme revenue | CEO background
 Query: {query}
 Output:"""
 
-# 5. Fast Document Executive Summary
 DOCUMENT_SUMMARY_PROMPT = """Write a one-sentence summary of this document excerpt:
 
 {preview}"""
 
-# 6. Entity-Relation Knowledge Graph Extraction
 GRAPH_EXTRACTION_PROMPT = """You are a Principal Knowledge Graph and Ontology Engineer.
 Your objective is to extract high-precision, factual real-world entities and their directed relationships from the provided text.
 
@@ -156,7 +148,6 @@ Text Chunk (from document '{filename}', page {page}):
 \"\"\"
 """
 
-# 7. Knowledge Graph Community Theme & Insights
 COMMUNITY_SUMMARY_PROMPT = """You are a Principal Enterprise Knowledge Architect.
 Analyze this thematic cluster of interconnected knowledge graph entities from the user's documents and write an executive community summary.
 

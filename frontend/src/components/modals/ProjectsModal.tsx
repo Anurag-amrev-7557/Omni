@@ -38,7 +38,6 @@ export const ProjectsModal: React.FC<ProjectsModalProps> = ({
           Organize document sets into custom workspace projects with dedicated vector collections.
         </p>
 
-        {/* Project List */}
         <div className="space-y-2 mb-5">
           <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] text-xs">
             <div className="flex items-center gap-2.5">

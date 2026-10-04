@@ -1,4 +1,3 @@
-// MiroFish-Style Pastel Color Palette by Entity Type
 export const ENTITY_PALETTES: Record<string, { bg: string; border: string; label: string }> = {
   Entity: { bg: '#FB923C', border: '#EA580C', label: 'Entity' },
   Concept: { bg: '#FB923C', border: '#EA580C', label: 'Concept' },

@@ -63,7 +63,6 @@ def ingest_file(
     if ext not in SUPPORTED_EXTENSIONS:
         raise ValueError(f"Unsupported file format '{ext}'. Supported: PDF, Markdown, Text, and Source Code files.")
 
-    # 1. Document Page Extraction (Single-pass or reuse preloaded)
     if preloaded_pages is not None:
         pages = preloaded_pages
     elif file_bytes is not None:
@@ -74,7 +73,6 @@ def ingest_file(
     if not pages:
         raise ValueError(f"No text content could be extracted from {filename}.")
 
-    # 2. Executive Summary
     if generate_ai_summary and ext in {".pdf", ".md", ".txt"}:
         summary = generate_summary(pages)
     else:
@@ -82,7 +80,6 @@ def ingest_file(
         page_word = "page" if len(pages) == 1 else "pages"
         summary = f"{filename} ({len(pages)} {page_word}, ~{total_words:,} words)"
 
-    # 3. Hierarchical Chunking
     if on_progress:
         on_progress("chunking", 30, f"Splitting {len(pages)} pages into semantic chunks...")
 
@@ -93,7 +90,6 @@ def ingest_file(
         user_id=norm_uid,
     )
 
-    # 4. Dense Vector Indexing with SIMD/Batched Vector Store Insertion
     if on_progress:
         on_progress("embedding", 60, f"Generating dense embeddings for {len(child_documents)} chunks...")
 
@@ -121,7 +117,6 @@ def ingest_file(
     if on_progress:
         on_progress("completed", 100, f"Indexed successfully ({elapsed_time:.1f}s)")
 
-    # 5. Optional Knowledge Graph Extraction
     if extract_graph and chunks_to_process:
         _run_knowledge_graph_pipeline(chunks_to_process, filename, norm_uid)
 
@@ -163,5 +158,4 @@ def extract_graph_for_file(
     _run_knowledge_graph_pipeline(_sample_chunks(parent_docs), clean_fn, norm_uid)
 
 
-# Backward-compatibility alias
 ingest_pdf = ingest_file

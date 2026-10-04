@@ -37,7 +37,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
   const isDark = theme === 'dark';
   const themeAccent = currentConfig?.previewColors?.accent || '#0284C7';
 
-  // Data State
   const [graphData, setGraphData] = useState<KnowledgeGraphData>({
     nodes: [],
     links: [],
@@ -47,40 +46,34 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
   const [loading, setLoading] = useState<boolean>(true);
   const [building, setBuilding] = useState<boolean>(false);
 
-  // Filter & Search State
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedDoc, setSelectedDoc] = useState<string>('All');
   const [selectedType, setSelectedType] = useState<string>('All');
   const [filterCommunity, setFilterCommunity] = useState<number | null>(null);
 
-  // Inspection Drawers & Modals
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [selectedLink, setSelectedLink] = useState<GraphLink | null>(null);
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [insightsOpen, setInsightsOpen] = useState<boolean>(false);
 
-  // View Settings
   const [showEdgeLabels, setShowEdgeLabels] = useState<boolean>(false);
   const [showLabels, setShowLabels] = useState<boolean>(true);
   const [physicsEnabled, setPhysicsEnabled] = useState<boolean>(true);
   const [docDropdownOpen, setDocDropdownOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
 
-  // Canvas References
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const nodesRef = useRef<GraphNode[]>([]);
   const linksRef = useRef<GraphLink[]>([]);
   const animFrameRef = useRef<number>(0);
-  const alphaRef = useRef<number>(1.0); // Simulation temperature / cooling
+  const alphaRef = useRef<number>(1.0);
   const triggerRenderRef = useRef<(() => void) | null>(null);
 
-  // Camera & Interaction
   const transformRef = useRef<{ x: number; y: number; k: number }>({ x: 0, y: 0, k: 1 });
   const isDraggingCanvasRef = useRef<boolean>(false);
   const dragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const draggedNodeRef = useRef<GraphNode | null>(null);
 
-  // Load Graph Data
   const loadGraph = useCallback(async () => {
     try {
       setLoading(true);
@@ -89,7 +82,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
       const width = canvasRef.current?.clientWidth || 800;
       const height = canvasRef.current?.clientHeight || 600;
       
-      // Retain previous coordinates if nodes existed, otherwise distribute evenly
       const existingPos = new Map(nodesRef.current.map(n => [n.id, { x: n.x, y: n.y }]));
       
       const initializedNodes = (data.nodes || []).map((n: GraphNode, i: number) => {
@@ -108,7 +100,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
         };
       });
 
-      // Deduplicate Links
       const seenPair = new Set<string>();
       const dedupedLinks: GraphLink[] = [];
       for (const l of (data.links || [])) {
@@ -124,7 +115,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
 
       nodesRef.current = initializedNodes;
       linksRef.current = dedupedLinks;
-      alphaRef.current = 1.0; // Heat simulation for new layout
+      alphaRef.current = 1.0;
 
       setGraphData({
         nodes: initializedNodes,
@@ -147,7 +138,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
     loadGraph();
   }, [loadGraph, vaultVersion]);
 
-  // Trigger Rebuild
   const handleRebuild = async () => {
     try {
       setBuilding(true);
@@ -167,7 +157,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
     }
   };
 
-  // Filter calculations
   const sourceDocs = useMemo(() => {
     const docs = new Set<string>(['All']);
     graphData.nodes.forEach(n => {
@@ -256,7 +245,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
     setSearchFocused(false);
   }, []);
 
-  // Screen to World coordinates
   const screenToWorld = useCallback((screenX: number, screenY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
@@ -268,7 +256,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
     };
   }, []);
 
-  // Camera Controls
   const handleZoom = (factor: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -314,7 +301,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
     triggerRenderRef.current?.();
   };
 
-  // Convergent Kinetic Simulation & High-DPI Rendering
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -334,7 +320,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
     handleResize();
     window.addEventListener('resize', handleResize);
 
-    // Convergent Force Simulation Step (Stable, bounded, decaying)
     const runSimulationStep = () => {
       if (!physicsEnabled || alphaRef.current < 0.005) return;
       
@@ -346,7 +331,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
       const alpha = alphaRef.current;
       const nodeMap = new Map(nodes.map(n => [n.id, n]));
 
-      // 1. Soft Centering Gravity
       for (const n of nodes) {
         if (n === draggedNodeRef.current) continue;
         const dx = center.x - (n.x || 0);
@@ -355,7 +339,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
         n.vy = (n.vy || 0) + dy * 0.0004 * alpha;
       }
 
-      // 2. Coulomb Node Repulsion & Collision Buffer (Prevents crowded clusters)
       for (let i = 0; i < nodes.length; i++) {
         const a = nodes[i];
         for (let j = i + 1; j < nodes.length; j++) {
@@ -366,7 +349,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
           const dist = Math.max(12, Math.sqrt(distSq));
           
           let force = (alpha * 1350) / (dist * dist);
-          // Collision buffer to keep node circles and labels separated
           if (dist < 52) {
             force += (52 - dist) * 0.16 * alpha;
           }
@@ -385,7 +367,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
         }
       }
 
-      // 3. Link Spring Attraction with hub degree roominess
       for (const link of links) {
         const srcId = typeof link.source === 'object' ? (link.source as any).id : link.source;
         const tgtId = typeof link.target === 'object' ? (link.target as any).id : link.target;
@@ -414,7 +395,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
         }
       }
 
-      // 4. Velocity Damping & Integration
       const damping = 0.84;
       for (const n of nodes) {
         if (n === draggedNodeRef.current) continue;
@@ -424,11 +404,9 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
         n.y = (n.y || 0) + (n.vy || 0);
       }
 
-      // Thermal Decay (gradually cool down and settle completely)
       alphaRef.current *= 0.985;
     };
 
-    // Render Canvas Frame
     const render = () => {
       if (!isRunning) return;
       runSimulationStep();
@@ -442,7 +420,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
       ctx.translate(transform.x, transform.y);
       ctx.scale(transform.k, transform.k);
 
-      // Subtle Dot Grid (Batched single-path GPU rasterization)
       const gridSize = 40;
       const startX = Math.floor((-transform.x / transform.k) / gridSize) * gridSize - gridSize;
       const endX = startX + (width / transform.k) + gridSize * 2;
@@ -463,7 +440,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
       const nodeMap = new Map(nodes.map(n => [n.id, n]));
       const isFilteringActive = selectedDoc !== 'All' || selectedType !== 'All' || filterCommunity !== null;
 
-      // 1. Draw Links
       const renderedLabelPositions: { x: number; y: number }[] = [];
       for (let i = 0; i < links.length; i++) {
         const link = links[i];
@@ -508,7 +484,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
         }
         ctx.stroke();
 
-        // Edge Label Badge with collision avoidance
         const shouldShowLabel = isHighlighted || (showEdgeLabels && transform.k > 0.65 && dist > 70);
         if (shouldShowLabel) {
           const isColliding = renderedLabelPositions.some(p => Math.hypot(p.x - midX, p.y - midY) < 32);
@@ -540,7 +515,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
         ctx.restore();
       }
 
-      // 2. Draw Nodes (Pre-compute selected node neighbors for O(1) adjacency checks)
       const selectedNodeNeighbors = new Set<string>();
       if (selectedNode) {
         for (let i = 0; i < links.length; i++) {
@@ -565,7 +539,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
 
         ctx.save();
 
-        // Active Theme Glow for Selected Node
         if (isSelected) {
           ctx.beginPath();
           ctx.arc(node.x || 0, node.y || 0, radius + 5, 0, Math.PI * 2);
@@ -573,18 +546,15 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
           ctx.fill();
         }
 
-        // Main Node Body
         ctx.beginPath();
         ctx.arc(node.x || 0, node.y || 0, radius, 0, Math.PI * 2);
         ctx.fillStyle = isSelected ? themeAccent : nodeStyle.bg;
         ctx.fill();
 
-        // Crisp Border
         ctx.strokeStyle = '#FFFFFF';
         ctx.lineWidth = isSelected ? 1.8 : 1.2;
         ctx.stroke();
 
-        // Node Label
         if (showLabels && (transform.k > 0.45 || isHovered || isSelected || isConnectedToSelected)) {
           const displayName = node.name.length > 14 ? node.name.slice(0, 13) + '…' : node.name;
           ctx.font = `${isSelected ? 'bold 11px' : isHovered ? '600 10.5px' : '500 10px'} "JetBrains Mono", -apple-system, sans-serif`;
@@ -592,13 +562,11 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
           const labelX = (node.x || 0) + radius + 5;
           const labelY = (node.y || 0);
 
-          // Dark / Light Halo
           ctx.lineJoin = 'round';
           ctx.strokeStyle = isDark ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.95)';
           ctx.lineWidth = 2.6;
           ctx.strokeText(displayName, labelX, labelY);
 
-          // Label Text
           ctx.fillStyle = isSelected 
             ? themeAccent 
             : isHovered 
@@ -614,7 +582,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
 
       ctx.restore();
 
-      // Adaptive Sleep: Only schedule animation frames when physics is moving or interacting
       const isSimulating = physicsEnabled && alphaRef.current >= 0.005;
       const isInteracting = draggedNodeRef.current !== null || isDraggingCanvasRef.current;
       if (isSimulating || isInteracting) {
@@ -643,7 +610,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
     };
   }, [activeNodeIds, selectedNode, selectedLink, hoveredNode, showLabels, showEdgeLabels, physicsEnabled, isDark, themeAccent, selectedDoc, selectedType, filterCommunity]);
 
-  // Smooth Non-Passive Wheel Zoom with cursor anchoring
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -671,7 +637,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
     };
   }, []);
 
-  // Mouse Interaction Handlers
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (docDropdownOpen) setDocDropdownOpen(false);
     if (searchFocused) setSearchFocused(false);
@@ -679,7 +644,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
     const world = screenToWorld(e.clientX, e.clientY);
     const isFilteringActive = selectedDoc !== 'All' || selectedType !== 'All' || filterCommunity !== null;
     
-    // 1. Check Node Click
     const clickedNode = nodesRef.current.find((n) => {
       if (isFilteringActive && !activeNodeIds.has(n.id)) return false;
       const dx = (n.x || 0) - world.x;
@@ -691,11 +655,10 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
       draggedNodeRef.current = clickedNode;
       setSelectedNode(clickedNode);
       setSelectedLink(null);
-      alphaRef.current = 0.25; // Reheat physics smoothly
+      alphaRef.current = 0.25;
       return;
     }
 
-    // 2. Check Edge Click (Perpendicular segment distance)
     const nodeMap = new Map(nodesRef.current.map(n => [n.id, n]));
     const clickedLink = linksRef.current.find((link) => {
       const srcId = typeof link.source === 'object' ? (link.source as any).id : link.source;
@@ -712,7 +675,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
       const projX = x1 + t * (x2 - x1);
       const projY = y1 + t * (y2 - y1);
       const dSq = (world.x - projX) * (world.x - projX) + (world.y - projY) * (world.y - projY);
-      return dSq < 64; // Within 8px of link segment
+      return dSq < 64;
     });
 
     if (clickedLink) {
@@ -721,7 +684,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
       return;
     }
 
-    // 3. Canvas Pan
     isDraggingCanvasRef.current = true;
     dragStartRef.current = { x: e.clientX - transformRef.current.x, y: e.clientY - transformRef.current.y };
     setSelectedNode(null);
@@ -731,7 +693,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const world = screenToWorld(e.clientX, e.clientY);
 
-    // Node Dragging
     if (draggedNodeRef.current) {
       draggedNodeRef.current.x = world.x;
       draggedNodeRef.current.y = world.y;
@@ -742,7 +703,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
       return;
     }
 
-    // Canvas Panning
     if (isDraggingCanvasRef.current) {
       transformRef.current.x = e.clientX - dragStartRef.current.x;
       transformRef.current.y = e.clientY - dragStartRef.current.y;
@@ -750,7 +710,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
       return;
     }
 
-    // Node Hovering
     const isFilteringActive = selectedDoc !== 'All' || selectedType !== 'All' || filterCommunity !== null;
     const found = nodesRef.current.find((n) => {
       if (isFilteringActive && !activeNodeIds.has(n.id)) return false;
@@ -768,11 +727,8 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
 
   return (
     <div className="relative w-full h-full flex flex-col bg-[var(--bg-main)] overflow-hidden select-none">
-      {/* Top Floating Control Bar */}
       <div className="absolute top-5 left-5 right-5 z-20 flex flex-wrap items-center justify-between gap-3 pointer-events-none">
-        {/* Left: Search & Document Selector */}
         <div className="flex items-center gap-3 pointer-events-auto">
-          {/* Search Pill */}
           <div className="relative">
             <div className="relative flex items-center">
               <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10 pointer-events-none text-[var(--text-muted)]">
@@ -803,7 +759,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
               )}
             </div>
 
-            {/* Suggestions Dropdown */}
             {searchFocused && searchResults.length > 0 && (
               <div className="absolute left-0 mt-2 w-80 p-2 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-2xl z-50 flex flex-col gap-1 text-[13px] animate-in fade-in duration-100">
                 <div className="px-3 py-1 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
@@ -830,7 +785,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
             )}
           </div>
 
-          {/* Document Filter Dropdown */}
           <div className="relative">
             <button
               type="button"
@@ -873,9 +827,7 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
           </div>
         </div>
 
-        {/* Right: Edge Labels, Insights, Rebuild */}
         <div className="flex items-center gap-2.5 pointer-events-auto">
-          {/* Toggle Edge Labels */}
           <button
             type="button"
             onClick={() => setShowEdgeLabels(!showEdgeLabels)}
@@ -889,7 +841,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
             <span className="hidden sm:inline">Edge Labels</span>
           </button>
 
-          {/* Insights Trigger */}
           <button
             type="button"
             onClick={() => setInsightsOpen(true)}
@@ -902,7 +853,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
             </span>
           </button>
 
-          {/* Rebuild Trigger */}
           <button
             type="button"
             onClick={handleRebuild}
@@ -915,13 +865,12 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
         </div>
       </div>
 
-      {/* Main Canvas Stage */}
       <div className="flex-1 relative w-full h-full cursor-grab active:cursor-grabbing">
         {loading || (building && graphData.nodes.length === 0) ? (
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-[var(--bg-main)]/65 backdrop-blur-xs select-none animate-in fade-in duration-200">
             <div className="relative flex items-center justify-center">
               <div className="absolute w-24 h-24 rounded-full bg-[var(--accent-primary)]/15 blur-xl animate-pulse pointer-events-none" />
-              <OrbitingOrbLoader size="lg" />
+              <OrbitingOrbLoader size="lg" state={building ? "connecting" : "searching"} />
             </div>
             <div className="flex flex-col items-center gap-1.5 text-center">
               <span className="text-[13px] font-medium text-[var(--text-main)] tracking-wide flex items-center gap-1.5">
@@ -974,7 +923,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
           className="w-full h-full block"
         />
 
-        {/* Entity Types Legend */}
         {presentEntityTypes.length > 0 && (
           <div className="absolute bottom-4 left-4 z-20 p-3 sm:p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] shadow-lg flex flex-col gap-2 pointer-events-auto max-w-[calc(100vw-32px)]">
             <div 
@@ -1018,7 +966,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
           </div>
         )}
 
-        {/* Floating Zoom & Controls HUD */}
         <div className="absolute bottom-4 right-4 z-20 flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border-color)] p-1 rounded-full shadow-xl pointer-events-auto">
           <button
             type="button"
@@ -1077,7 +1024,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
         </div>
       </div>
 
-      {/* Node Details Inspector */}
       {selectedNode && (
         <EntityDetailDrawer
           entity={selectedNode}
@@ -1092,7 +1038,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
         />
       )}
 
-      {/* Relationship Details Inspector */}
       {selectedLink && (
         <RelationshipDetailDrawer
           link={selectedLink}
@@ -1106,7 +1051,6 @@ export const KnowledgeGraphView: React.FC<KnowledgeGraphViewProps> = React.memo(
         />
       )}
 
-      {/* Community Insights Modal */}
       <CommunityInsightsModal
         isOpen={insightsOpen}
         communities={graphData.communities}

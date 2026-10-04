@@ -52,27 +52,40 @@ def delete_chat_session(session_id: str):
     return {"success": True}
 
 
-@router.post("/api/reset")
-def reset_user_workspace(user_id: str = Depends(require_user)):
-    """Resets the requesting user's workspace (vectors, graph, chat history) with strict tenant isolation.
-
-    CRITICAL FIX: Scopes cleanup strictly to the requesting user instead of dropping global tables.
-    """
-    set_current_user(user_id)
+def purge_user_data(user_id: str, purge_uploads: bool = False):
+    """Purges user data (vectors, graph, chat sessions) with tenant isolation."""
     norm_user = normalize_user_id(user_id)
+    try:
+        delete_user_vectors(norm_user)
+    except Exception as e:
+        logger.debug(f"User vector cleanup notice for {norm_user}: {e}")
 
-    # Clean vectors strictly belonging to user
-    delete_user_vectors(norm_user)
-
-    # Clean graph strictly belonging to user
     try:
         clear_user_graph(user_id=norm_user)
     except Exception as e:
-        logger.debug(f"Reset graph notice: {e}")
+        logger.debug(f"User graph cleanup notice for {norm_user}: {e}")
 
-    # Clean user sessions
-    delete_user_sessions(norm_user)
+    try:
+        delete_user_sessions(norm_user)
+    except Exception as e:
+        logger.debug(f"User session cleanup notice for {norm_user}: {e}")
 
+    if purge_uploads:
+        try:
+            target_dir = get_user_uploads_dir(user_id)
+            if os.path.exists(target_dir) and os.path.isdir(target_dir):
+                shutil.rmtree(target_dir, ignore_errors=True)
+                logger.info(f"Removed upload directory: {target_dir}")
+        except Exception as e:
+            logger.warning(f"Upload directory cleanup notice for {user_id}: {e}")
+
+
+@router.post("/api/reset")
+def reset_user_workspace(user_id: str = Depends(require_user)):
+    """Resets the requesting user's workspace (vectors, graph, chat history) with strict tenant isolation."""
+    set_current_user(user_id)
+    norm_user = normalize_user_id(user_id)
+    purge_user_data(norm_user, purge_uploads=False)
     new_id = create_session("New Chat", user_id=norm_user)
     return {"success": True, "new_session_id": new_id}
 
@@ -81,30 +94,8 @@ def cleanup_guest_session(guest_id: str):
     """Purges all files, vectors, knowledge graph, and chat sessions for an ephemeral guest."""
     if not is_guest_user(guest_id):
         return
-
     logger.info(f"Cleaning up ephemeral guest session: {guest_id}")
-    try:
-        delete_user_vectors(guest_id)
-    except Exception as e:
-        logger.warning(f"Guest vector cleanup notice for {guest_id}: {e}")
-
-    try:
-        clear_user_graph(guest_id)
-    except Exception as e:
-        logger.warning(f"Guest graph cleanup notice for {guest_id}: {e}")
-
-    try:
-        delete_user_sessions(guest_id)
-    except Exception as e:
-        logger.warning(f"Guest session cleanup notice for {guest_id}: {e}")
-
-    try:
-        guest_dir = get_user_uploads_dir(guest_id)
-        if os.path.exists(guest_dir) and os.path.isdir(guest_dir):
-            shutil.rmtree(guest_dir, ignore_errors=True)
-            logger.info(f"Removed guest upload directory: {guest_dir}")
-    except Exception as e:
-        logger.warning(f"Guest directory cleanup notice for {guest_id}: {e}")
+    purge_user_data(guest_id, purge_uploads=True)
 
 
 @router.post("/api/guest/cleanup")

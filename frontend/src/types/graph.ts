@@ -1,14 +1,13 @@
 export interface GraphNode {
   id: string;
   name: string;
-  type: string; // 'Concept' | 'System' | 'Technology' | 'Organization' | 'Person' | 'Document'
+  type: string;
   description?: string;
   aliases?: string[];
   community_id: number;
   degree: number;
   pagerank: number;
   source_docs?: string[];
-  // Simulation coordinate props
   x?: number;
   y?: number;
   vx?: number;
@@ -45,15 +44,4 @@ export interface KnowledgeGraphData {
     total_links: number;
     total_communities: number;
   };
-}
-
-export interface GraphHopTrace {
-  hop: number;
-  source: string;
-  target: string;
-  relation: string;
-  description?: string;
-  source_doc: string;
-  page: number;
-  snippet?: string;
 }

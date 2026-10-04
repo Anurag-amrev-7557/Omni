@@ -20,7 +20,6 @@ import { ChatSession, ChatMessage } from './types/chat';
 import { ProjectItem, INITIAL_PROJECTS } from './types/project';
 
 export default function App() {
-  // Navigation & Layout State
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'chats' | 'projects' | 'vault' | 'graph' | 'chats_list'>(() => {
     try {
@@ -32,7 +31,6 @@ export default function App() {
     return 'chats';
   });
 
-  // Persist active tab across page refreshes
   useEffect(() => {
     try {
       localStorage.setItem('omni_active_tab', activeTab);
@@ -40,16 +38,14 @@ export default function App() {
   }, [activeTab]);
 
   const [sidecarOpen, setSidecarOpen] = useState<boolean>(false);
-  const [sidecarDoc, setSidecarDoc] = useState<{ filename: string; content?: string; page?: number } | null>(null);
+  const [sidecarDoc, setSidecarDoc] = useState<{ filename: string; content?: string; page?: number; url?: string; is_web?: boolean } | null>(null);
 
-  // Projects State
   const [projects, setProjects] = useState<ProjectItem[]>(() => {
     const saved = localStorage.getItem('omni_projects');
     if (saved) {
       try {
         return JSON.parse(saved);
       } catch {
-        // fallback
       }
     }
     return INITIAL_PROJECTS;
@@ -58,7 +54,6 @@ export default function App() {
     return localStorage.getItem('omni_active_project') || 'default-vault';
   });
 
-  // Chat & Session Helper: Get cached messages for instant display without waiting for network
   const getCachedMessages = (sessionId: string | null): ChatMessage[] => {
     if (!sessionId) return [];
     try {
@@ -69,7 +64,6 @@ export default function App() {
     }
   };
 
-  // Chat & Session State (Instant SWR hydration from cache)
   const [sessions, setSessions] = useState<ChatSession[]>(() => {
     try {
       const saved = localStorage.getItem('omni_sessions_cache');
@@ -136,19 +130,16 @@ export default function App() {
   const isStreamingRef = useRef<boolean>(false);
   const activeSessionIdRef = useRef<string | null>(currentSessionId);
 
-  // Keep activeSessionIdRef in sync with currentSessionId
   useEffect(() => {
     activeSessionIdRef.current = currentSessionId;
   }, [currentSessionId]);
 
-  // Sync sessions cache with localStorage on every update (including immediate deletions)
   useEffect(() => {
     try {
       localStorage.setItem('omni_sessions_cache', JSON.stringify(sessions));
     } catch {}
   }, [sessions]);
 
-  // Persist active session ID across page refreshes
   useEffect(() => {
     try {
       if (currentSessionId) {
@@ -159,7 +150,6 @@ export default function App() {
     } catch {}
   }, [currentSessionId]);
 
-  // Model & Inference Settings
   const [selectedModel, setSelectedModel] = useState<string>('GPT-OSS 120B');
   const [effortLevel, setEffortLevel] = useState<string>('Medium');
   const [webSearchEnabled, setWebSearchEnabled] = useState<boolean>(() => {
@@ -169,7 +159,6 @@ export default function App() {
   const [similarityTopK, setSimilarityTopK] = useState<number>(12);
   const [rerankLimit, setRerankLimit] = useState<number>(3);
 
-  // Modals
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTabId>('general');
   const [searchOpen, setSearchOpen] = useState<boolean>(false);
@@ -183,7 +172,6 @@ export default function App() {
     setSettingsOpen(true);
   }, []);
 
-  // Toast
   const [toastMessage, setToastMessage] = useState<string>('');
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = useCallback((msg: string, duration = 2600) => {
@@ -200,7 +188,6 @@ export default function App() {
     }
   }, []);
 
-  // Custom Hooks
   const {
     documents,
     stats,
@@ -222,12 +209,10 @@ export default function App() {
 
   const { speakText, startVoiceDictation } = useSpeech(showToast);
 
-  // Fetch Sessions (stable callback with functional state updates to prevent re-render cascades)
   const loadSessions = useCallback(async () => {
     try {
       const sess = await api.getSessions();
       setSessions(prev => {
-        // Preserve any optimistic sessions that the remote server hasn't committed yet
         const optimistic = prev.filter(p => !sess.some(s => s.session_id === p.session_id));
         return [...optimistic, ...sess];
       });
@@ -235,9 +220,7 @@ export default function App() {
         localStorage.setItem('omni_sessions_cache', JSON.stringify(sess));
       } catch {}
       setCurrentSessionId(prev => {
-        // Never hijack or switch sessions while user is streaming
         if (isStreamingRef.current) return prev;
-        // If user intentionally navigated to New Chat (prev === null), preserve it!
         if (prev === null) return null;
         if (prev && sess.some(s => s.session_id === prev)) {
           return prev;
@@ -251,7 +234,6 @@ export default function App() {
     }
   }, []);
 
-  // Fetch Messages for active session (with instant cache hydration)
   const loadMessages = useCallback(async (sessionId: string) => {
     if (isStreamingRef.current) return;
     if (sessionId !== activeSessionIdRef.current) return;
@@ -281,7 +263,6 @@ export default function App() {
     }
   }, []);
 
-  // Instant switch between sessions
   const handleSelectSession = useCallback((sessionId: string) => {
     if (sessionId === currentSessionId) return;
     if (isStreamingRef.current) return;
@@ -297,7 +278,6 @@ export default function App() {
     }
   }, [currentSessionId]);
 
-  // Supabase Auth Integration (registered once on mount)
   useEffect(() => {
     if (supabase) {
       setAuthTokenProvider(async () => {
@@ -308,7 +288,6 @@ export default function App() {
           return null;
         }
       });
-      // Proactive initial session sync
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.user?.id) {
           previousUserIdRef.current = session.user.id;
@@ -320,14 +299,13 @@ export default function App() {
         }
       });
       const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'INITIAL_SESSION') return; // Handled by proactive initial sync
+        if (event === 'INITIAL_SESSION') return;
         const currentUserId = session?.user?.id ?? null;
         const token = session?.access_token ?? null;
         setCachedToken(token);
         if (session) {
           setAuthModalOpen(false);
         }
-        // Wipe all user data, caches, and reset state if user logs out or switches accounts
         if (event === 'SIGNED_OUT' || currentUserId !== previousUserIdRef.current) {
           previousUserIdRef.current = currentUserId;
           clearUserDataOnLogout();
@@ -345,8 +323,7 @@ export default function App() {
       });
       return () => listener.subscription.unsubscribe();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run once on mount
+  }, []);
 
   useEffect(() => {
     loadSessions();
@@ -360,10 +337,8 @@ export default function App() {
       }
       loadMessages(currentSessionId);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentSessionId]);
 
-  // Create New Thread (Instant local reset - creates remote thread on first prompt)
   const handleNewChat = () => {
     if (isStreamingRef.current) return;
     setCurrentSessionId(null);
@@ -376,9 +351,7 @@ export default function App() {
     showToast("Started new chat");
   };
 
-  // Delete Thread (Optimistic UI with Rollback)
   const handleDeleteSession = async (sessionId: string) => {
-    // Snapshot state for rollback
     const previousSessions = sessions;
     const previousSessionId = currentSessionId;
 
@@ -386,7 +359,6 @@ export default function App() {
       localStorage.removeItem(`omni_msgs_${sessionId}`);
     } catch {}
 
-    // Optimistically remove session immediately and persist to cache
     const remaining = sessions.filter(s => s.session_id !== sessionId);
     setSessions(remaining);
     try {
@@ -406,7 +378,6 @@ export default function App() {
       await api.deleteSession(sessionId);
     } catch (e) {
       console.error("Error deleting session:", e);
-      // Rollback on failure
       setSessions(previousSessions);
       setCurrentSessionId(previousSessionId);
       try {
@@ -416,13 +387,11 @@ export default function App() {
     }
   };
 
-  // Inspect document in sidecar reader
-  const handleInspectDoc = (doc: { filename: string; content?: string; page?: number }) => {
+  const handleInspectDoc = (doc: { filename: string; content?: string; page?: number; url?: string; is_web?: boolean }) => {
     setSidecarDoc(doc);
     setSidecarOpen(true);
   };
 
-  // Project Management Handlers
   const handleCreateProject = (name: string, description: string, color: string) => {
     const newProject: ProjectItem = {
       id: `proj-${Date.now()}`,
@@ -450,11 +419,9 @@ export default function App() {
     }
   };
 
-  // Handle Send Prompt with SSE Streaming (Optimistic UI)
   const handleSendPrompt = async (text: string = inputPrompt) => {
     if (!text.trim() && attachedFiles.length === 0) return;
 
-    // 1. Prepare actual prompt content
     let actualPrompt = text.trim();
     if (referencedVaultDocs.length > 0) {
       const refHeader = `[Focus explicitly on referenced Knowledge Vault documents: ${referencedVaultDocs.join(', ')}]\n\n`;
@@ -464,15 +431,12 @@ export default function App() {
       actualPrompt = "Summarize the attached files.";
     }
 
-    // 2. Instantly clear input prompt & attached files (Zero delay)
     const filesToUpload = [...attachedFiles];
     setInputPrompt('');
     setAttachedFiles([]);
 
-    // 3. Ensure an active session exists or create optimistic session immediately
     let activeSessId = currentSessionId;
     if (!activeSessId) {
-      // Generate standard RFC4122 UUID so Postgres and client always agree
       activeSessId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
         const r = Math.random() * 16 | 0;
         return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
@@ -490,13 +454,11 @@ export default function App() {
       setSessions(prev => [optimisticSession, ...prev]);
       setCurrentSessionId(activeSessId);
 
-      // Create remote session with this exact ID (no swapping!)
       api.createSession(sessionTitle, activeSessId).catch(err => {
         console.warn("Could not proactively create remote session:", err);
       });
     } else {
       activeSessionIdRef.current = activeSessId;
-      // Optimistically update session title in sidebar if it was generic
       const truncatedTitle = actualPrompt.slice(0, 32).trim();
       if (truncatedTitle) {
         setSessions(prev => 
@@ -510,14 +472,12 @@ export default function App() {
       }
     }
 
-    // 4. Instantly append user message and streaming assistant placeholder
     const userMsg: ChatMessage = { role: 'user', content: actualPrompt };
     const tempAssistantMsg: ChatMessage = { role: 'assistant', content: '', contexts: null };
     setMessages(prev => [...prev, userMsg, tempAssistantMsg]);
     setIsStreaming(true);
     isStreamingRef.current = true;
 
-    // 5. If files were attached, initiate ingestion concurrently
     if (filesToUpload.length > 0) {
       uploadFiles(filesToUpload);
     }
@@ -525,7 +485,6 @@ export default function App() {
     let coldStartTimer: ReturnType<typeof setTimeout> | null = null;
     let coldStartNotified = false;
 
-    // Detect free-tier server cold starts (Render free tier spins down after 15m inactivity, taking 30–50s on wake up)
     coldStartTimer = setTimeout(() => {
       coldStartNotified = true;
       showToast("⚡ Server waking up from free-tier inactivity sleep... First response may take 30–50s.", 14000);
@@ -614,7 +573,6 @@ export default function App() {
 
         sseBuffer += decoder.decode(value, { stream: true });
         const lines = sseBuffer.split('\n');
-        // Preserve any trailing incomplete line in buffer
         sseBuffer = lines.pop() || '';
 
         for (const line of lines) {
@@ -627,7 +585,6 @@ export default function App() {
           try {
             const parsed = JSON.parse(dataStr);
 
-            // Handle status events emitted by backend during retrieval/web search
             if (parsed.type === 'status' || parsed.status || (parsed.message && !parsed.token && !parsed.contexts)) {
               lastStatusUpdate = parsed.message || parsed.status || '';
             }
@@ -641,7 +598,6 @@ export default function App() {
 
             scheduleRender();
           } catch {
-            // Only append if it's plain text from a non-JSON SSE source, never broken JSON fragments
             if (!dataStr.startsWith('{') && !dataStr.startsWith('[')) {
               targetContent += dataStr;
               scheduleRender();
@@ -650,7 +606,6 @@ export default function App() {
         }
       }
 
-      // Final synchronous flush on stream completion
       setMessages(prev => {
         const updated = [...prev];
         const lastIdx = updated.length - 1;
@@ -664,7 +619,6 @@ export default function App() {
         return updated;
       });
 
-      // Safeguard against empty response hanging the loader
       if (!targetContent.trim()) {
         setMessages(prev => {
           const updated = [...prev];
@@ -679,7 +633,6 @@ export default function App() {
         });
       }
 
-      // Persist completed conversation into local cache for instant retrieval
       setMessages(prev => {
         try {
           localStorage.setItem(`omni_msgs_${activeSessId}`, JSON.stringify(prev));
@@ -721,7 +674,6 @@ export default function App() {
 
   return (
     <div className="omni-layout font-sans">
-      {/* Toast Notifications */}
       <Toast 
         message={toastMessage} 
         onClose={() => {
@@ -733,7 +685,6 @@ export default function App() {
         }} 
       />
 
-      {/* Left Sidebar */}
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -755,9 +706,7 @@ export default function App() {
         showToast={showToast}
       />
 
-      {/* Main App Content Area */}
       <main className="flex-1 flex flex-col h-full overflow-hidden bg-[var(--bg-dark)]">
-        {/* Top Header Bar */}
         <TopHeader
           sidebarCollapsed={sidebarCollapsed}
           onExpandSidebar={() => setSidebarCollapsed(false)}
@@ -767,11 +716,8 @@ export default function App() {
           onOpenAuth={() => setAuthModalOpen(true)}
         />
 
-        {/* Tab Switcher Body with Sidecar Support */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Main Active Tab View (Smooth Synchronized Width Transition with Sidecar) */}
           <div className="flex-1 min-w-0 h-full overflow-hidden flex flex-col transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]">
-            {/* CHATS TAB */}
             <div className={`flex-1 min-w-0 h-full overflow-hidden flex flex-col ${(activeTab === 'chats' || activeTab === 'chats_list') ? '' : 'hidden'}`}>
               <ChatCanvas
                 currentSessionId={currentSessionId}
@@ -790,7 +736,7 @@ export default function App() {
                 }}
                 onAttachFiles={(files) => {
                   if (!files) return;
-                  const incoming = Array.from(files);
+                  const incoming = Array.from(files) as File[];
                   setAttachedFiles(prev => {
                     const existingSet = new Set(prev.map(f => `${f.name}_${f.size}_${f.lastModified}`));
                     const uniqueIncoming = incoming.filter(f => !existingSet.has(`${f.name}_${f.size}_${f.lastModified}`));
@@ -822,7 +768,6 @@ export default function App() {
               />
             </div>
 
-            {/* PROJECTS TAB */}
             <div className={`flex-1 min-w-0 h-full overflow-hidden flex flex-col ${activeTab === 'projects' ? '' : 'hidden'}`}>
               <ProjectsView
                 projects={projects}
@@ -844,7 +789,6 @@ export default function App() {
               />
             </div>
 
-            {/* KNOWLEDGE VAULT TAB */}
             <div className={`flex-1 min-w-0 h-full overflow-hidden flex flex-col ${activeTab === 'vault' ? '' : 'hidden'}`}>
               <KnowledgeVault
                 documents={documents}
@@ -866,7 +810,6 @@ export default function App() {
               />
             </div>
 
-            {/* KNOWLEDGE GRAPH TAB */}
             <div className={`flex-1 min-w-0 h-full overflow-hidden flex flex-col ${activeTab === 'graph' ? '' : 'hidden'}`}>
               <KnowledgeGraphView
                 onInspectDoc={handleInspectDoc}
@@ -875,7 +818,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* 50% SPLIT SIDECAR READER */}
           <SidecarReader
             isOpen={sidecarOpen}
             onClose={() => setSidecarOpen(false)}
@@ -884,7 +826,6 @@ export default function App() {
         </div>
       </main>
 
-      {/* Global Modals */}
       <SettingsModal
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}

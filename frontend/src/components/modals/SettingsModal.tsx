@@ -59,11 +59,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [themeFilter, setThemeFilter] = useState<'All' | 'Light' | 'Dark'>('All');
   
-  // Custom dropdown popover states
   const [workDropdownOpen, setWorkDropdownOpen] = useState(false);
   const [fontDropdownOpen, setFontDropdownOpen] = useState(false);
 
-  // Claude Profile & General Preferences State
   const [fullName, setFullName] = useState(() => localStorage.getItem('omni_user_name') || 'Anurag');
   const [callName, setCallName] = useState(() => localStorage.getItem('omni_call_name') || 'Anurag');
   const [workDomain, setWorkDomain] = useState(() => localStorage.getItem('omni_work_domain') || 'Software Engineering');
@@ -72,22 +70,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     (localStorage.getItem('omni_motion') as 'system' | 'reduced') || 'system'
   );
 
-  // User Auth State
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
-  // Real-time Pipeline Health State
   const [healthData, setHealthData] = useState<HealthResponse | null>(null);
   const [isCheckingHealth, setIsCheckingHealth] = useState<boolean>(false);
   const [lastHealthCheck, setLastHealthCheck] = useState<Date | null>(null);
 
-  // Sync initialTab when modal opens (always fallback to 'general')
   useEffect(() => {
     if (isOpen) {
       setActiveTab(initialTab || 'general');
     }
   }, [isOpen, initialTab]);
 
-  // Sync user auth from Supabase
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setUserEmail(data.session?.user?.email ?? null);
@@ -96,7 +90,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     });
   }, [isOpen]);
 
-  // Fetch real-time health data
   const loadHealthData = async () => {
     setIsCheckingHealth(true);
     try {
@@ -118,7 +111,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Streamlined navigation category groups (clean, uncluttered, necessary for user)
   const navGroups = [
     {
       label: 'Settings',
@@ -156,10 +148,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           setFontDropdownOpen(false);
         }}
       >
-        {/* Main Body: Claude-Style Left Sidebar & Right Content Panel */}
         <div className="flex flex-col sm:flex-row flex-1 overflow-hidden">
           
-          {/* LEFT SIDEBAR (~230px) */}
           <div 
             className="sm:w-60 p-3 sm:p-4 border-b sm:border-b-0 sm:border-r flex flex-col gap-3 flex-shrink-0"
             style={{ 
@@ -167,7 +157,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               backgroundColor: 'var(--bg-sidebar)',
             }}
           >
-            {/* Search Input Bar (theme background for optimal contrast) */}
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
               <input 
@@ -195,7 +184,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               )}
             </div>
 
-            {/* Navigation Category Groups */}
             <div className="flex-1 overflow-y-auto no-scrollbar space-y-4 pt-1">
               {navGroups.map((group) => {
                 const filteredItems = group.items.filter(item => 
@@ -258,9 +246,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* RIGHT CONTENT PANEL */}
           <div className="flex-1 flex flex-col overflow-hidden relative" style={{ backgroundColor: 'var(--bg-modal)' }}>
-            {/* Top Close Button */}
             <button 
               onClick={onClose}
               className="absolute top-4 right-4 z-20 p-1.5 rounded-lg transition-colors cursor-pointer"
@@ -272,18 +258,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <X size={16} />
             </button>
 
-            {/* Content Scroll Container (no-scrollbar hides vertical scrollbar cleanly) */}
             <div className="flex-1 p-5 sm:p-7 overflow-y-auto no-scrollbar">
 
-              {/* TAB 1: GENERAL */}
               {activeTab === 'general' && (
                 <div className="space-y-8 max-w-xl">
-                  {/* Profile Section */}
                   <div>
                     <h3 className="text-[15px] font-semibold mb-5" style={{ color: 'var(--text-main)' }}>Profile</h3>
                     
                     <div className="space-y-4">
-                      {/* Avatar Row */}
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium" style={{ color: 'var(--text-sidebar-item)' }}>Avatar</span>
                         <div 
@@ -300,7 +282,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Full Name Row */}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-4">
                         <span className="text-sm font-medium" style={{ color: 'var(--text-sidebar-item)' }}>Full name</span>
                         <input 
@@ -318,7 +299,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         />
                       </div>
 
-                      {/* What should Omni call you? */}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-4">
                         <span className="text-sm font-medium" style={{ color: 'var(--text-sidebar-item)' }}>What should Omni call you?</span>
                         <input 
@@ -336,7 +316,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         />
                       </div>
 
-                      {/* What best describes your work? Custom Dropdown */}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-4 relative">
                         <span className="text-sm font-medium" style={{ color: 'var(--text-sidebar-item)' }}>What best describes your work?</span>
                         <div className="relative sm:w-64">
@@ -399,7 +378,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Instructions for Omni */}
                       <div className="pt-2">
                         <div className="mb-1.5">
                           <span className="text-sm font-medium block" style={{ color: 'var(--text-sidebar-item)' }}>Instructions for Omni</span>
@@ -425,12 +403,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Preferences Section */}
                   <div className="pt-2" style={{ borderTopWidth: '1px', borderTopStyle: 'solid', borderTopColor: 'var(--border-color)' }}>
                     <h3 className="text-[15px] font-semibold mb-5" style={{ color: 'var(--text-main)' }}>Preferences</h3>
 
                     <div className="space-y-4">
-                      {/* Appearance Toggle */}
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium" style={{ color: 'var(--text-sidebar-item)' }}>Appearance</span>
                         <div 
@@ -481,7 +457,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Chat Font Custom Dropdown */}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-4 relative">
                         <span className="text-sm font-medium" style={{ color: 'var(--text-sidebar-item)' }}>Chat font</span>
                         <div className="relative sm:w-48">
@@ -543,7 +518,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Motion Preference */}
                       <div className="flex items-center justify-between">
                         <div>
                           <span className="text-sm font-medium block" style={{ color: 'var(--text-sidebar-item)' }}>Motion</span>
@@ -589,7 +563,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               )}
 
-              {/* TAB 2: ACCOUNT */}
               {activeTab === 'account' && (
                 <div className="space-y-6 max-w-xl">
                   <div>
@@ -633,7 +606,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               )}
 
-              {/* TAB 3: PIPELINE HEALTH (Actual & Real Live Telemetry) */}
               {activeTab === 'health' && (
                 <div className="space-y-5 max-w-2xl">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2" style={{ borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: 'var(--border-color)' }}>
@@ -666,7 +638,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </button>
                   </div>
 
-                  {/* Health Banner */}
                   <div 
                     className="p-4 rounded-xl flex items-center justify-between gap-4"
                     style={{
@@ -718,9 +689,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   </div>
 
-                  {/* 4 Cards Grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {/* Qdrant */}
                     <div 
                       className="p-3.5 rounded-xl space-y-1.5 text-[13px]"
                       style={{
@@ -739,7 +708,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div className="flex justify-between" style={{ color: 'var(--text-muted)' }}><span>Dimension:</span><span className="font-mono" style={{ color: 'var(--text-main)' }}>384d Dense</span></div>
                     </div>
 
-                    {/* Knowledge Graph */}
                     <div 
                       className="p-3.5 rounded-xl space-y-1.5 text-[13px]"
                       style={{
@@ -758,7 +726,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div className="flex justify-between" style={{ color: 'var(--text-muted)' }}><span>Clustering:</span><span className="font-mono" style={{ color: 'var(--text-main)' }}>Leiden / Louvain</span></div>
                     </div>
 
-                    {/* Dense Embeddings */}
                     <div 
                       className="p-3.5 rounded-xl space-y-1.5 text-[13px]"
                       style={{
@@ -777,7 +744,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div className="flex justify-between" style={{ color: 'var(--text-muted)' }}><span>Latency:</span><span className="font-mono" style={{ color: 'var(--status-active-text)' }}>&lt; 1.5ms</span></div>
                     </div>
 
-                    {/* LLM Inference */}
                     <div 
                       className="p-3.5 rounded-xl space-y-1.5 text-[13px]"
                       style={{
@@ -799,7 +765,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               )}
 
-              {/* TAB 4: APPEARANCE & THEMES */}
               {activeTab === 'theme' && (
                 <div className="space-y-5 max-w-2xl">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -808,7 +773,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <p className="text-[13px]" style={{ color: 'var(--text-muted)' }}>Explore curated light editorial and deep dark themes.</p>
                     </div>
 
-                    {/* Filter Pills */}
                     <div 
                       className="flex items-center p-0.5 rounded-lg text-[13px] self-start sm:self-auto flex-shrink-0"
                       style={{
@@ -882,12 +846,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               )}
 
-              {/* TAB 5: AI MOTION & LOADER */}
               {activeTab === 'orb' && (
                 <div className="space-y-5 max-w-2xl">
                   <div>
-                    <h3 className="text-[15px] font-semibold mb-0.5" style={{ color: 'var(--text-main)' }}>3D AI Motion Engine</h3>
-                    <p className="text-[13px]" style={{ color: 'var(--text-muted)' }}>Customize the particle loader rendered during grounding and streaming.</p>
+                    <h3 className="text-[15px] font-semibold mb-0.5" style={{ color: 'var(--text-main)' }}>Thinking Orbs Engine</h3>
+                    <p className="text-[13px]" style={{ color: 'var(--text-muted)' }}>Nine hand-tuned animated loading states for AI interfaces, grounding, and streaming.</p>
                   </div>
 
                   <div 
@@ -902,8 +865,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <div className="mb-3 flex items-center justify-center h-24">
                       <OrbitingOrbLoader style={orbStyle} size="xl" />
                     </div>
-                    <div className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
-                      {orbList.find(o => o.id === orbStyle)?.name || '3D Helical Vortex'}
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-sm font-semibold" style={{ color: 'var(--text-main)' }}>
+                        {orbList.find(o => o.id === orbStyle)?.name || 'Globe Scan'}
+                      </span>
+                      {orbList.find(o => o.id === orbStyle)?.badge && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-mono font-medium" style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--accent-primary)' }}>
+                          {orbList.find(o => o.id === orbStyle)?.badge}
+                        </span>
+                      )}
                     </div>
                     <div className="text-[13px] max-w-sm mt-1" style={{ color: 'var(--text-muted)' }}>
                       {orbList.find(o => o.id === orbStyle)?.description}
@@ -942,7 +912,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               <OrbitingOrbLoader style={orb.id} size="sm" />
                             </div>
                             <div className="min-w-0">
-                              <span className="font-semibold text-[13px] block truncate" style={{ color: 'var(--text-main)' }}>{orb.name}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-[13px] block truncate" style={{ color: 'var(--text-main)' }}>{orb.name}</span>
+                                <span className="text-[10px] px-1.5 py-0.2 rounded-full font-mono font-medium" style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--accent-primary)' }}>{orb.badge}</span>
+                              </div>
                               <span className="text-[12px] line-clamp-1" style={{ color: 'var(--text-muted)' }}>{orb.description}</span>
                             </div>
                           </div>
@@ -954,7 +927,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               )}
 
-              {/* TAB 6: RAG PIPELINE */}
               {activeTab === 'rag' && (
                 <div className="space-y-5 max-w-xl">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -988,7 +960,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
 
                   <div className="space-y-4">
-                    {/* Temperature */}
                     <div 
                       className="p-4 rounded-xl"
                       style={{
@@ -1011,7 +982,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div className="flex justify-between text-[11px] mt-1 font-mono" style={{ color: 'var(--text-muted)' }}><span>0.0 (Deterministic)</span><span>1.0 (Creative)</span></div>
                     </div>
 
-                    {/* Top-K */}
                     <div 
                       className="p-4 rounded-xl"
                       style={{
@@ -1034,7 +1004,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div className="flex justify-between text-[11px] mt-1 font-mono" style={{ color: 'var(--text-muted)' }}><span>1 chunk</span><span>15 chunks</span></div>
                     </div>
 
-                    {/* Rerank Limit */}
                     <div 
                       className="p-4 rounded-xl"
                       style={{
@@ -1057,7 +1026,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div className="flex justify-between text-[11px] mt-1 font-mono" style={{ color: 'var(--text-muted)' }}><span>1 top-ranked</span><span>10 top-ranked</span></div>
                     </div>
 
-                    {/* Danger Zone: Reset Collection directly in RAG pipeline tab */}
                     <div 
                       className="p-4 rounded-xl space-y-3 mt-4"
                       style={{

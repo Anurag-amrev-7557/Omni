@@ -105,14 +105,12 @@ export const VaultUploadModal: React.FC<VaultUploadModalProps> = ({
   const uploadSingleFile = async (fileState: FileUploadState, index: number): Promise<boolean> => {
     const { file } = fileState;
     
-    // Start with uploading status and initial state
     setFileStates(prev => {
       const next = [...prev];
       next[index] = { ...next[index], status: 'uploading', progress: 5, stageMessage: 'Uploading...' };
       return next;
     });
 
-    // Optimistically insert document into the table immediately with indexing status
     const sizeMb = parseFloat((file.size / (1024 * 1024)).toFixed(2));
     onAddDocument?.({
       filename: file.name,
@@ -123,7 +121,6 @@ export const VaultUploadModal: React.FC<VaultUploadModalProps> = ({
     });
 
     try {
-      // Connect to backend stream for real stage-by-stage progress (extraction, chunking, embeddings, indexing)
       await api.uploadSingleDocumentStream(file, (event) => {
         if (event.type === 'progress') {
           setFileStates(prev => {
@@ -139,21 +136,18 @@ export const VaultUploadModal: React.FC<VaultUploadModalProps> = ({
         }
       });
 
-      // Complete the progress to 100%
       setFileStates(prev => {
         const next = [...prev];
         next[index] = { ...next[index], progress: 100, stageMessage: 'Indexed' };
         return next;
       });
 
-      // Mark as completed
       setFileStates(prev => {
         const next = [...prev];
         next[index] = { ...next[index], status: 'completed', progress: 100, stageMessage: 'Indexed' };
         return next;
       });
 
-      // Optimistically insert document into the table
       const sizeMb = parseFloat((file.size / (1024 * 1024)).toFixed(2));
       onAddDocument?.({
         filename: file.name,
@@ -234,7 +228,6 @@ export const VaultUploadModal: React.FC<VaultUploadModalProps> = ({
 
     setIsUploading(false);
     
-    // Refresh the vault to ensure sync
     try {
       await onUploadSuccess?.();
     } catch (error) {
@@ -243,7 +236,6 @@ export const VaultUploadModal: React.FC<VaultUploadModalProps> = ({
 
     if (failedCount === 0) {
       showToast(`✓ Successfully indexed ${completedCount} document(s)`);
-      // Brief delay so users can see the completed state
       setTimeout(() => {
         handleClose();
       }, 1200);
@@ -275,7 +267,6 @@ export const VaultUploadModal: React.FC<VaultUploadModalProps> = ({
         className="w-full max-w-lg rounded-2xl bg-[var(--bg-modal)] border border-[var(--border-color)] shadow-2xl p-6 flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Header */}
         <div className="flex items-center justify-between pb-4 border-b border-[var(--border-color)]">
           <div>
             <h2 className="text-[16px] font-semibold text-[var(--text-main)] tracking-tight">
@@ -297,9 +288,7 @@ export const VaultUploadModal: React.FC<VaultUploadModalProps> = ({
           )}
         </div>
 
-        {/* Modal Body */}
         <div className="overflow-y-auto py-4 space-y-4 flex-1">
-          {/* Live Progress Bar when Uploading */}
           {isUploading && (
             <div className="p-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] space-y-2">
               <div className="flex items-center justify-between text-[12px] font-medium text-[var(--text-main)]">
@@ -318,7 +307,6 @@ export const VaultUploadModal: React.FC<VaultUploadModalProps> = ({
             </div>
           )}
 
-          {/* Drop Area (hidden during upload) */}
           {!isUploading && (
             <div
               onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
@@ -351,7 +339,6 @@ export const VaultUploadModal: React.FC<VaultUploadModalProps> = ({
             </div>
           )}
 
-          {/* Queued / Ingesting Files List */}
           {fileStates.length > 0 && (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-[12.5px] font-semibold text-[var(--text-main)] px-0.5">
@@ -426,7 +413,6 @@ export const VaultUploadModal: React.FC<VaultUploadModalProps> = ({
                         </div>
                       </div>
                       
-                      {/* Individual File Progress Bar */}
                       {status === 'uploading' && (
                         <div className="mt-2 w-full h-1.5 rounded-full bg-[var(--bg-input)] overflow-hidden">
                           <div 
@@ -442,14 +428,12 @@ export const VaultUploadModal: React.FC<VaultUploadModalProps> = ({
             </div>
           )}
 
-          {/* Clean Vector Ingestion Note */}
           <div className="flex items-center gap-2 text-[11.5px] text-[var(--text-muted)] px-1">
             <Layers size={13} className="text-[var(--accent-primary)] flex-shrink-0" />
             <span>Files are chunked and indexed into Qdrant vector memory. New entries appear instantly.</span>
           </div>
         </div>
 
-        {/* Modal Footer */}
         <div className="flex items-center justify-between pt-3.5 border-t border-[var(--border-color)]">
           <div className="text-[12px] text-[var(--text-muted)]">
             {fileStates.length > 0 

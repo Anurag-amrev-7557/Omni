@@ -5,7 +5,6 @@ from typing import List, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
-# Determine project root directory
 _DEFAULT_ROOT = Path(__file__).resolve().parent.parent.parent
 ROOT_DIR = os.environ.get("APP_ROOT_DIR")
 if not ROOT_DIR:
@@ -23,15 +22,12 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # General Environment
     APP_ROOT_DIR: str = ROOT_DIR
     ENVIRONMENT: str = "development"
     FRONTEND_URL: str = ""
 
-    # User Defaults
     DEFAULT_LOCAL_USER: str = "10d2f529-3fae-4a29-9a5e-312876700ff9"
 
-    # LLM (Groq) Configuration
     GROQ_API_KEY: str = ""
     PRIMARY_LLM_MODEL: str = "openai/gpt-oss-120b"
     DEFAULT_LLM_MODELS: List[str] = [
@@ -54,20 +50,17 @@ class Settings(BaseSettings):
     LLM_TIMEOUT: float = 20.0
     LLM_MAX_TOKENS: int = 1800
 
-    # Embeddings & Reranker Configuration
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
     EMBEDDING_DIMENSION: int = 384
     RERANKER_MODEL: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     ENABLE_CROSS_ENCODER: bool = False
 
-    # Qdrant Vector DB Configuration
     QDRANT_URL: str = ""
     QDRANT_API_KEY: str = ""
     QDRANT_PATH: str = Field(default_factory=lambda: os.path.join(ROOT_DIR, "data", "qdrant_db"))
     COLLECTION_NAME: str = "pdf_chunks"
     QDRANT_TIMEOUT: float = 60.0
 
-    # Persistent Relational DB (PostgreSQL / SQLite)
     DATABASE_URL: str = ""
     NEON_DATABASE_URL: str = ""
     CHAT_DB_PATH: str = Field(default_factory=lambda: os.path.join(ROOT_DIR, "data", "chat_history.db"))
@@ -76,11 +69,9 @@ class Settings(BaseSettings):
     DB_POOL_MAX: int = 10
     DB_TIMEOUT: float = 10.0
 
-    # File Storage Configuration
     UPLOADS_DIR: str = Field(default_factory=lambda: os.path.join(ROOT_DIR, "data", "uploaded_docs"))
 
 
-    # External APIs: Supabase & Tavily
     SUPABASE_URL: str = ""
     SUPABASE_PUBLISHABLE_KEY: str = ""
     SUPABASE_SERVICE_ROLE_KEY: str = ""
@@ -91,12 +82,10 @@ class Settings(BaseSettings):
     TAVILY_MAX_RESULTS: int = 4
     TAVILY_TIMEOUT: float = 6.0
 
-    # Rate Limiting Configuration
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_CHAT_PER_MINUTE: int = 30
     RATE_LIMIT_SEARCH_PER_MINUTE: int = 15
 
-    # Ingestion & Chunking Parameters
     PARENT_CHUNK_SIZE: int = 2800
     PARENT_CHUNK_OVERLAP: int = 350
     CHILD_CHUNK_SIZE: int = 450
@@ -104,7 +93,6 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE_MB: int = 50
     ALLOWED_FILE_EXTENSIONS: List[str] = [".pdf", ".txt", ".csv", ".docx", ".md"]
 
-    # Retrieval Tuning
     DEFAULT_RETRIEVAL_K: int = 6
     RRF_K: int = 60
     RRF_DENSE_WEIGHT: float = 0.6
@@ -123,5 +111,4 @@ class Settings(BaseSettings):
         )
 
 
-# Singleton instance
 settings = Settings()

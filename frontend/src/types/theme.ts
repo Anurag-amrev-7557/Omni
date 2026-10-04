@@ -10,7 +10,15 @@ export type ThemeId =
   | 'amber' 
   | 'amber-dark';
 
-export type OrbStyle = 'vortex' | 'vortex-pure' | 'bands' | 'geodesic' | 'pulse';
+import type { OrbState } from 'thinking-orbs';
+
+export type OrbStyle = 
+  | OrbState 
+  | 'vortex' 
+  | 'vortex-pure' 
+  | 'bands' 
+  | 'geodesic' 
+  | 'pulse';
 
 export interface OrbConfig {
   id: OrbStyle;
@@ -19,36 +27,60 @@ export interface OrbConfig {
   description: string;
 }
 
-export const ORB_PRESETS: Record<OrbStyle, OrbConfig> = {
-  vortex: {
-    id: 'vortex',
-    name: '3D Celestial Vortex',
-    badge: 'Chromatic',
-    description: 'Dual-sheath logarithmic spiral streamlines with differential acceleration and subtle accent tinting',
+export const ORB_PRESETS: Record<string, OrbConfig> = {
+  searching: {
+    id: 'searching',
+    name: 'Globe Scan',
+    badge: 'Search',
+    description: 'A scan meridian sweeps across a dotted 3D globe',
   },
-  'vortex-pure': {
-    id: 'vortex-pure',
-    name: 'Monochrome Vortex',
-    badge: 'Minimal',
-    description: 'Pure monochrome logarithmic vortex streamlines with delicate micro-trails and stardust',
+  working: {
+    id: 'working',
+    name: 'Orbital Path',
+    badge: 'Process',
+    description: 'Particles circulating along tilted orbital paths',
   },
-  bands: {
-    id: 'bands',
-    name: 'Counter-Rotating Strata',
-    badge: 'Kinetic',
-    description: 'Layered horizontal latitude rows from top to bottom moving in alternating opposite directions',
+  solving: {
+    id: 'solving',
+    name: 'Quantum Scramble',
+    badge: 'Reasoning',
+    description: 'Bands scramble in quarter turns, then click back into place',
   },
-  geodesic: {
-    id: 'geodesic',
-    name: '3D Geodesic Fibonacci',
-    badge: 'Lattice',
-    description: 'Structured point-cloud sphere with high-contrast exponential depth scaling',
+  connecting: {
+    id: 'connecting',
+    name: 'Constellation Mesh',
+    badge: 'Network',
+    description: 'Constellation wires itself with packets running along edges',
   },
-  pulse: {
-    id: 'pulse',
-    name: 'Quantum Core Halo',
+  weaving: {
+    id: 'weaving',
+    name: 'Helix Plait',
+    badge: 'Synthesis',
+    description: 'Three fluid strands plait continuously around the sphere',
+  },
+  composing: {
+    id: 'composing',
+    name: 'Undulating Sash',
+    badge: 'Creative',
+    description: 'A luminous ribbon undulating in a multi-band 3D sash',
+  },
+  breathing: {
+    id: 'breathing',
+    name: 'Core Resonance',
     badge: 'Ambient',
-    description: 'Volumetric breathing particle halo with subtle diffuse inner luminescence',
+    description: 'A face-on luminous dotted ring slowly breathing and morphing',
+  },
+  listening: {
+    id: 'listening',
+    name: 'Harmonic Waveform',
+    badge: 'Audio',
+    description: 'Harmonic waves rolling across latitude rings',
+  },
+  shaping: {
+    id: 'shaping',
+    name: 'Polymorphic Shift',
+    badge: 'Geometry',
+    description: 'Dotted outlines morphing smoothly circle → triangle → square',
   },
 };
 
@@ -67,7 +99,6 @@ export interface ThemeConfig {
 }
 
 export const THEME_PRESETS: Record<ThemeId, ThemeConfig> = {
-  // --- WARM CREAM & OBSIDIAN ---
   light: {
     id: 'light',
     name: 'Warm Cream Parchment',
@@ -95,7 +126,6 @@ export const THEME_PRESETS: Record<ThemeId, ThemeConfig> = {
     },
   },
 
-  // --- MATCHA SUITE ---
   matcha: {
     id: 'matcha',
     name: 'Matcha Linen',
@@ -123,7 +153,6 @@ export const THEME_PRESETS: Record<ThemeId, ThemeConfig> = {
     },
   },
 
-  // --- TERRACOTTA SUITE ---
   terracotta: {
     id: 'terracotta',
     name: 'Tuscan Terracotta',
@@ -151,7 +180,6 @@ export const THEME_PRESETS: Record<ThemeId, ThemeConfig> = {
     },
   },
 
-  // --- NORDIC SUITE ---
   nordic: {
     id: 'nordic',
     name: 'Nordic Cashmere',
@@ -179,7 +207,6 @@ export const THEME_PRESETS: Record<ThemeId, ThemeConfig> = {
     },
   },
 
-  // --- VINTAGE AMBER SUITE ---
   amber: {
     id: 'amber',
     name: 'Vintage Sepia & Amber',

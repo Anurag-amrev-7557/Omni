@@ -11,8 +11,6 @@ from src.generation.llm import invoke_groq_with_fallback, stream_groq_with_fallb
 from src.generation.prompts import (
     CONVERSATIONAL_GREETING_PROMPT,
     GROUNDING_RAG_PROMPT,
-    QUERY_DECOMPOSITION_PROMPT,
-    QUERY_REFORMULATION_PROMPT,
     VAULT_EMPTY_PROMPT,
     VAULT_INVENTORY_PROMPT,
 )
@@ -23,12 +21,6 @@ from src.web_search.tavily import search_tavily
 _SENTINEL = object()
 _NO_CONTEXT_MSG = "I couldn't find any relevant information in the database to answer that."
 
-_REFERENTIAL_TOKENS = frozenset({
-    "he", "his", "him", "she", "her", "it", "its", "they", "them", "their",
-    "this", "that", "these", "those", "above", "former", "latter",
-})
-_CONTINUATION_PHRASES = ("what about", "how about", "and then", "tell me more")
-_COMPOUND_MARKERS = (" compare ", " vs ", " versus ", " differences between ", " difference between ", " contrast ")
 _VAULT_META_PATTERNS = (
     "what are the docs", "what docs", "which docs", "what files", "which files",
     "list docs", "list the docs", "list files", "list the files",
@@ -48,33 +40,21 @@ _AGGREGATION_MARKERS = (
     "projects", "experience", "work", "skills", "overview", "technologies",
 )
 
+_DECOMPOSE_RE = re.compile(r"\s+(?:vs\.?|versus|compare)\s+", re.IGNORECASE)
+_CLEAN_QUERY_RE = re.compile(r"[^\w\s]")
+
 
 def reformulate_query(query: str, chat_history: Optional[List[Dict[str, Any]]] = None) -> str:
-    """Conversational Memory Router: Rephrases ambiguous follow-up questions."""
-    if not chat_history or len(chat_history) < 2:
-        return query
-
-    q_lower = query.lower()
-    words_set = set(re.findall(r"\w+", q_lower))
-    if not (words_set & _REFERENTIAL_TOKENS or any(p in q_lower for p in _CONTINUATION_PHRASES)):
-        return query
-
-    recent = chat_history[-4:]
-    formatted_history = "\n".join(f"{msg['role'].upper()}: {msg['content'][:250]}" for msg in recent)
-    prompt = QUERY_REFORMULATION_PROMPT.format(formatted_history=formatted_history, query=query)
-    return invoke_groq_with_fallback(prompt, max_tokens=60) or query
+    """Conversational Memory Router: Preserves query intent for grounding."""
+    return query
 
 
 @lru_cache(maxsize=256)
 def decompose_query(query: str) -> List[str]:
-    """Agentic Query Decomposer: Breaks multi-topic complex inquiries into sub-queries."""
-    q_lower = query.lower()
-    if not any(marker in q_lower for marker in _COMPOUND_MARKERS):
-        return [query]
-
-    prompt = QUERY_DECOMPOSITION_PROMPT.format(query=query)
-    response = invoke_groq_with_fallback(prompt, max_tokens=80)
-    return [q.strip() for q in response.split("|") if q.strip()] if response else [query]
+    """Agentic Query Decomposer: Fast regex-based split for compound inquiries."""
+    parts = _DECOMPOSE_RE.split(query)
+    cleaned = [p.strip() for p in parts if p.strip()]
+    return cleaned if len(cleaned) > 1 else [query]
 
 
 def is_vault_meta_query(q: str) -> bool:
@@ -85,7 +65,7 @@ def is_vault_meta_query(q: str) -> bool:
 
 def is_conversational_query(q: str) -> bool:
     """Detects conversational greetings, introductions, and pleasantries."""
-    q_clean = re.sub(r"[^\w\s]", "", q.lower()).strip()
+    q_clean = _CLEAN_QUERY_RE.sub("", q.lower()).strip()
     if q_clean in _GREETINGS:
         return True
     words = q_clean.split()
@@ -125,12 +105,9 @@ def prepare_context_and_prompt(
 
     standalone_query = reformulate_query(query, chat_history)
     sub_queries = decompose_query(standalone_query)
+    search_queries = list(sub_queries)
 
     q_lower = query.lower()
-    search_queries = list(sub_queries)
-    if "project" in q_lower and not any("engineering" in sq.lower() for sq in search_queries):
-        search_queries.append(standalone_query + " engineering work systems products")
-
     is_aggregation = any(marker in q_lower for marker in _AGGREGATION_MARKERS)
     retrieval_k = 8 if is_aggregation else settings.DEFAULT_RETRIEVAL_K
 
@@ -148,6 +125,9 @@ def prepare_context_and_prompt(
 
     def fetch_web_contexts() -> List[Dict[str, Any]]:
         if not web_search:
+            return []
+        if not settings.TAVILY_API_KEY.strip():
+            logger.warning("Live web search was requested, but TAVILY_API_KEY is not configured in .env.")
             return []
         w_ctx = []
         try:
@@ -174,19 +154,34 @@ def prepare_context_and_prompt(
                             "url": url,
                             "is_web": True,
                         })
+            else:
+                logger.warning(f"Tavily search failed: {tavily_res.get('error')}")
         except Exception as e:
             logger.warning(f"Tavily search error: {e}")
         return w_ctx
 
-    if web_search:
+    if web_search and active_files:
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             fut_local = executor.submit(fetch_local_contexts)
             fut_web = executor.submit(fetch_web_contexts)
             combined_raw_contexts = fut_local.result() + fut_web.result()
+    elif web_search:
+        combined_raw_contexts = fetch_web_contexts()
     else:
         combined_raw_contexts = fetch_local_contexts()
 
     if not combined_raw_contexts:
+        if not active_files:
+            extra_instructions = instructions_clause
+            if web_search and not settings.TAVILY_API_KEY.strip():
+                extra_instructions += "\n    NOTE: The user enabled Live Web Search, but TAVILY_API_KEY is not configured in the .env file. Mention this clearly to the user so they know how to enable live web search."
+            return VAULT_EMPTY_PROMPT.format(manifest_text=manifest_text, instructions_clause=extra_instructions, query=query), []
+        if web_search and not settings.TAVILY_API_KEY.strip():
+            extra_instructions = (
+                instructions_clause
+                + "\n    NOTE: No matching vault documents were found, and Live Web Search was enabled but TAVILY_API_KEY is not configured in .env. Remind the user to configure TAVILY_API_KEY in .env, and answer the query using general knowledge."
+            )
+            return VAULT_EMPTY_PROMPT.format(manifest_text=manifest_text, instructions_clause=extra_instructions, query=query), []
         return None, []
 
     seen = set()
@@ -197,10 +192,11 @@ def prepare_context_and_prompt(
             seen.add(c_text)
             unique_contexts.append(ctx)
 
-    combined_context = ""
+    context_blocks = []
     for idx, ctx in enumerate(unique_contexts, start=1):
         page_info = f", Page {ctx['page']}" if ctx.get("page") and not ctx.get("is_web") else ""
-        combined_context += f"--- SOURCE [{idx}]: {ctx['filename']}{page_info} ---\n{ctx['content']}\n\n"
+        context_blocks.append(f"--- SOURCE [{idx}]: {ctx['filename']}{page_info} ---\n{ctx['content']}\n\n")
+    combined_context = "".join(context_blocks)
 
     prompt = GROUNDING_RAG_PROMPT.format(
         instructions_clause=instructions_clause,

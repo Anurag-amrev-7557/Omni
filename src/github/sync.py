@@ -100,7 +100,6 @@ def sync_github_files_stream(
             with open(local_file_path, "w", encoding="utf-8") as f:
                 f.write(content)
 
-            # Vector ingestion into Qdrant
             ingest_file(local_file_path, user_id=user_id, extract_graph=False, generate_ai_summary=False)
 
             size_mb = round(os.path.getsize(local_file_path) / (1024 * 1024), 2)

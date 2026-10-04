@@ -29,7 +29,6 @@ const FormattedInsightContent: React.FC<{ content: string }> = ({ content }) => 
   return (
     <div className="space-y-2.5 text-[12.5px] leading-relaxed">
       {lines.map((line, idx) => {
-        // Bullet item
         if (line.startsWith('- ') || line.startsWith('• ') || line.startsWith('* ')) {
           const bulletText = line.replace(/^[-•*]\s+/, '');
           return (
@@ -42,7 +41,6 @@ const FormattedInsightContent: React.FC<{ content: string }> = ({ content }) => 
           );
         }
 
-        // Executive Theme or Section Heading
         if (line.toLowerCase().startsWith('**executive theme:**') || line.toLowerCase().startsWith('executive theme:')) {
           return (
             <div key={idx} className="p-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] text-[12px] text-[var(--text-main)] leading-relaxed">
@@ -95,7 +93,6 @@ export const CommunityInsightsModal: React.FC<CommunityInsightsModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm fade-in">
       <div className="w-full max-w-3xl max-h-[88vh] bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-        {/* Header */}
         <div className="p-5 sm:p-6 border-b border-[var(--border-color)] flex items-center justify-between gap-4 bg-[var(--bg-card)]">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-[var(--accent-subtle)] text-[var(--accent-primary)] flex items-center justify-center flex-shrink-0 shadow-xs">
@@ -124,7 +121,6 @@ export const CommunityInsightsModal: React.FC<CommunityInsightsModalProps> = ({
           </button>
         </div>
 
-        {/* Search / Filter Toolbar inside modal */}
         {communities.length > 2 && (
           <div className="px-5 py-3 border-b border-[var(--border-color)] bg-[var(--bg-sidebar)]/60 flex items-center gap-2">
             <div className="relative flex-1">
@@ -140,7 +136,6 @@ export const CommunityInsightsModal: React.FC<CommunityInsightsModalProps> = ({
           </div>
         )}
 
-        {/* List of Communities */}
         <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
           {filteredCommunities.length === 0 ? (
             <div className="py-16 text-center text-xs text-[var(--text-muted)]">
@@ -154,7 +149,6 @@ export const CommunityInsightsModal: React.FC<CommunityInsightsModalProps> = ({
                 key={comm.id}
                 className="p-5 rounded-2xl bg-[var(--bg-sidebar)] border border-[var(--border-color)] hover:border-[var(--accent-primary)]/40 transition-all shadow-xs space-y-3"
               >
-                {/* Cluster Header */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-2.5 flex-wrap">
                     <span className="px-2.5 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent-primary)] font-mono text-[11px] font-bold">
@@ -180,14 +174,12 @@ export const CommunityInsightsModal: React.FC<CommunityInsightsModalProps> = ({
                   )}
                 </div>
 
-                {/* Formatted Markdown Body */}
                 {comm.summary && (
                   <div className="pt-1">
                     <FormattedInsightContent content={comm.summary} />
                   </div>
                 )}
 
-                {/* Key Entities */}
                 {comm.key_entities && comm.key_entities.length > 0 && (
                   <div className="flex flex-wrap items-center gap-1.5 pt-3 border-t border-[var(--border-color)]">
                     <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] tracking-wider mr-1">
@@ -208,7 +200,6 @@ export const CommunityInsightsModal: React.FC<CommunityInsightsModalProps> = ({
           )}
         </div>
 
-        {/* Footer */}
         <div className="px-5 py-4 border-t border-[var(--border-color)] bg-[var(--bg-card)] flex items-center justify-between text-xs text-[var(--text-muted)]">
           <div className="flex items-center gap-2">
             <Layers size={14} className="text-[var(--accent-primary)]" />

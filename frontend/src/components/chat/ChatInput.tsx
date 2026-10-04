@@ -78,7 +78,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [isPlusClosing, setIsPlusClosing] = useState(false);
 
-  // Attachment Carousel Scroll State
   const carouselRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -136,7 +135,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const ghostRef = useRef<HTMLDivElement>(null);
   const [isMultiLine, setIsMultiLine] = useState(false);
 
-  // Filter vault documents based on @ query
   const matchingDocs = useMemo(() => {
     if (!mentionQuery) return vaultDocuments.slice(0, 6);
     return vaultDocuments.filter(d => 
@@ -144,7 +142,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     ).slice(0, 6);
   }, [vaultDocuments, mentionQuery]);
 
-  // Monitor ghost mirror height to detect multi-line transitions fluidly
   useEffect(() => {
     if (ghostRef.current) {
       const h = ghostRef.current.clientHeight;
@@ -153,7 +150,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [inputPrompt, attachedFiles, referencedVaultDocs]);
 
-  // Handle Text Change & @ Trigger
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setInputPrompt(val);
@@ -178,7 +174,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
-  // Insert Selected Mention
   const handleSelectMentionDoc = useCallback((doc: DocumentItem) => {
     if (!textareaRef.current) return;
     
@@ -202,7 +197,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   }, [inputPrompt, onAddReferencedDoc, setInputPrompt, showToast, closeMentionMenu]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Navigate @ mention autocomplete dropdown with arrow keys
     if (mentionMenuOpen && matchingDocs.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -226,7 +220,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
     }
 
-    // Normal Send
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if ((inputPrompt.trim() || attachedFiles.length > 0 || referencedVaultDocs.length > 0) && !isStreaming) {
@@ -239,7 +232,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <div className="w-full select-none relative">
-      {/* @ MENTION SLIDING WINDOW (Physically emerged from and clipped into the slot behind the input) */}
       {mentionMenuOpen && matchingDocs.length > 0 && (
         <>
           <div 
@@ -290,13 +282,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         </>
       )}
 
-      {/* Morphing Input Card with CSS Grid Auto-Sizing (z-20 sits in front of the sliding tray) */}
       <div 
         className={`relative z-20 rounded-2xl border border-[var(--border-input)] bg-[var(--bg-input)] shadow-sm transition-all duration-200 ease-out ${
           isMultiLine ? 'px-4 pt-3 pb-3' : 'px-3.5 py-3 min-h-[52px]'
         }`}
       >
-        {/* Hidden File Input */}
         <input 
           type="file" 
           id="chat-file-input" 
@@ -305,10 +295,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           className="hidden" 
         />
 
-        {/* REFERENCED VAULT DOCUMENTS & ATTACHED FILES CHIP CAROUSEL */}
         {(referencedVaultDocs.length > 0 || attachedFiles.length > 0) && (
           <div className="relative group/carousel w-full mb-0.5 transition-all duration-200">
-            {/* Left Scroll Navigation Button */}
             {canScrollLeft && (
               <button
                 type="button"
@@ -320,12 +308,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               </button>
             )}
 
-            {/* In-Place Horizontal Track with Adequate Padding to Avoid Shadow/Button Clipping */}
             <div 
               ref={carouselRef}
               className="flex items-center gap-3.5 overflow-x-auto no-scrollbar scroll-smooth pt-2 pb-3.5 px-2 -mx-1"
             >
-              {/* Vault @ Mentions Document Square Blocks */}
               {referencedVaultDocs.map((filename) => (
                 <DocumentSquareTile 
                   key={filename}
@@ -334,7 +320,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 />
               ))}
 
-              {/* Attached Local Files Document Square Blocks */}
               {attachedFiles.map((file) => (
                 <DocumentSquareTile 
                   key={`${file.name}-${file.size}-${file.lastModified}`}
@@ -345,7 +330,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               ))}
             </div>
 
-            {/* Right Scroll Navigation Button */}
             {canScrollRight && (
               <button
                 type="button"
@@ -359,7 +343,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           </div>
         )}
 
-        {/* PLUS ACTION DROPDOWN DOCKED JUST ABOVE LEFT EDGE OF INPUT SECTION */}
         {plusMenuOpen && (
           <>
             <div 
@@ -369,7 +352,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             <div className="absolute bottom-full mb-1 left-2 z-30 w-64 overflow-hidden pointer-events-none p-0.5">
               <div className={`${isPlusClosing ? 'pure-slide-down' : 'pure-slide-up'} pointer-events-auto w-full py-1.5 px-1 bg-[var(--bg-modal)] border border-[var(--border-color)] rounded-2xl backdrop-blur-2xl text-xs select-none flex flex-col gap-0.5`}>
                 
-                {/* 1. Add files or photos */}
                 <label 
                   htmlFor="chat-file-input"
                   className="flex items-center justify-between px-3 py-2 rounded-xl text-[13px] text-[var(--text-main)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
@@ -382,7 +364,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   <span className="text-[11px] text-[var(--text-dark)] font-sans tracking-tight">⌘ U</span>
                 </label>
 
-                {/* 2. Take a screenshot */}
                 <div 
                   className="flex items-center justify-between px-3 py-2 rounded-xl text-[13px] text-[var(--text-main)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
                   onClick={async () => {
@@ -422,7 +403,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   </div>
                 </div>
 
-                {/* 3. Add to project */}
                 <div 
                   className="flex items-center justify-between px-3 py-2 rounded-xl text-[13px] text-[var(--text-main)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
                   onClick={() => {
@@ -438,7 +418,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   <ChevronRight size={14} className="text-[var(--text-dark)]" />
                 </div>
 
-                {/* 4. Add from GitHub */}
                 <div 
                   className="flex items-center justify-between px-3 py-2 rounded-xl text-[13px] text-[var(--text-main)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
                   onClick={() => {
@@ -459,10 +438,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   </div>
                 </div>
 
-                {/* Divider 1 */}
                 <div className="my-1 border-t border-[var(--border-color)]" />
 
-                {/* 5. Skills */}
                 <div 
                   className="flex items-center justify-between px-3 py-2 rounded-xl text-[13px] text-[var(--text-main)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
                   onClick={() => {
@@ -477,7 +454,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   <ChevronRight size={14} className="text-[var(--text-dark)]" />
                 </div>
 
-                {/* 6. Connectors */}
                 <div 
                   className="flex items-center justify-between px-3 py-2 rounded-xl text-[13px] text-[var(--text-main)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
                   onClick={() => {
@@ -492,7 +468,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   <ChevronRight size={14} className="text-[var(--text-dark)]" />
                 </div>
 
-                {/* 7. Add plugins */}
                 <div 
                   className="flex items-center justify-between px-3 py-2 rounded-xl text-[13px] text-[var(--text-main)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
                   onClick={() => {
@@ -506,10 +481,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                   </div>
                 </div>
 
-                {/* Divider 2 */}
                 <div className="my-1 border-t border-[var(--border-color)]" />
 
-                {/* 8. Web search toggle */}
                 <div 
                   className="flex items-center justify-between px-3 py-2 rounded-xl text-[13px] text-[var(--text-main)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
                   onClick={() => {
@@ -533,13 +506,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           </>
         )}
 
-        {/* CSS GRID EXPANDING TEXTAREA */}
         <div 
           className={`grid grid-cols-1 items-start w-full transition-all duration-200 ease-out ${
             isMultiLine ? 'pl-0 pr-0' : 'pl-8 pr-16'
           }`}
         >
-          {/* Ghost Mirror for continuous zero-jitter growth */}
           <div
             ref={ghostRef}
             aria-hidden="true"
@@ -548,7 +519,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             {inputPrompt ? inputPrompt + '\n' : 'placeholder'}
           </div>
 
-          {/* Real Input Textarea */}
           <textarea
             ref={textareaRef}
             value={inputPrompt}
@@ -561,13 +531,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           />
         </div>
 
-        {/* SINGLE-LINE MODE ICONS (Pinned inline) */}
         <div 
           className={`transition-opacity duration-200 ${
             isMultiLine ? 'opacity-0 pointer-events-none' : 'opacity-100'
           }`}
         >
-          {/* Plus Icon on Left */}
           <div className="absolute left-3 top-3">
             <button
               className="flex items-center justify-center w-7 h-7 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
@@ -585,7 +553,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             </button>
           </div>
 
-          {/* Voice / Send Controls on Right */}
           <div className="absolute right-3 top-3 flex items-center gap-1">
             <button 
               className="flex items-center gap-0.5 px-1.5 py-1 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors"
@@ -609,7 +576,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           </div>
         </div>
 
-        {/* MULTI-LINE MODE BOTTOM TOOLBAR */}
         <div 
           className={`flex items-center justify-between transition-all duration-200 ease-out ${
             isMultiLine 
@@ -617,7 +583,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               : 'opacity-0 max-h-0 overflow-hidden pointer-events-none'
           }`}
         >
-          {/* Plus Icon on Bottom-Left */}
           <div>
             <button
               className="flex items-center justify-center w-7 h-7 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"
@@ -635,7 +600,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             </button>
           </div>
 
-          {/* Right Action Icons on Bottom-Right */}
           <div className="flex items-center gap-1.5">
             <button 
               className="flex items-center gap-0.5 px-2 py-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors"
@@ -662,14 +626,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         </div>
       </div>
 
-      {/* Footer Disclaimer & Model Selector Row */}
       <div className="flex items-center justify-end sm:justify-between text-xs text-[var(--text-muted)] mt-2 px-1">
-        {/* Left Disclaimer (Hidden on mobile) */}
         <span className="text-[12px] text-[var(--text-muted)] select-none hidden sm:inline">
           Omni is AI and can make mistakes. Please double-check responses.
         </span>
 
-        {/* Right Model Selector */}
         <div className="relative">
           <button 
             className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors cursor-pointer"
@@ -718,7 +679,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
                 <div className="my-2 border-t border-[var(--border-color)]" />
 
-                {/* Effort Level Submenu */}
                 <div 
                   className="flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer hover:bg-[var(--bg-hover)] text-[var(--text-main)] transition-colors"
                   onClick={() => setEffortSubmenuOpen(!effortSubmenuOpen)}

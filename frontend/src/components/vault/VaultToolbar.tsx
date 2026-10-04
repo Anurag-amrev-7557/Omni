@@ -23,7 +23,6 @@ export const VaultToolbar: React.FC<VaultToolbarProps> = ({
 }) => {
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 select-none">
-      {/* Left Search Bar */}
       <div className="relative w-full sm:w-80">
         <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
         <input
@@ -43,7 +42,6 @@ export const VaultToolbar: React.FC<VaultToolbarProps> = ({
         )}
       </div>
 
-      {/* Right Filter Category Pills */}
       <div className="flex items-center p-1 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] text-[12.5px] shadow-2xs self-start sm:self-auto">
         <button
           className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${

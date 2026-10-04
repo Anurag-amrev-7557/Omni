@@ -45,7 +45,6 @@ def init_docs_db(force: bool = False):
             cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_user_id ON documents(user_id);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_documents_filename ON documents(filename);")
 
-            # Backward-compatible column migration for older schemas
             cols_to_add = [
                 ("size_bytes", "BIGINT DEFAULT 0" if is_pg else "INTEGER DEFAULT 0"),
                 ("page_count", "INT DEFAULT 1" if is_pg else "INTEGER DEFAULT 1"),
@@ -54,14 +53,21 @@ def init_docs_db(force: bool = False):
                 ("chunk_count", "INT DEFAULT 0" if is_pg else "INTEGER DEFAULT 0"),
                 ("error", "TEXT"),
             ]
-            for col, col_def in cols_to_add:
-                try:
-                    if is_pg:
+            if is_pg:
+                for col, col_def in cols_to_add:
+                    try:
                         cur.execute(f"ALTER TABLE documents ADD COLUMN IF NOT EXISTS {col} {col_def};")
-                    else:
-                        cur.execute(f"ALTER TABLE documents ADD COLUMN {col} {col_def};")
-                except Exception:
-                    pass
+                    except Exception:
+                        pass
+            else:
+                cur.execute("PRAGMA table_info(documents);")
+                existing_cols = {r[1] for r in cur.fetchall()}
+                for col, col_def in cols_to_add:
+                    if col not in existing_cols:
+                        try:
+                            cur.execute(f"ALTER TABLE documents ADD COLUMN {col} {col_def};")
+                        except Exception:
+                            pass
 
             try:
                 cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_filename_user_id ON documents(filename, user_id);")
@@ -151,6 +157,26 @@ def update_document_status(
         return False
 
 
+def _fetch_user_doc_rows(cur, p: str, norm_user: str, is_local: bool) -> list:
+    """Internal helper executing tenant-isolated document retrieval."""
+    order_clause = "ORDER BY updated_at DESC NULLS LAST" if p == "%s" else "ORDER BY updated_at DESC"
+    if is_local:
+        cur.execute(f"""
+            SELECT filename, size_bytes, page_count, status, summary, chunk_count, error, updated_at
+            FROM documents
+            WHERE user_id = {p} OR user_id = {p}
+            {order_clause}
+        """, (norm_user, settings.DEFAULT_LOCAL_USER))
+    else:
+        cur.execute(f"""
+            SELECT filename, size_bytes, page_count, status, summary, chunk_count, error, updated_at
+            FROM documents
+            WHERE user_id = {p}
+            {order_clause}
+        """, (norm_user,))
+    return cur.fetchall()
+
+
 def get_user_documents(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """Retrieves document records strictly belonging to the specified user."""
     init_docs_db()
@@ -159,22 +185,7 @@ def get_user_documents(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
 
     try:
         with get_db_cursor() as (conn, cur, p):
-            order_clause = "ORDER BY updated_at DESC NULLS LAST" if p == "%s" else "ORDER BY updated_at DESC"
-            if is_local:
-                cur.execute(f"""
-                    SELECT filename, size_bytes, page_count, status, summary, chunk_count, error, updated_at
-                    FROM documents
-                    WHERE user_id = {p} OR user_id = {p}
-                    {order_clause}
-                """, (norm_user, settings.DEFAULT_LOCAL_USER))
-            else:
-                cur.execute(f"""
-                    SELECT filename, size_bytes, page_count, status, summary, chunk_count, error, updated_at
-                    FROM documents
-                    WHERE user_id = {p}
-                    {order_clause}
-                """, (norm_user,))
-            rows = cur.fetchall()
+            rows = _fetch_user_doc_rows(cur, p, norm_user, is_local)
             return _format_doc_rows(rows)
     except Exception as e:
         logger.error(f"get_user_documents error: {e}")
@@ -182,22 +193,7 @@ def get_user_documents(user_id: Optional[str] = None) -> List[Dict[str, Any]]:
             try:
                 init_docs_db(force=True)
                 with get_db_cursor() as (conn, cur, p):
-                    order_clause = "ORDER BY updated_at DESC NULLS LAST" if p == "%s" else "ORDER BY updated_at DESC"
-                    if is_local:
-                        cur.execute(f"""
-                            SELECT filename, size_bytes, page_count, status, summary, chunk_count, error, updated_at
-                            FROM documents
-                            WHERE user_id = {p} OR user_id = {p}
-                            {order_clause}
-                        """, (norm_user, settings.DEFAULT_LOCAL_USER))
-                    else:
-                        cur.execute(f"""
-                            SELECT filename, size_bytes, page_count, status, summary, chunk_count, error, updated_at
-                            FROM documents
-                            WHERE user_id = {p}
-                            {order_clause}
-                        """, (norm_user,))
-                    rows = cur.fetchall()
+                    rows = _fetch_user_doc_rows(cur, p, norm_user, is_local)
                     return _format_doc_rows(rows)
             except Exception as retry_e:
                 logger.error(f"get_user_documents retry error: {retry_e}")

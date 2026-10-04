@@ -86,7 +86,6 @@ export const clearUserDataOnLogout = () => {
   if (typeof window === 'undefined') return;
 
   try {
-    // 1. Explicit fixed user/session data keys
     const userKeys = [
       'omni_sessions_cache',
       'omni_active_session_id',
@@ -103,7 +102,6 @@ export const clearUserDataOnLogout = () => {
       try { localStorage.removeItem(k); } catch {}
     });
 
-    // 2. Clear all dynamic per-session message cache keys (omni_msgs_*)
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
@@ -115,7 +113,6 @@ export const clearUserDataOnLogout = () => {
       try { localStorage.removeItem(k); } catch {}
     });
 
-    // 3. Clear guest session ID in sessionStorage so the next guest session starts clean
     try { sessionStorage.removeItem('omni_guest_session_id'); } catch {}
   } catch (err) {
     console.error('Failed to clear user data on logout:', err);
@@ -128,7 +125,6 @@ export const apiFetch = async (path: string, options: RequestInit = {}) => {
   if (token && token !== 'null' && token !== 'undefined') {
     headers.set('Authorization', `Bearer ${token}`);
   } else {
-    // Unauthenticated guest user: scope requests with ephemeral guest session ID
     headers.set('X-Guest-Id', getGuestSessionId());
   }
   if (!headers.has('Cache-Control')) headers.set('Cache-Control', 'no-cache, no-store');
@@ -141,7 +137,6 @@ export const apiFetch = async (path: string, options: RequestInit = {}) => {
     }
     return res;
   } catch (error: any) {
-    // Network error or server unreachable
     throw new Error(`Network error: ${error.message || 'Server unreachable'}`);
   }
 };
@@ -180,7 +175,6 @@ export async function readNDJSONStream<T = any>(
 }
 
 export const api = {
-  // Session APIs
   async getSessions(): Promise<ChatSession[]> {
     const res = await apiFetch('/api/sessions');
     if (!res.ok) throw new Error(`Failed to load sessions (HTTP ${res.status})`);
@@ -201,7 +195,6 @@ export const api = {
     await apiFetch(`/api/sessions/${sessionId}`, { method: 'DELETE' });
   },
 
-  // Message APIs
   async getMessages(sessionId: string): Promise<ChatMessage[]> {
     const res = await apiFetch(`/api/sessions/${sessionId}/messages`);
     if (!res.ok) throw new Error(`Failed to load messages (HTTP ${res.status})`);
@@ -209,7 +202,6 @@ export const api = {
     return data.messages || [];
   },
 
-  // Document APIs
   async getDocuments(): Promise<DocumentItem[]> {
     const res = await apiFetch('/api/documents');
     if (!res.ok) throw new Error(`Failed to load documents (HTTP ${res.status})`);
@@ -362,7 +354,6 @@ export const api = {
     return `${API_BASE}/api/pdf-page-image?${params.toString()}`;
   },
 
-  // Knowledge Graph APIs
   async getGraph(): Promise<any> {
     const res = await apiFetch(`/api/graph?_t=${Date.now()}`);
     if (!res.ok) {
@@ -397,7 +388,6 @@ export const api = {
     return res.json();
   },
 
-  // GitHub Connector APIs
   async githubPreview(data: { repo?: string; repo_url?: string; branch?: string; subfolder?: string; token?: string }): Promise<any> {
     const res = await apiFetch('/api/github/preview', {
       method: 'POST',

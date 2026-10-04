@@ -1,4 +1,5 @@
 """Entity-Relation Property Graph (ERPG) Extraction and Semantic Deduplication Engine."""
+import concurrent.futures
 import json
 import re
 from typing import Any, Optional
@@ -7,6 +8,7 @@ from src.config.settings import settings
 from src.core.logging import logger
 from src.generation.llm import invoke_groq_with_fallback
 from src.generation.prompts import GRAPH_EXTRACTION_PROMPT
+from src.graph.clustering import run_community_detection_and_summaries
 from src.graph.db import (
     batch_save_entities_and_relations,
     delete_document_graph,
@@ -34,20 +36,36 @@ TYPE_NORMALIZATION_MAP = {
 
 TECH_KEYWORDS = {"python", "docker", "fastapi", "react", "next.js", "postgres", "sql", "jwt", "git", "api", "qdrant", "redis", "linux", "html", "css", "typescript", "javascript"}
 
+# Pre-compiled regular expressions for entity extraction and canonicalization
+_RE_WHITESPACE = re.compile(r'\s+')
+_RE_TRAILING_PUNCT = re.compile(r'[\.,;:]+$')
+_RE_HONORIFICS = re.compile(r'^(?:Dr|Prof|Mr|Mrs|Ms|Hon|Sir|Dame|Rev)\.?\s+', re.IGNORECASE)
+_RE_POST_HONORIFICS = re.compile(r',?\s+(?:Ph\.?D\.?|M\.?D\.?|B\.?E\.?|B\.?Tech|M\.?Tech|MBA|Esq\.?)$', re.IGNORECASE)
+_RE_ROLE_SPLIT = re.compile(r'^([A-Z][a-zA-Z\s\.\'-]{2,35}?)\s*(?:[-–—|]|\s+as\s+|\s+at\s+|\()([A-Za-z0-9\s/&_-]{2,50})\)?$')
+_RE_CLEAN_TYPE = re.compile(r'[^a-zA-Z0-9_]')
+_RE_THINK = re.compile(r'<think>[\s\S]*?</think>')
+_RE_CODEBLOCK_START = re.compile(r'^```(?:json)?\s*')
+_RE_CODEBLOCK_END = re.compile(r'\s*```$')
+_RE_JSON_BLOCK = re.compile(r'\{[\s\S]*\}')
+_RE_SALVAGE_ENT = re.compile(r'\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"type"\s*:\s*"([^"]+)"(?:[^}]*?"description"\s*:\s*"([^"]*)")?[^}]*\}')
+_RE_SALVAGE_REL = re.compile(r'\{\s*"source"\s*:\s*"([^"]+)"\s*,\s*"target"\s*:\s*"([^"]+)"\s*,\s*"type"\s*:\s*"([^"]+)"(?:[^}]*?"description"\s*:\s*"([^"]*)")?[^}]*\}')
+_RE_FALLBACK_CANDIDATES = re.compile(r'\b[A-Z][A-Za-z0-9_-]{2,}(?:\s+[A-Z][A-Za-z0-9_-]{2,})*\b')
+_RE_REL_TYPE = re.compile(r'[^A-Za-z0-9_]')
+
 
 def canonicalize_name(name: str) -> str:
     """Normalizes entity names for semantic deduplication and entity resolution."""
-    cleaned = re.sub(r'\s+', ' ', name.strip().strip("\"'`"))
-    cleaned = re.sub(r'[\.,;:]+$', '', cleaned).strip()
-    cleaned = re.sub(r'^(?:Dr|Prof|Mr|Mrs|Ms|Hon|Sir|Dame|Rev)\.?\s+', '', cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r',?\s+(?:Ph\.?D\.?|M\.?D\.?|B\.?E\.?|B\.?Tech|M\.?Tech|MBA|Esq\.?)$', '', cleaned, flags=re.IGNORECASE)
+    cleaned = _RE_WHITESPACE.sub(' ', name.strip().strip("\"'`"))
+    cleaned = _RE_TRAILING_PUNCT.sub('', cleaned).strip()
+    cleaned = _RE_HONORIFICS.sub('', cleaned)
+    cleaned = _RE_POST_HONORIFICS.sub('', cleaned)
     return cleaned.strip()
 
 
 def split_implicit_role(raw_name: str) -> tuple[str, Optional[str]]:
     """Separates atomic entity name from any attached role/designation suffix."""
     cname = canonicalize_name(raw_name)
-    m = re.match(r'^([A-Z][a-zA-Z\s\.\'-]{2,35}?)\s*(?:[-–—|]|\s+as\s+|\s+at\s+|\()([A-Za-z0-9\s/&_-]{2,50})\)?$', cname)
+    m = _RE_ROLE_SPLIT.match(cname)
     if m:
         cand_name, cand_role = m.group(1).strip(), m.group(2).strip()
         if len(cand_name.split()) >= 2:
@@ -66,7 +84,7 @@ def normalize_entity_type(raw_type: str, name: str) -> str:
             return v
     if any(kw in name.lower() for kw in TECH_KEYWORDS):
         return "Technology"
-    clean_type = re.sub(r'[^a-zA-Z0-9_]', '', t.title())
+    clean_type = _RE_CLEAN_TYPE.sub('', t.title())
     if len(clean_type) >= 2 and clean_type.lower() not in {"unknown", "misc", "other", "item", "thing", "tag", "entity"}:
         return clean_type
     return "Concept"
@@ -97,17 +115,16 @@ def extract_entities_and_relations(
         models=settings.DEFAULT_LLM_MODELS,
     )
     if raw:
-        clean_raw = re.sub(r'<think>[\s\S]*?</think>', '', raw).strip()
-        clean_raw = re.sub(r'^```(?:json)?\s*', '', clean_raw)
-        clean_raw = re.sub(r'\s*```$', '', clean_raw)
-        json_match = re.search(r'\{[\s\S]*\}', clean_raw)
+        clean_raw = _RE_THINK.sub('', raw).strip()
+        clean_raw = _RE_CODEBLOCK_START.sub('', clean_raw)
+        clean_raw = _RE_CODEBLOCK_END.sub('', clean_raw)
+        json_match = _RE_JSON_BLOCK.search(clean_raw)
         if json_match:
             try:
                 extracted_json = json.loads(json_match.group(0))
             except json.JSONDecodeError:
                 pass
 
-        # If full JSON parse failed (e.g. truncated at token boundary), attempt recovery
         if not isinstance(extracted_json, dict) or not extracted_json.get("entities"):
             last_brace = clean_raw.rfind("}")
             if last_brace > 0:
@@ -121,24 +138,17 @@ def extract_entities_and_relations(
                     except Exception:
                         pass
 
-        # Secondary recovery: regex salvage of any complete entity and relation dicts
         if not isinstance(extracted_json, dict) or not extracted_json.get("entities"):
             entities_salvaged = []
             relations_salvaged = []
-            for em in re.finditer(
-                r'\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"type"\s*:\s*"([^"]+)"(?:[^}]*?"description"\s*:\s*"([^"]*)")?[^}]*\}',
-                clean_raw,
-            ):
+            for em in _RE_SALVAGE_ENT.finditer(clean_raw):
                 entities_salvaged.append({
                     "name": em.group(1),
                     "type": em.group(2),
                     "description": em.group(3) or "",
                     "aliases": [],
                 })
-            for rm in re.finditer(
-                r'\{\s*"source"\s*:\s*"([^"]+)"\s*,\s*"target"\s*:\s*"([^"]+)"\s*,\s*"type"\s*:\s*"([^"]+)"(?:[^}]*?"description"\s*:\s*"([^"]*)")?[^}]*\}',
-                clean_raw,
-            ):
+            for rm in _RE_SALVAGE_REL.finditer(clean_raw):
                 relations_salvaged.append({
                     "source": rm.group(1),
                     "target": rm.group(2),
@@ -155,9 +165,8 @@ def extract_entities_and_relations(
     entities = extracted_json.get("entities", [])
     relations = extracted_json.get("relations", [])
 
-    # Heuristic Rule-Based Fallback ONLY if LLM extraction returned 0 entities
     if not entities:
-        candidates = list(dict.fromkeys(re.findall(r'\b[A-Z][A-Za-z0-9_-]{2,}(?:\s+[A-Z][A-Za-z0-9_-]{2,})*\b', text)))
+        candidates = list(dict.fromkeys(_RE_FALLBACK_CANDIDATES.findall(text)))
         stopwords = {
             "This", "That", "There", "Here", "With", "From", "Your", "Please",
             "Document", "Section", "Table", "Figure", "After", "Before", "When",
@@ -248,7 +257,7 @@ def extract_entities_and_relations(
                 })
                 valid_names.add(ep_name)
 
-        rel_type = re.sub(r'[^A-Za-z0-9_]', '', rel.get("type", "RELATES_TO")).upper() or "RELATES_TO"
+        rel_type = _RE_REL_TYPE.sub('', rel.get("type", "RELATES_TO")).upper() or "RELATES_TO"
         rel_key = (src.lower(), tgt.lower(), rel_type)
         if rel_key not in seen_rel_keys:
             seen_rel_keys.add(rel_key)
@@ -260,8 +269,6 @@ def extract_entities_and_relations(
                 "weight": float(rel.get("weight", 1.0)),
             })
 
-    # Hierarchical Hub-and-Spoke Anchor Topology
-    # Prevents starburst crowding by clustering technologies under their respective projects/organizations
     primary_persons = [e["name"] for e in cleaned_entities if e.get("type") == "Person"]
     anchor = primary_persons[0] if primary_persons else (cleaned_entities[0]["name"] if cleaned_entities else None)
 
@@ -280,7 +287,6 @@ def extract_entities_and_relations(
     linked_pairs = {(r["source"].lower(), r["target"].lower()) for r in cleaned_relations}
     linked_names = {r["source"].lower() for r in cleaned_relations} | {r["target"].lower() for r in cleaned_relations}
 
-    # Ensure projects & organizations are linked to the primary person anchor
     if anchor:
         for sys_ent in systems:
             s_name = sys_ent["name"]
@@ -309,7 +315,6 @@ def extract_entities_and_relations(
                 linked_pairs.add((anchor.lower(), o_name.lower()))
                 linked_names.add(o_name.lower())
 
-    # Anchor remaining orphan entities to their contextual project/org hub (or fallback to anchor)
     for ent in cleaned_entities:
         cname = ent["name"]
         if cname.lower() in linked_names or (anchor and cname.lower() == anchor.lower()):
@@ -375,8 +380,6 @@ def extract_and_cluster(
     run_clustering: Optional[bool] = None,
 ) -> dict:
     """Extracts entities & relations from chunks, resolves entities, and detects communities."""
-    from src.graph.clustering import run_community_detection_and_summaries
-
     if clear_existing:
         delete_document_graph(filename, user_id=user_id)
 
@@ -392,7 +395,6 @@ def extract_and_cluster(
             user_id=user_id,
         )
 
-    import concurrent.futures
     if len(chunks) <= 1:
         results = [_process_chunk(c) for c in chunks]
     else:

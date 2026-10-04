@@ -15,18 +15,26 @@ from src.core.security import is_default_or_local_user, normalize_user_id
 
 DEFAULT_LOCAL_USER = settings.DEFAULT_LOCAL_USER
 DB_PATH = settings.GRAPH_DB_PATH
+_db_dir_checked = False
+
+_HONORIFICS_RE = re.compile(r'^(?:dr|prof|mr|mrs|ms|hon|sir|dame|rev)\.?\s+', re.IGNORECASE)
+_DEGREES_RE = re.compile(r',?\s+(?:ph\.?d\.?|m\.?d\.?|b\.?e\.?|b\.?tech|m\.?tech|mba|esq\.?)$', re.IGNORECASE)
+_CORP_SUFFIX_RE = re.compile(r'\b(?:inc|incorporated|llc|ltd|limited|corp|corporation|pvt|private|technologies|solutions|co)\b\.?', re.IGNORECASE)
+_TECH_JS_RE = re.compile(r'\.js$', re.IGNORECASE)
+_TECH_TERMS_RE = re.compile(r'\b(?:framework|library|database|db|platform|engine|sdk|api)\b', re.IGNORECASE)
+_TRAILING_DASH_RE = re.compile(r'\s*[-–—|:/]\s*.*$')
+_PARENTHETICAL_RE = re.compile(r'\s*\([^)]*\)')
+_ALPHANUMERIC_ONLY_RE = re.compile(r'[^a-z0-9]')
 
 
 def get_db_connection() -> sqlite3.Connection:
-    """Opens a SQLite connection with row factories, WAL mode, and foreign key support."""
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    """Opens a SQLite connection with row factories and foreign key support."""
+    global _db_dir_checked
+    if not _db_dir_checked:
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+        _db_dir_checked = True
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.execute("PRAGMA foreign_keys = ON;")
-    try:
-        conn.execute("PRAGMA journal_mode = WAL;")
-        conn.execute("PRAGMA synchronous = NORMAL;")
-    except Exception:
-        pass
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -63,10 +71,33 @@ def _user_clause(uid: str) -> tuple[str, tuple]:
     return "user_id = ?", (uid,)
 
 
+def _prune_orphaned_entities_and_communities(cur: sqlite3.Cursor, clause: str, params: tuple):
+    """Prunes entities disconnected from all documents/relations and cleans empty communities."""
+    cur.execute(f"""
+        DELETE FROM graph_entities
+        WHERE ({clause})
+        AND (source_docs = '[]' OR source_docs IS NULL OR source_docs = '')
+        AND entity_id NOT IN (SELECT source_entity_id FROM graph_relations)
+        AND entity_id NOT IN (SELECT target_entity_id FROM graph_relations)
+    """, params)
+
+    cur.execute(f"SELECT COUNT(*) as count FROM graph_entities WHERE {clause}", params)
+    if cur.fetchone()["count"] == 0:
+        cur.execute(f"DELETE FROM graph_communities WHERE {clause}", params)
+
+
 def init_graph_db():
-    """Initializes graph tables and performance indices in SQLite."""
+    """Initializes graph tables, WAL mode, and performance indices in SQLite."""
+    global _db_dir_checked
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    _db_dir_checked = True
     try:
         with _cursor(commit=True) as cur:
+            try:
+                cur.execute("PRAGMA journal_mode = WAL;")
+                cur.execute("PRAGMA synchronous = NORMAL;")
+            except Exception:
+                pass
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS graph_entities (
                     entity_id TEXT PRIMARY KEY,
@@ -160,14 +191,14 @@ def _upsert_entity_cursor(
             UPDATE graph_entities
             SET entity_type = ?, description = ?, aliases = ?, source_docs = ?, updated_at = CURRENT_TIMESTAMP
             WHERE user_id = ? AND entity_id = ?
-        """, (final_type, final_desc, json.dumps(sorted(list(curr_aliases))), json.dumps(sorted(list(curr_docs))), uid, ent_id))
+        """, (final_type, final_desc, json.dumps(sorted(curr_aliases)), json.dumps(sorted(curr_docs)), uid, ent_id))
         return ent_id
 
     ent_id = str(uuid.uuid4())
     cur.execute("""
         INSERT INTO graph_entities (entity_id, user_id, canonical_name, entity_type, description, aliases, source_docs)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (ent_id, uid, cname, etype, desc, json.dumps(sorted(list(set(new_aliases)))), json.dumps(sorted(list(set(new_docs))))))
+    """, (ent_id, uid, cname, etype, desc, json.dumps(sorted(set(new_aliases))), json.dumps(sorted(set(new_docs)))))
     return ent_id
 
 
@@ -213,15 +244,12 @@ def add_relation(
                 source_doc = CASE WHEN excluded.source_doc != '' THEN excluded.source_doc ELSE graph_relations.source_doc END,
                 page_num = excluded.page_num,
                 snippet = CASE WHEN LENGTH(excluded.snippet) > LENGTH(graph_relations.snippet) THEN excluded.snippet ELSE graph_relations.snippet END
+            RETURNING relation_id;
         """, (
             rel_id, uid, source_entity_id, target_entity_id,
             norm_type, weight, description.strip(),
             source_doc.strip(), page_num, snippet.strip()
         ))
-        cur.execute(
-            "SELECT relation_id FROM graph_relations WHERE user_id=? AND source_entity_id=? AND target_entity_id=? AND relation_type=?",
-            (uid, source_entity_id, target_entity_id, norm_type)
-        )
         row = cur.fetchone()
         return row["relation_id"] if row else rel_id
 
@@ -356,12 +384,24 @@ def get_user_graph(user_id: Optional[str] = None, active_filenames: Optional[lis
 
 
 def save_community_clusters(clusters: list[dict], user_id: Optional[str] = None):
-    """Saves hierarchical community clusters and summaries."""
+    """Saves hierarchical community clusters and summaries using batch insertion."""
     uid = normalize_user_id(user_id or get_current_user())
     with _cursor(commit=True) as cur:
         cur.execute("DELETE FROM graph_communities WHERE user_id=?", (uid,))
-        for c in clusters:
-            cur.execute("""
+        if clusters:
+            params = [
+                (
+                    c.get("community_id", 0),
+                    uid,
+                    c.get("level", 0),
+                    c.get("title", f"Community {c.get('community_id', 0)}"),
+                    c.get("summary", ""),
+                    json.dumps(c.get("key_entities", [])),
+                    json.dumps(c.get("findings", [])),
+                )
+                for c in clusters
+            ]
+            cur.executemany("""
                 INSERT INTO graph_communities (
                     community_id, user_id, level, title, summary, key_entities, findings
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -370,27 +410,24 @@ def save_community_clusters(clusters: list[dict], user_id: Optional[str] = None)
                     summary = excluded.summary,
                     key_entities = excluded.key_entities,
                     findings = excluded.findings
-            """, (
-                c.get("community_id", 0),
-                uid,
-                c.get("level", 0),
-                c.get("title", f"Community {c.get('community_id', 0)}"),
-                c.get("summary", ""),
-                json.dumps(c.get("key_entities", [])),
-                json.dumps(c.get("findings", [])),
-            ))
+            """, params)
 
 
 def update_entity_metrics(entity_updates: list[dict], user_id: Optional[str] = None):
-    """Batch updates degree, PageRank, and community assignments."""
+    """Batch updates degree, PageRank, and community assignments using a single executemany call."""
     uid = normalize_user_id(user_id or get_current_user())
+    if not entity_updates:
+        return
     with _cursor(commit=True) as cur:
-        for u in entity_updates:
-            cur.execute("""
-                UPDATE graph_entities SET
-                    community_id = ?, degree = ?, pagerank = ?
-                WHERE entity_id = ? AND user_id = ?
-            """, (u.get("community_id", 0), u.get("degree", 0), u.get("pagerank", 1.0), u["entity_id"], uid))
+        params = [
+            (u.get("community_id", 0), u.get("degree", 0), u.get("pagerank", 1.0), u["entity_id"], uid)
+            for u in entity_updates
+        ]
+        cur.executemany("""
+            UPDATE graph_entities SET
+                community_id = ?, degree = ?, pagerank = ?
+            WHERE entity_id = ? AND user_id = ?
+        """, params)
 
 
 def sync_and_prune_graph(user_id: Optional[str] = None, active_filenames: Optional[list[str]] = None):
@@ -421,17 +458,7 @@ def sync_and_prune_graph(user_id: Optional[str] = None, active_filenames: Option
             if len(filtered) != len(docs):
                 cur.execute("UPDATE graph_entities SET source_docs = ? WHERE entity_id = ?", (json.dumps(filtered), r["entity_id"]))
 
-        cur.execute(f"""
-            DELETE FROM graph_entities
-            WHERE ({clause})
-            AND (source_docs = '[]' OR source_docs IS NULL OR source_docs = '')
-            AND entity_id NOT IN (SELECT source_entity_id FROM graph_relations)
-            AND entity_id NOT IN (SELECT target_entity_id FROM graph_relations)
-        """, params)
-
-        cur.execute(f"SELECT COUNT(*) as count FROM graph_entities WHERE {clause}", params)
-        if cur.fetchone()["count"] == 0:
-            cur.execute(f"DELETE FROM graph_communities WHERE {clause}", params)
+        _prune_orphaned_entities_and_communities(cur, clause, params)
 
     run_entity_resolution_and_deduplication(uid)
 
@@ -442,16 +469,16 @@ def run_entity_resolution_and_deduplication(user_id: Optional[str] = None) -> in
 
     def normalize_entity_stem(name: str, etype: str = "") -> str:
         s = name.lower().strip()
-        s = re.sub(r'^(?:dr|prof|mr|mrs|ms|hon|sir|dame|rev)\.?\s+', '', s)
-        s = re.sub(r',?\s+(?:ph\.?d\.?|m\.?d\.?|b\.?e\.?|b\.?tech|m\.?tech|mba|esq\.?)$', '', s)
+        s = _HONORIFICS_RE.sub('', s)
+        s = _DEGREES_RE.sub('', s)
         if etype in ('Organization', 'Company'):
-            s = re.sub(r'\b(?:inc|incorporated|llc|ltd|limited|corp|corporation|pvt|private|technologies|solutions|co)\b\.?', '', s)
+            s = _CORP_SUFFIX_RE.sub('', s)
         if etype in ('Technology', 'System', 'Skill'):
-            s = re.sub(r'\.js$', '', s)
-            s = re.sub(r'\b(?:framework|library|database|db|platform|engine|sdk|api)\b', '', s)
-        s = re.sub(r'\s*[-–—|:/]\s*.*$', '', s)
-        s = re.sub(r'\s*\([^)]*\)', '', s)
-        return re.sub(r'[^a-z0-9]', '', s)
+            s = _TECH_JS_RE.sub('', s)
+            s = _TECH_TERMS_RE.sub('', s)
+        s = _TRAILING_DASH_RE.sub('', s)
+        s = _PARENTHETICAL_RE.sub('', s)
+        return _ALPHANUMERIC_ONLY_RE.sub('', s)
 
     merged_count = 0
     with _cursor(commit=True) as cur:
@@ -509,7 +536,7 @@ def run_entity_resolution_and_deduplication(user_id: Optional[str] = None) -> in
                 UPDATE graph_entities
                 SET source_docs = ?, aliases = ?, description = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE user_id = ? AND entity_id = ?
-            """, (json.dumps(sorted(list(all_docs))), json.dumps(sorted(list(all_aliases))), best_desc, uid, primary_id))
+            """, (json.dumps(sorted(all_docs)), json.dumps(sorted(all_aliases)), best_desc, uid, primary_id))
 
     if merged_count > 0:
         logger.info(f"Resolved and unified {merged_count} fragmented entities for user {uid}")
@@ -525,24 +552,20 @@ def delete_document_graph(filename: str, user_id: Optional[str] = None):
 
     with _cursor(commit=True) as cur:
         cur.execute(f"DELETE FROM graph_relations WHERE source_doc=? AND ({clause})", (filename_clean,) + params)
-        cur.execute(f"SELECT entity_id, source_docs FROM graph_entities WHERE {clause}", params)
+
+        # Fast path: only inspect entities that actually reference the deleted document
+        search_pattern = f"%{filename_clean}%"
+        cur.execute(
+            f"SELECT entity_id, source_docs FROM graph_entities WHERE ({clause}) AND source_docs LIKE ?",
+            params + (search_pattern,)
+        )
         for r in cur.fetchall():
             docs = _parse_json(r["source_docs"])
             if filename_clean in docs:
                 docs.remove(filename_clean)
                 cur.execute("UPDATE graph_entities SET source_docs=? WHERE entity_id=?", (json.dumps(docs), r["entity_id"]))
 
-        cur.execute(f"""
-            DELETE FROM graph_entities
-            WHERE ({clause})
-            AND (source_docs = '[]' OR source_docs IS NULL OR source_docs = '')
-            AND entity_id NOT IN (SELECT source_entity_id FROM graph_relations)
-            AND entity_id NOT IN (SELECT target_entity_id FROM graph_relations)
-        """, params)
-
-        cur.execute(f"SELECT COUNT(*) as count FROM graph_entities WHERE {clause}", params)
-        if cur.fetchone()["count"] == 0:
-            cur.execute(f"DELETE FROM graph_communities WHERE {clause}", params)
+        _prune_orphaned_entities_and_communities(cur, clause, params)
 
 
 def clear_user_graph(user_id: Optional[str] = None):

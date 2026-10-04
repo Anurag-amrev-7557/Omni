@@ -30,7 +30,6 @@ from src.graph.extractor import (
 )
 
 __all__ = [
-    # DB operations
     "get_db_connection",
     "init_graph_db",
     "upsert_entity",
@@ -43,17 +42,13 @@ __all__ = [
     "run_entity_resolution_and_deduplication",
     "delete_document_graph",
     "clear_user_graph",
-    # Traversal
     "traverse_subgraph",
     "extract_query_keywords",
-    # Clustering
     "compute_pagerank",
     "detect_louvain_communities",
     "run_community_detection_and_summaries",
-    # Extraction
     "extract_entities_and_relations",
     "canonicalize_name",
     "normalize_entity_type",
-    # Pipeline
     "extract_and_cluster",
 ]

@@ -34,7 +34,6 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'chats' | 'docs' | 'actions'>('all');
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
 
-  // Reset query and selection on open
   useEffect(() => {
     if (isOpen) {
       setQuery('');
@@ -43,7 +42,6 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     }
   }, [isOpen]);
 
-  // Filtered lists
   const filteredSessions = useMemo(() => {
     if (!query) return sessions.slice(0, 5);
     return sessions.filter(s =>
@@ -93,7 +91,6 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     },
   ].filter(a => !query || a.title.toLowerCase().includes(query.toLowerCase()) || a.desc.toLowerCase().includes(query.toLowerCase())), [query, onNewChat, onNavigateTab, onOpenSettings, onClose]);
 
-  // Flattened navigable list for keyboard arrows
   const allResults = useMemo(() => {
     const list: Array<{ type: 'session' | 'doc' | 'action'; item: any }> = [];
     if (categoryFilter === 'all' || categoryFilter === 'chats') {
@@ -108,7 +105,6 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     return list;
   }, [categoryFilter, filteredSessions, filteredDocs, systemActions]);
 
-  // Keyboard navigation listener (Arrow Up/Down, Enter, Esc)
   useEffect(() => {
     if (!isOpen) return;
 
@@ -152,12 +148,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({
       style={{ backgroundColor: 'var(--backdrop-color)' }}
       onClick={onClose}
     >
-      {/* Modal Container */}
       <div
         className="dropdown-popover w-full max-w-2xl rounded-3xl bg-[var(--bg-modal)] border border-[var(--border-color)] shadow-[0_24px_64px_rgba(0,0,0,0.35)] overflow-hidden flex flex-col max-h-[80vh] text-[var(--text-main)]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Search Input Bar */}
         <div className="flex items-center gap-3.5 px-5 py-4 border-b border-[var(--border-color)] bg-[var(--bg-modal)]">
           <Search size={19} className="text-[var(--accent-primary)] flex-shrink-0" />
           <input
@@ -187,7 +181,6 @@ export const SearchModal: React.FC<SearchModalProps> = ({
           </div>
         </div>
 
-        {/* Filter Category Pills */}
         <div className="flex items-center gap-1.5 px-4 py-2 border-b border-[var(--border-color)] bg-[var(--bg-sidebar)] text-xs overflow-x-auto select-none">
           {[
             { id: 'all', label: 'All Results' },
@@ -212,7 +205,6 @@ export const SearchModal: React.FC<SearchModalProps> = ({
           ))}
         </div>
 
-        {/* Results Scroll Area */}
         <div className="flex-1 overflow-y-auto p-2 space-y-4 bg-[var(--bg-modal)]">
           {allResults.length === 0 ? (
             <div className="py-12 text-center text-xs text-[var(--text-muted)]">
@@ -220,7 +212,6 @@ export const SearchModal: React.FC<SearchModalProps> = ({
             </div>
           ) : (
             <>
-              {/* CHATS SECTION */}
               {(categoryFilter === 'all' || categoryFilter === 'chats') && filteredSessions.length > 0 && (
                 <div>
                   <div className="px-3 py-1 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider select-none">
@@ -261,7 +252,6 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                 </div>
               )}
 
-              {/* DOCUMENTS SECTION */}
               {(categoryFilter === 'all' || categoryFilter === 'docs') && filteredDocs.length > 0 && (
                 <div>
                   <div className="px-3 py-1 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider select-none">
@@ -302,7 +292,6 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                 </div>
               )}
 
-              {/* QUICK ACTIONS SECTION */}
               {(categoryFilter === 'all' || categoryFilter === 'actions') && systemActions.length > 0 && (
                 <div>
                   <div className="px-3 py-1 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider select-none">
@@ -344,7 +333,6 @@ export const SearchModal: React.FC<SearchModalProps> = ({
           )}
         </div>
 
-        {/* Modal Footer with Keyboard Navigation Hints */}
         <div className="flex items-center justify-between px-5 py-3 border-t border-[var(--border-color)] bg-[var(--bg-sidebar)] text-[11px] text-[var(--text-muted)] font-mono select-none">
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1.5">

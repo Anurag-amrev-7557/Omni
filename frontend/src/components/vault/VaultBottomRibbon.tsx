@@ -65,7 +65,6 @@ export const VaultBottomRibbon: React.FC<VaultBottomRibbonProps> = ({
 
   const hasSelection = selectedFilenames.length > 0;
 
-  // 1. BULK SELECTION MODE: Replaces bottom ribbon content smoothly
   if (hasSelection) {
     const selectedDocs = documents.filter((d) => selectedFilenames.includes(d.filename));
     const selectedMb = selectedDocs.reduce((acc, d) => acc + (d.size_mb || 0), 0).toFixed(2);
@@ -73,7 +72,6 @@ export const VaultBottomRibbon: React.FC<VaultBottomRibbonProps> = ({
     return (
       <footer className="h-12 min-h-[48px] border-t border-[var(--border-color)] bg-[var(--bg-modal)] flex items-center justify-between select-none flex-shrink-0 shadow-lg px-3 sm:px-6 transition-all duration-300 animate-in fade-in">
         <div className="max-w-6xl mx-auto w-full flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
-          {/* Selected Count & Size Badge */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <span className="w-5 h-5 rounded-md bg-[var(--accent-primary)] text-[var(--accent-contrast-text)] flex items-center justify-center font-bold text-[11px] font-mono shadow-xs">
               {selectedFilenames.length}
@@ -86,7 +84,6 @@ export const VaultBottomRibbon: React.FC<VaultBottomRibbonProps> = ({
             </span>
           </div>
 
-          {/* Action Buttons */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {onBatchReindex && (
               <button
@@ -147,12 +144,10 @@ export const VaultBottomRibbon: React.FC<VaultBottomRibbonProps> = ({
     );
   }
 
-  // 2. DEFAULT METRICS & LIVE PIPELINE HEALTH MODE
   return (
     <footer className="h-12 min-h-[48px] border-t border-[var(--border-color)] bg-[var(--bg-card)] flex items-center justify-between select-none flex-shrink-0 shadow-2xs transition-all duration-300">
       <div className="max-w-6xl mx-auto w-full px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 overflow-hidden">
         
-        {/* Left: Active Corpus & Size */}
         <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 rounded-xl bg-[var(--bg-input)] border border-[var(--border-color)] shadow-2xs flex-shrink-0">
           <HardDrive size={13} className="text-[var(--accent-primary)]" />
           <span className="text-[12px] sm:text-[12.5px] font-semibold text-[var(--text-main)]">
@@ -163,7 +158,6 @@ export const VaultBottomRibbon: React.FC<VaultBottomRibbonProps> = ({
           </span>
         </div>
 
-        {/* Middle: Vector Engine & Hybrid Retrieval Specs */}
         <div className="hidden md:flex items-center gap-3 px-3 py-1 rounded-xl bg-[var(--bg-input)] border border-[var(--border-color)] shadow-2xs">
           <div className="flex items-center gap-1.5">
             <Database size={14} className="text-blue-500" />
@@ -179,7 +173,6 @@ export const VaultBottomRibbon: React.FC<VaultBottomRibbonProps> = ({
           </div>
         </div>
 
-        {/* Right: Actual & Real Health & Grounding Verification */}
         <div className="flex items-center gap-2 sm:gap-3 px-2.5 sm:px-3 py-1 rounded-xl bg-[var(--bg-input)] border border-[var(--border-color)] shadow-2xs flex-shrink-0">
           <div className="flex items-center gap-1.5" title="Qdrant Vector Database Live Status">
             <span 

@@ -27,7 +27,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
   if (!isOpen) return null;
 
-  // Google OAuth Login
   const handleGoogleSignIn = async () => {
     try {
       setIsLoading(true);
@@ -47,7 +46,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     }
   };
 
-  // Email OTP / Magic Link or Password Authentication
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
@@ -58,7 +56,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
     try {
       if (authMethod === 'otp') {
-        // Passwordless Magic Link / OTP
         const { error } = await supabase.auth.signInWithOtp({
           email: email.trim(),
           options: {
@@ -69,7 +66,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         setSuccessMessage(`Check your inbox at ${email.trim()} for your magic sign-in link.`);
         showToast("Magic sign-in link dispatched!");
       } else {
-        // Password Sign In / Sign Up
         if (isSignUp) {
           const { error, data } = await supabase.auth.signUp({
             email: email.trim(),
@@ -106,18 +102,14 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
   return (
     <div className="fixed inset-0 z-[100] flex bg-[#141413] overflow-hidden fade-in select-none">
-      {/* LEFT COLUMN: BRAND & AUTH FORM */}
       <div className="flex-1 flex flex-col justify-between p-4 sm:p-6 md:p-8 lg:p-10 overflow-y-auto">
-        {/* Top Header Row */}
         <div className="flex items-center justify-between w-full">
-          {/* Brand Logo with Warm Sunburst Mark */}
           <div className="flex items-center gap-2.5">
             <span className="font-serif text-3xl font-light tracking-tight text-[#f4f3ef]">
               Omni
             </span>
           </div>
 
-          {/* Dismiss Button (if guest can return) */}
           {onClose && (
             <button
               onClick={onClose}
@@ -129,10 +121,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           )}
         </div>
 
-        {/* Center Auth Hero & Form */}
         <div className="my-auto py-6 w-full flex flex-col items-center justify-center">
           <div className="w-full max-w-xl flex flex-col items-center text-center">
-            {/* Editorial Headline */}
             <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl font-light text-[#f4f3ef] mb-4 tracking-tight text-center whitespace-nowrap">
               Question what’s next
             </h1>
@@ -140,7 +130,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               Your thinking partner for big ambitions
             </p>
 
-            {/* Minimalist Pill Banner if Query Limit Triggered */}
             {reasonMessage && (
               <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#1f1e1d] border border-[#2c2b29] text-[12.5px] text-[#b8b5ad] mb-6 shadow-xs fade-in select-none">
                 <span className="w-2 h-2 rounded-full bg-[#e07a5f] animate-pulse flex-shrink-0" />
@@ -148,9 +137,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               </div>
             )}
 
-            {/* Clean Rounded Auth Card (Exact Claude Palette) */}
             <div className="w-full max-w-[420px] p-6 sm:p-7 rounded-[28px] bg-[#1f1e1d] border border-[#2c2b29] shadow-2xl text-left">
-              {/* Google OAuth Button */}
               <button
                 type="button"
                 onClick={handleGoogleSignIn}
@@ -178,7 +165,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 <span>Continue with Google</span>
               </button>
 
-              {/* Subtle OR Divider */}
               <div className="relative my-4 text-center">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-[#2c2b29]" />
@@ -188,7 +174,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 </span>
               </div>
 
-              {/* Email Form */}
               <form onSubmit={handleEmailAuth} className="space-y-3">
                 <div>
                   <input
@@ -215,7 +200,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   </div>
                 )}
 
-                {/* Error or Success Alert */}
                 {errorMessage && (
                   <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2 fade-in">
                     <AlertCircle size={14} className="flex-shrink-0" />
@@ -230,7 +214,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   </div>
                 )}
 
-                {/* Primary Submit Button (Solid White with Dark Text) */}
                 <button
                   type="submit"
                   disabled={isLoading || !email.trim()}
@@ -253,7 +236,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 </button>
               </form>
 
-              {/* Switch Auth Method Subtext */}
               <div className="mt-5 pt-5 pb-0 -mb-2 border-t border-[#2c2b29] flex flex-col items-center justify-center text-[13px] text-[#b8b5ad]">
                 {authMethod === 'otp' ? (
                   <button
@@ -289,7 +271,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 )}
               </div>
 
-              {/* Continue as Guest Option */}
               {onClose && (
                 <div className="mt-4 pt-3 border-t border-[#2c2b29]/50 text-center">
                   <button
@@ -306,7 +287,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         </div>
       </div>
 
-      {/* RIGHT COLUMN: CINEMATIC EDITORIAL WORKSPACE ASSET */}
       <div className="hidden lg:block lg:w-1/2 p-6 h-full">
         <div className="w-full h-full rounded-3xl border border-[#2c2b29] overflow-hidden shadow-2xl relative bg-[#1f1e1d] group">
           <img
@@ -314,7 +294,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             alt="Omni Research & Thinking Workspace"
             className="w-full h-full object-cover rounded-3xl transition-transform duration-700 group-hover:scale-[1.02]"
           />
-          {/* Subtle Ambient Vignette Overlay */}
           <div className="absolute inset-0 rounded-3xl bg-gradient-to-t from-black/50 via-transparent to-black/20 pointer-events-none" />
           
           <div className="absolute bottom-8 left-8 right-8 text-white p-6 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10">

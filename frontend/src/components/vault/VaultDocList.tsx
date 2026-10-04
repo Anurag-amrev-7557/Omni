@@ -66,7 +66,6 @@ export const VaultDocList: React.FC<VaultDocListProps> = ({
     );
   }
 
-  // Column Sort Header Helper Component
   const SortableHeader: React.FC<{
     field: SortField;
     label: string;
@@ -103,7 +102,6 @@ export const VaultDocList: React.FC<VaultDocListProps> = ({
         <table className="w-full min-w-[700px] text-left text-xs border-collapse">
           <thead>
             <tr className="border-b border-[var(--border-color)] bg-[var(--bg-sidebar)]">
-              {/* Master Select-All Checkbox */}
               <th className="py-3 px-4 w-12 text-center">
                 <div className="flex items-center justify-center">
                   <CustomCheckbox
@@ -115,7 +113,6 @@ export const VaultDocList: React.FC<VaultDocListProps> = ({
                 </div>
               </th>
 
-              {/* Sortable Column Headers */}
               <SortableHeader field="name" label="Document" className="w-[42%]" />
               <SortableHeader field="type" label="Format" className="w-[14%]" />
               <SortableHeader field="size" label="Size" className="w-[12%]" />
@@ -145,7 +142,6 @@ export const VaultDocList: React.FC<VaultDocListProps> = ({
                   }`}
                   onClick={() => onInspect({ filename: doc.filename })}
                 >
-                  {/* Row Checkbox */}
                   <td className="py-3.5 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-center">
                       <CustomCheckbox
@@ -156,7 +152,6 @@ export const VaultDocList: React.FC<VaultDocListProps> = ({
                     </div>
                   </td>
 
-                  {/* Document Name */}
                   <td className="py-3.5 px-4">
                     <div className="flex items-center gap-3">
                       <FormatBadge filename={doc.filename} size="sm" />
@@ -169,22 +164,18 @@ export const VaultDocList: React.FC<VaultDocListProps> = ({
                     </div>
                   </td>
 
-                  {/* Format */}
                   <td className="py-3.5 px-4 text-[var(--text-muted)] text-[12.5px]">
                     {isPdf ? 'PDF Document' : isMd ? 'Markdown Spec' : 'Plaintext File'}
                   </td>
 
-                  {/* Size */}
                   <td className="py-3.5 px-4 font-mono text-[12.5px] text-[var(--text-main)] font-semibold">
                     {doc.size_mb} MB
                   </td>
 
-                  {/* Pages */}
                   <td className="py-3.5 px-4 text-[var(--text-muted)] text-[12.5px] font-mono">
                     {doc.pages || 1} {doc.pages === 1 ? 'page' : 'pages'}
                   </td>
 
-                  {/* Vector Index Status Micro-Pill */}
                   <td className="py-3.5 px-4">
                     {doc.status === 'indexing' || doc.status === 'uploading' || doc.indexed === false ? (
                       <span 
@@ -215,7 +206,6 @@ export const VaultDocList: React.FC<VaultDocListProps> = ({
                     )}
                   </td>
 
-                  {/* Actions Bar */}
                   <td className="py-3.5 px-5 text-right" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
                       <button

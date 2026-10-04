@@ -45,7 +45,6 @@ def hybrid_search(
     effective_uid = user_id if user_id else get_current_user()
     norm_uid = normalize_user_id(effective_uid)
 
-    # SECURITY GATE: block any call where the resolved identity is the default/local sentinel
     if not user_id or is_default_or_local_user(user_id) or is_default_or_local_user(norm_uid):
         logger.debug(
             "hybrid_search: no authenticated user_id supplied (got %r); "
@@ -96,7 +95,6 @@ def hybrid_search(
         for doc, score in docs_and_scores
     ]
 
-    # Stage 1: Reciprocal Rank Fusion (Dense + BM25)
     fused_candidates = compute_reciprocal_rank_fusion(
         dense_results=initial_candidates,
         candidate_docs=initial_candidates,
@@ -105,7 +103,6 @@ def hybrid_search(
     for doc in fused_candidates:
         doc["rerank_score"] = doc.get("rrf_score", 0.0)
 
-    # Stage 2: Deep Cross-Encoder Reranking (if enabled)
     if settings.ENABLE_CROSS_ENCODER and fused_candidates:
         try:
             reranker = get_reranker()
@@ -119,7 +116,6 @@ def hybrid_search(
         except Exception as e:
             logger.debug(f"Cross-Encoder reranking note: {e}")
 
-    # Stage 3: Multi-Hop Knowledge Graph Traversal & Provenance Fusion
     try:
         active_files = active_filenames if active_filenames is not None else get_collection_stats(user_id=norm_uid).get("files", [])
         if active_files:
@@ -130,7 +126,6 @@ def hybrid_search(
     except Exception as g_exc:
         logger.debug(f"Graph traversal note: {g_exc}")
 
-    # Stage 4: Deduplicate by parent window to maximize topical diversity across target_k
     unique_candidates = []
     seen_parents = set()
     for doc in fused_candidates:

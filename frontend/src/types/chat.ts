@@ -9,6 +9,8 @@ export interface ContextChunk {
   rrf_score?: number;
   vector_score?: number;
   bm25_score?: number;
+  url?: string;
+  is_web?: boolean;
 }
 
 export interface ChatMessage {

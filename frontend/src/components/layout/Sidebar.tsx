@@ -89,7 +89,6 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
 
   return (
     <>
-      {/* Mobile Drawer Backdrop Overlay */}
       <div 
         className={`fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-xs transition-opacity duration-300 ${
           collapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'
@@ -105,7 +104,6 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
         }`}
       >
         <div className="w-[280px] min-w-[280px] h-full flex flex-col justify-between">
-          {/* Top Header & Brand */}
           <div className="flex flex-col">
             <div className="h-14 px-5 flex items-center justify-between border-b border-[var(--border-color)]">
               <span className="font-serif text-xl font-medium text-[var(--text-main)] tracking-tight">Omni</span>
@@ -127,7 +125,6 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
             </div>
           </div>
 
-          {/* Navigation Section */}
           <div className="p-3 flex flex-col gap-1 border-b border-[var(--border-color)]">
             <button 
               className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-all text-left cursor-pointer"
@@ -201,7 +198,6 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
           </button>
         </div>
 
-        {/* Recents Thread List */}
         <div className="px-4 pt-4 pb-1.5 flex items-center justify-between text-[11px] font-semibold text-[var(--text-dark)] uppercase tracking-wider">
           <span>Recents</span>
         </div>
@@ -243,7 +239,6 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
                 >
                   <span className="truncate flex-1 pr-6">{s.title || 'Untitled chat'}</span>
 
-                  {/* Clean Subtle More Button - Visible on mobile touch screens and on hover on desktop */}
                   <button
                     className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer ${
                       activeMenuSessionId === s.session_id
@@ -274,7 +269,6 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
           )}
         </div>
 
-        {/* Unclipped Fixed Dropdown Popover with Outside Click Dismiss */}
         {activeMenuSessionId && menuCoords && (
           <>
             <div 
@@ -305,7 +299,6 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
         )}
       </div>
 
-      {/* User Profile Footer */}
       <div className="p-3 border-t border-[var(--border-color)] relative">
         <div 
           className="flex items-center justify-between p-2 rounded-xl hover:bg-[var(--bg-hover)] cursor-pointer transition-colors"

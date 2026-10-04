@@ -35,11 +35,9 @@ class TestSecurityFilters(unittest.TestCase):
         self.assertEqual(normalize_user_id("  "), settings.DEFAULT_LOCAL_USER)
         self.assertEqual(normalize_user_id("default_user"), settings.DEFAULT_LOCAL_USER)
 
-        # UUID normalization
         uuid_str = "a8098c1a-f86e-11da-bd1a-00112444be1e"
         self.assertEqual(normalize_user_id(uuid_str.upper()), uuid_str)
 
-        # Non-UUID string creates deterministic UUIDv5
         v5_id = normalize_user_id("custom_guest_123")
         self.assertEqual(normalize_user_id("custom_guest_123"), v5_id)
 
@@ -49,7 +47,6 @@ class TestSecurityFilters(unittest.TestCase):
         self.assertEqual(sanitize_filename("nested/dir/test.txt"), "test.txt")
         self.assertEqual(sanitize_filename("../../../malicious.doc"), "malicious.doc")
         
-        # Disallow hidden files
         with self.assertRaises(ValueError):
             sanitize_filename(".hidden_file")
         with self.assertRaises(ValueError):
@@ -86,7 +83,6 @@ class TestDocsDbIsolation(unittest.TestCase):
         user_a = "user_isolation_a"
         user_b = "user_isolation_b"
 
-        # Register doc for user A
         upsert_document_record(
             filename="user_a_secret.pdf",
             user_id=user_a,
@@ -95,7 +91,6 @@ class TestDocsDbIsolation(unittest.TestCase):
             chunk_count=5,
         )
 
-        # Register doc for user B
         upsert_document_record(
             filename="user_b_confidential.pdf",
             user_id=user_b,
@@ -104,26 +99,21 @@ class TestDocsDbIsolation(unittest.TestCase):
             chunk_count=10,
         )
 
-        # Check User A's docs
         docs_a = get_user_documents(user_a)
         filenames_a = [d["filename"] for d in docs_a]
         self.assertIn("user_a_secret.pdf", filenames_a)
         self.assertNotIn("user_b_confidential.pdf", filenames_a)
 
-        # Check User B's docs
         docs_b = get_user_documents(user_b)
         filenames_b = [d["filename"] for d in docs_b]
         self.assertIn("user_b_confidential.pdf", filenames_b)
         self.assertNotIn("user_a_secret.pdf", filenames_b)
 
-        # User A cannot delete User B's doc
-        # Deleting 'user_b_confidential.pdf' under user A scope affects 0 records for user B
         delete_document_record("user_b_confidential.pdf", user_id=user_a)
         docs_b_after = get_user_documents(user_b)
         filenames_b_after = [d["filename"] for d in docs_b_after]
         self.assertIn("user_b_confidential.pdf", filenames_b_after)
 
-        # Cleanup
         delete_document_record("user_a_secret.pdf", user_id=user_a)
         delete_document_record("user_b_confidential.pdf", user_id=user_b)
 
@@ -145,7 +135,6 @@ class TestVectorStoreScoping(unittest.TestCase):
         invalidate_stats_cache()
         stats = get_collection_stats(user_id="user_david")
 
-        # Verify scroll call has scroll_filter for user_david
         mock_client.scroll.assert_called_once()
         _, scroll_kwargs = mock_client.scroll.call_args
         scroll_filter = scroll_kwargs.get("scroll_filter")

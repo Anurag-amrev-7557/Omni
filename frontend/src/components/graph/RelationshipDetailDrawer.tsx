@@ -31,7 +31,6 @@ export const RelationshipDetailDrawer: React.FC<RelationshipDetailDrawerProps> =
 
   return (
     <div className="absolute top-5 right-5 w-88 sm:w-96 max-w-[calc(100vw-40px)] max-h-[calc(100%-40px)] bg-[var(--bg-card)]/98 backdrop-blur-2xl border border-[var(--border-color)] rounded-2xl shadow-2xl z-30 flex flex-col overflow-hidden fade-in select-text animate-in slide-in-from-right-3 duration-150">
-      {/* Header with seamless fade merge */}
       <div className="relative px-6 pt-5 pb-2.5 flex items-center justify-between gap-3 bg-[var(--bg-card)] z-10">
         <h3 className="text-base sm:text-lg font-bold text-[var(--text-main)] tracking-tight">
           Relationship
@@ -45,12 +44,9 @@ export const RelationshipDetailDrawer: React.FC<RelationshipDetailDrawerProps> =
         </button>
       </div>
 
-      {/* Soft Gradient Fade Merge Boundary */}
       <div className="h-5 -mt-1 bg-gradient-to-b from-[var(--bg-card)] via-[var(--bg-card)]/60 to-transparent pointer-events-none z-10" />
 
-      {/* Auto-Height Content bounded within screen viewport */}
       <div className="flex-1 overflow-y-auto px-6 pb-6 pt-0 space-y-4 text-xs">
-        {/* Top Relation Card */}
         <div className="p-3.5 rounded-xl bg-[var(--bg-sidebar)] border border-[var(--border-color)] text-[13px] text-[var(--text-main)] leading-relaxed shadow-2xs">
           <span 
             className="font-bold text-[var(--accent-primary)] hover:underline cursor-pointer"
@@ -71,7 +67,6 @@ export const RelationshipDetailDrawer: React.FC<RelationshipDetailDrawerProps> =
           </span>
         </div>
 
-        {/* Key-Value Metadata Grid */}
         <div className="grid grid-cols-[75px_1fr] gap-y-3.5 gap-x-3 text-[13.5px] items-baseline">
           <div className="text-[var(--text-muted)] font-medium">UUID:</div>
           <div className="text-[var(--text-muted)] font-mono text-[12px] break-all select-all">
@@ -90,7 +85,6 @@ export const RelationshipDetailDrawer: React.FC<RelationshipDetailDrawerProps> =
           </div>
         </div>
 
-        {/* Episodes / Provenance Section */}
         <div className="pt-3.5 border-t border-[var(--border-color)] space-y-2">
           <div className="text-[13.5px] font-bold text-[var(--text-main)] mb-1.5">Episodes:</div>
           <div className="p-2 rounded-xl bg-[var(--bg-sidebar)] border border-[var(--border-color)] font-mono text-[11.5px] text-[var(--text-muted)] break-all">
@@ -114,7 +108,6 @@ export const RelationshipDetailDrawer: React.FC<RelationshipDetailDrawerProps> =
           )}
         </div>
 
-        {/* Timestamps */}
         <div className="pt-3.5 border-t border-[var(--border-color)] grid grid-cols-[85px_1fr] gap-y-2.5 gap-x-3 text-[12.5px]">
           <div className="text-[var(--text-muted)]">Created:</div>
           <div className="text-[var(--text-main)] font-medium">Feb 11, 2026, 8:03 AM</div>

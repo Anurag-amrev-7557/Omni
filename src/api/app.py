@@ -7,7 +7,6 @@ from fastapi.responses import JSONResponse
 
 from src.config.settings import settings
 from src.core.logging import trace_id_ctx, logger
-from src.core.exceptions import OmniException
 from src.storage.vector_store import init_db
 from src.storage.chat_db import init_chat_db
 from src.storage.docs_db import init_docs_db
@@ -57,7 +56,6 @@ def create_app() -> FastAPI:
         version="2.0.0",
     )
 
-    # Middleware
     @application.middleware("http")
     async def trace_id_middleware(request: Request, call_next):
         incoming_trace = request.headers.get("X-Request-ID") or request.headers.get("X-Trace-ID")
@@ -81,24 +79,13 @@ def create_app() -> FastAPI:
         max_age=86400,
     )
 
-    # Global Exception Handler
-    @application.exception_handler(OmniException)
-    async def omni_exception_handler(request: Request, exc: OmniException):
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={"detail": exc.message, "error_type": exc.__class__.__name__, **exc.detail},
-        )
-
-    # Include Routers
     application.include_router(health_router)
     application.include_router(sessions_router)
     application.include_router(documents_router)
     application.include_router(chat_router)
-    application.include_router(pdf_router)
     application.include_router(github_router)
     application.include_router(graph_router)
 
-    # Startup event
     @application.on_event("startup")
     async def on_startup():
         def _initialize_backends():

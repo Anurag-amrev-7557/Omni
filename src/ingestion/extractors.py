@@ -9,9 +9,7 @@ from src.generation.llm import invoke_groq_with_fallback
 from src.generation.prompts import DOCUMENT_SUMMARY_PROMPT
 
 SUPPORTED_EXTENSIONS = {
-    # Documents
     ".pdf", ".txt", ".md", ".markdown", ".rst",
-    # Programming Languages & Code
     ".py", ".ts", ".tsx", ".js", ".jsx", ".json",
     ".yaml", ".yml", ".go", ".rs", ".java", ".cpp",
     ".c", ".h", ".hpp", ".sql", ".sh", ".bash",

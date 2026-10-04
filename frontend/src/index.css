@@ -10,11 +10,6 @@
   }
 }
 
-/* =========================================================
-   COMPREHENSIVE DESIGN TOKENS (LIGHT & DARK PAIRS)
-========================================================= */
-
-/* 1. OBSIDIAN CHARCOAL (DEFAULT DARK) */
 :root,
 [data-theme="dark"] {
   --bg-dark: #161616;
@@ -84,7 +79,6 @@
   --font-code: 'JetBrains Mono', monospace;
 }
 
-/* 2. WARM CREAM PARCHMENT (LIGHT) */
 [data-theme="light"] {
   --bg-dark: #fbfaf5;
   --bg-sidebar: #f3efe6;
@@ -149,7 +143,6 @@
   --danger-border: rgba(185, 28, 28, 0.25);
 }
 
-/* 3. MATCHA LINEN (LIGHT) */
 [data-theme="matcha"] {
   --bg-dark: #f5f7f2;
   --bg-sidebar: #e9eee4;
@@ -214,7 +207,6 @@
   --danger-border: rgba(185, 28, 28, 0.25);
 }
 
-/* 4. MATCHA FOREST (DARK) */
 [data-theme="matcha-dark"] {
   --bg-dark: #14221a;
   --bg-sidebar: #0e1a14;
@@ -279,7 +271,6 @@
   --danger-border: rgba(248, 113, 113, 0.3);
 }
 
-/* 5. TUSCAN TERRACOTTA (LIGHT) */
 [data-theme="terracotta"] {
   --bg-dark: #fdf7f2;
   --bg-sidebar: #f7ede4;
@@ -344,7 +335,6 @@
   --danger-border: rgba(185, 28, 28, 0.25);
 }
 
-/* 6. EMBER TERRACOTTA (DARK) */
 [data-theme="terracotta-dark"] {
   --bg-dark: #211714;
   --bg-sidebar: #1a110e;
@@ -409,7 +399,6 @@
   --danger-border: rgba(248, 113, 113, 0.3);
 }
 
-/* 7. NORDIC CASHMERE (LIGHT) */
 [data-theme="nordic"] {
   --bg-dark: #f7f7f8;
   --bg-sidebar: #edeef0;
@@ -474,7 +463,6 @@
   --danger-border: rgba(190, 18, 60, 0.25);
 }
 
-/* 8. NORDIC FJORD (DARK) */
 [data-theme="nordic-dark"] {
   --bg-dark: #0f172a;
   --bg-sidebar: #090d19;
@@ -539,7 +527,6 @@
   --danger-border: rgba(248, 113, 113, 0.3);
 }
 
-/* 9. VINTAGE SEPIA & AMBER (LIGHT) */
 [data-theme="amber"] {
   --bg-dark: #faf5ea;
   --bg-sidebar: #f2e8d5;
@@ -604,7 +591,6 @@
   --danger-border: rgba(185, 28, 28, 0.25);
 }
 
-/* 10. DARK ROAST AMBER (DARK) */
 [data-theme="amber-dark"] {
   --bg-dark: #1b140e;
   --bg-sidebar: #140e0a;
@@ -675,9 +661,6 @@
   padding: 0;
 }
 
-/* =========================================================
-   THEME-AWARE TEXT SELECTION (WCAG AAA CONTRAST)
-========================================================= */
 ::selection {
   background-color: var(--selection-bg);
   color: var(--selection-text);
@@ -712,7 +695,6 @@ html, body {
   transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
 }
 
-/* Base Layout Classes */
 .omni-layout {
   position: fixed;
   inset: 0;
@@ -724,7 +706,6 @@ html, body {
   width: 100vw;
 }
 
-/* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -743,7 +724,6 @@ html, body {
   background: var(--text-dark);
 }
 
-/* Markdown Prose Styling */
 .omni-prose {
   font-family: var(--font-sans);
   font-size: 0.95rem;
@@ -784,7 +764,6 @@ html, body {
 .omni-prose h3 { font-size: 1.08rem; }
 .omni-prose h4 { font-size: 0.95rem; }
 
-/* Lists formatting (Fix Tailwind reset) */
 .omni-prose ul {
   list-style-type: disc !important;
   margin-left: 1.5rem !important;
@@ -825,7 +804,6 @@ html, body {
   display: inline;
 }
 
-/* Tables formatting */
 .omni-prose table {
   width: 100%;
   border-collapse: separate;
@@ -902,12 +880,10 @@ html, body {
   margin: 0.85rem 0;
 }
 
-/* First child top margin reset */
 .omni-prose > :first-child {
   margin-top: 0 !important;
 }
 
-/* Horizontal Divider / Rule Styling with Perfectly Balanced Symmetrical Placement */
 .omni-prose hr {
   border: none;
   border-top: 1px solid var(--border-color);
@@ -917,7 +893,6 @@ html, body {
   clear: both;
 }
 
-/* Balance preceding block margins so space above divider equals space below */
 .omni-prose p + hr,
 .omni-prose ul + hr,
 .omni-prose ol + hr,
@@ -925,15 +900,13 @@ html, body {
 .omni-prose pre + hr,
 .omni-prose blockquote + hr,
 .omni-prose .omni-table-wrapper + hr {
-  margin-top: 0.55rem; /* 0.85rem preceding margin-bottom + 0.55rem = 1.4rem total space above */
+  margin-top: 0.55rem;
 }
 
-/* Ensure elements immediately following hr start cleanly with 0 extra top margin */
 .omni-prose hr + * {
   margin-top: 0 !important;
 }
 
-/* When a section heading or paragraph follows a divider, keep exact 1.4rem breathing room */
 .omni-prose hr + h1,
 .omni-prose hr + h2,
 .omni-prose hr + h3,
@@ -944,7 +917,6 @@ html, body {
   margin-top: 0 !important;
 }
 
-/* Animations */
 @keyframes spinSlow {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -981,9 +953,6 @@ html, body {
   animation: fadeIn 0.2s ease-out forwards;
 }
 
-/* Directionally-Aware Physical Sliding Dropdown Animations */
-
-/* 1. Downward Popovers (Triggered from Top: Header Theme Menu, Vault Toolbar Sort) */
 @keyframes slideDownIn {
   0% {
     opacity: 0;
@@ -1001,7 +970,6 @@ html, body {
   transform-origin: top;
 }
 
-/* 2. Upward Popovers (Triggered from Bottom: Model Selector, Sidebar User Profile, Bottom Controls) */
 @keyframes slideUpIn {
   0% {
     opacity: 0;
@@ -1018,7 +986,6 @@ html, body {
   transform-origin: bottom;
 }
 
-/* Sliding Window Emerging from Behind Input */
 @keyframes slideUpBehind {
   0% {
     opacity: 0;
@@ -1035,7 +1002,6 @@ html, body {
   transform-origin: bottom center;
 }
 
-/* Physical Sliding Window Emerging and Exiting Into Slot (Clipped by Input Boundary) */
 @keyframes pureSlideUpBehind {
   0% {
     transform: translateY(105%);
@@ -1062,7 +1028,6 @@ html, body {
   animation: pureSlideDownBehind 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Smooth Scale-In Entry for Document Tiles */
 @keyframes popIn {
   0% {
     opacity: 0;
@@ -1078,7 +1043,6 @@ html, body {
   animation: popIn 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Cross-Browser Scrollbar Hiding Utility */
 .no-scrollbar::-webkit-scrollbar {
   display: none !important;
   width: 0 !important;
@@ -1086,11 +1050,7 @@ html, body {
 }
 
 .no-scrollbar {
-  -ms-overflow-style: none !important; /* IE and Edge */
-  scrollbar-width: none !important; /* Firefox and Standard Browsers */
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
 }
-
-
-
-
 

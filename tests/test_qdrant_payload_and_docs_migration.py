@@ -47,7 +47,6 @@ class TestQdrantPayloadAndDocsMigration(unittest.TestCase):
         mock_col.name = settings.COLLECTION_NAME
         mock_client.get_collections.return_value.collections = [mock_col]
 
-        # First scroll raises 400 Bad Request index error, second returns empty
         mock_client.scroll.side_effect = [
             Exception("Bad request: Index required but not found for 'user_id'"),
             ([], None),
@@ -69,14 +68,14 @@ class TestQdrantPayloadAndDocsMigration(unittest.TestCase):
     def test_format_doc_rows_includes_summary(self):
         """Verify _format_doc_rows formats summary correctly."""
         sample_row = [
-            "report.pdf",       # 0: filename
-            1048576,            # 1: size_bytes (1 MB)
-            5,                  # 2: page_count
-            "ready",            # 3: status
-            "Q3 financial doc", # 4: summary
-            12,                 # 5: chunk_count
-            None,               # 6: error
-            None,               # 7: updated_at
+            "report.pdf",
+            1048576,
+            5,
+            "ready",
+            "Q3 financial doc",
+            12,
+            None,
+            None,
         ]
         formatted = _format_doc_rows([sample_row])
         self.assertEqual(len(formatted), 1)

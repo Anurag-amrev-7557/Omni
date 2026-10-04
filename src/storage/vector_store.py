@@ -134,7 +134,6 @@ def delete_files_from_collection(filenames: List[str], user_id: Optional[str] = 
     if not filenames:
         return
 
-    # SECURITY GATE: refuse to delete without an explicit, non-sentinel user scope.
     if not user_id or not str(user_id).strip():
         raise ValueError(
             "Security violation: user_id is required for scoped vector deletion. "
@@ -225,7 +224,7 @@ def _scroll_user_files(client: QdrantClient, col_name: str, scroll_filter: Any) 
         offset = next_offset
 
     total_chunks = user_points_count if user_points_count > 0 else counted_chunks
-    return {"total_chunks": total_chunks, "files": sorted(list(files))}
+    return {"total_chunks": total_chunks, "files": sorted(files)}
 
 
 def get_collection_stats(user_id: Optional[str] = None) -> Dict[str, Any]:

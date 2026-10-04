@@ -15,7 +15,8 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "thinking-orbs": "^0.3.2"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",

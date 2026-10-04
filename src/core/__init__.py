@@ -16,7 +16,6 @@ from src.core.auth import (
     DEFAULT_GUEST_USER,
     get_ssl_context,
 )
-from src.core.exceptions import OmniException
 from src.core.logging import logger, get_logger
 
 __all__ = [
@@ -33,7 +32,6 @@ __all__ = [
     "DEFAULT_LOCAL_USER",
     "DEFAULT_GUEST_USER",
     "get_ssl_context",
-    "OmniException",
     "logger",
     "get_logger",
 ]

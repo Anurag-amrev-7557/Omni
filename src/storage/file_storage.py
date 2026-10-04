@@ -65,7 +65,6 @@ def resolve_document_path(filename: str, user_id: Optional[str] = None) -> Optio
     safe_uid = sanitize_user_id_for_path(user_id)
     user_dir = get_user_uploads_dir(user_id)
 
-    # 1. Local disk match across user directory candidates
     candidate_paths = [
         os.path.join(user_dir, safe_name),
         os.path.join("/tmp", "rag_uploads", safe_uid, safe_name),
@@ -79,7 +78,6 @@ def resolve_document_path(filename: str, user_id: Optional[str] = None) -> Optio
 
     local_path = os.path.join(user_dir, safe_name)
 
-    # 2. Check Supabase Storage under user prefix
     client = get_supabase_client()
     if client:
         try:
@@ -90,7 +88,6 @@ def resolve_document_path(filename: str, user_id: Optional[str] = None) -> Optio
         except Exception:
             pass
 
-    # 3. If local or default user, check shared local folders
     if is_default_or_local_user(user_id):
         fallback_dirs = [
             os.path.join(settings.UPLOADS_DIR, "default"),
@@ -103,7 +100,6 @@ def resolve_document_path(filename: str, user_id: Optional[str] = None) -> Optio
             if os.path.isfile(candidate):
                 return candidate
 
-        # Check default folder in Supabase
         if client:
             for fallback_uid in ["default", settings.DEFAULT_LOCAL_USER]:
                 try:
@@ -202,18 +198,25 @@ def delete_physical_document(filename: str, user_id: Optional[str] = None):
         return
 
     safe_uid = sanitize_user_id_for_path(user_id)
+    resolved = resolve_document_path(filename, user_id=user_id)
+    if resolved and os.path.isfile(resolved):
+        try:
+            os.remove(resolved)
+            logger.info(f"Removed physical file: {resolved}")
+        except Exception as e:
+            logger.debug(f"Error removing physical file {resolved}: {e}")
+
     target_dirs = [
-        os.path.join(settings.UPLOADS_DIR, safe_uid),
-        os.path.join(settings.UPLOADS_DIR, "default"),
-        os.path.join(settings.UPLOADS_DIR, settings.DEFAULT_LOCAL_USER),
+        os.path.join(settings.UPLOADS_DIR, safe_uid) if settings.UPLOADS_DIR else None,
+        os.path.join(settings.UPLOADS_DIR, "default") if settings.UPLOADS_DIR else None,
+        os.path.join(settings.UPLOADS_DIR, settings.DEFAULT_LOCAL_USER) if settings.UPLOADS_DIR else None,
         settings.UPLOADS_DIR,
         os.path.join(settings.APP_ROOT_DIR, "data"),
     ]
-    resolved = resolve_document_path(filename, user_id=user_id)
     if resolved:
         target_dirs.append(os.path.dirname(resolved))
 
-    for d in set(target_dirs):
+    for d in {d for d in target_dirs if d and os.path.isdir(d)}:
         p = os.path.join(d, safe_name)
         if os.path.isfile(p):
             try:

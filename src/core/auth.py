@@ -55,7 +55,6 @@ def jwks_client() -> Optional[Any]:
 
 def _verify_token(token: str) -> Optional[str]:
     """Cryptographically validates a Supabase JWT via JWKS or REST fallback."""
-    # Fast path: JWKS cryptographic signature verification
     client = jwks_client()
     if client and jwt:
         try:
@@ -71,7 +70,6 @@ def _verify_token(token: str) -> Optional[str]:
         except Exception as e:
             logger.debug(f"JWKS verification notice: {e}")
 
-    # Fallback: Supabase Auth REST verification
     if settings.SUPABASE_URL and settings.SUPABASE_PUBLISHABLE_KEY:
         try:
             req = Request(
@@ -105,19 +103,16 @@ def require_user(
         else (token_param.strip() if token_param else None)
     )
 
-    # 1. Ephemeral guest session passed directly as token
     if raw_token and raw_token.startswith("guest_"):
         set_current_user(raw_token)
         return raw_token
 
-    # 2. Cryptographic JWT authentication
     if raw_token and raw_token not in ("null", "undefined", "", "guest", "local"):
         if user_id := _verify_token(raw_token):
             set_current_user(user_id)
             return user_id
         raise HTTPException(status_code=401, detail="Invalid or expired access token")
 
-    # 3. Ephemeral Guest Session ID from header or query param
     guest = x_guest_id or guest_id_param or user_id_param
     if guest and (guest.startswith("guest_") or len(guest) >= 8):
         cleaned_guest = guest.strip()

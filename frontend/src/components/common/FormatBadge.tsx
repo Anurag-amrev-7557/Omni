@@ -1,4 +1,5 @@
 import React from 'react';
+import { Globe } from 'lucide-react';
 
 interface FormatBadgeProps {
   filename: string;
@@ -6,7 +7,8 @@ interface FormatBadgeProps {
 }
 
 export const FormatBadge: React.FC<FormatBadgeProps> = ({ filename, size = 'md' }) => {
-  const ext = filename.split('.').pop()?.toLowerCase() || 'txt';
+  const isWeb = filename.startsWith('[Web]') || filename.startsWith('http://') || filename.startsWith('https://') || filename.includes('://');
+  const ext = isWeb ? 'web' : (filename.split('.').pop()?.toLowerCase() || 'txt');
   const isPdf = ext === 'pdf';
   const isMd = ext === 'md';
 
@@ -24,7 +26,13 @@ export const FormatBadge: React.FC<FormatBadgeProps> = ({ filename, size = 'md' 
     borderColor: 'var(--badge-txt-border)',
   };
 
-  if (isPdf) {
+  if (isWeb) {
+    styleVars = {
+      backgroundColor: 'rgba(2, 132, 199, 0.12)',
+      color: '#0284c7',
+      borderColor: 'rgba(2, 132, 199, 0.25)',
+    };
+  } else if (isPdf) {
     styleVars = {
       backgroundColor: 'var(--badge-pdf-bg)',
       color: 'var(--badge-pdf-text)',
@@ -42,8 +50,13 @@ export const FormatBadge: React.FC<FormatBadgeProps> = ({ filename, size = 'md' 
     <div 
       className={`inline-flex items-center justify-center font-bold uppercase tracking-wider border flex-shrink-0 leading-none transition-colors ${badgeSizeClasses}`}
       style={styleVars}
+      title={isWeb ? 'Web Source' : `${ext.toUpperCase()} Document`}
     >
-      {ext}
+      {isWeb ? (
+        size === 'xs' ? 'WEB' : <Globe size={size === 'sm' ? 13 : size === 'lg' ? 18 : 15} />
+      ) : (
+        ext
+      )}
     </div>
   );
 };

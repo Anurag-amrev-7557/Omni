@@ -25,7 +25,6 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(({
 
   return (
     <header className="h-14 min-h-[52px] w-full px-6 flex items-center justify-between border-b border-[var(--border-color)] bg-[var(--bg-dark)] select-none">
-      {/* Left Title & Collapse */}
       <div className="flex items-center gap-3">
         {sidebarCollapsed && (
           <button 
@@ -46,11 +45,9 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(({
         </div>
       </div>
 
-      {/* Right Action Icons & Theme Quick Switcher */}
       <div className="flex items-center gap-2">
         <AuthControls onOpenAuth={onOpenAuth} />
 
-        {/* Theme Quick Switcher Dropdown */}
         <div className="relative">
           <button 
             className="flex items-center justify-between gap-1 h-8 w-[104px] px-2.5 text-xs font-medium rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-main)] hover:border-[var(--border-hover)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer shadow-2xs select-none group"
@@ -73,7 +70,6 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(({
               <div 
                 className="dropdown-popover-top absolute right-0 top-10 z-50 w-72 max-w-[calc(100vw-24px)] max-h-96 overflow-y-auto no-scrollbar py-2 px-1.5 bg-[var(--bg-modal)] border border-[var(--border-color)] rounded-2xl shadow-[0_16px_48px_rgba(0,0,0,0.25)] backdrop-blur-2xl"
               >
-                {/* Light Themes */}
                 <div className="px-3 py-1.5 text-[11px] font-bold text-[var(--text-dark)] uppercase tracking-wider select-none">
                   Light & Warm Palettes
                 </div>
@@ -102,7 +98,6 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(({
 
                 <div className="my-2 border-t border-[var(--border-color)]" />
 
-                {/* Dark Themes */}
                 <div className="px-3 py-1.5 text-[11px] font-bold text-[var(--text-dark)] uppercase tracking-wider select-none">
                   Dark & Night Palettes
                 </div>
@@ -133,7 +128,6 @@ export const TopHeader: React.FC<TopHeaderProps> = React.memo(({
           )}
         </div>
 
-        {/* Settings Button */}
         <button 
           className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-main)] hover:border-[var(--border-hover)] hover:bg-[var(--bg-hover)] transition-all cursor-pointer shadow-2xs group select-none"
           onClick={onOpenSettings}

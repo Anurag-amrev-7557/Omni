@@ -29,7 +29,15 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const [orbStyle, setOrbStyleState] = useState<OrbStyle>(() => {
     const saved = localStorage.getItem('omni_orb_style') as OrbStyle;
-    return (saved && ORB_PRESETS[saved]) ? saved : 'vortex';
+    const legacyMap: Record<string, OrbStyle> = {
+      vortex: 'working',
+      'vortex-pure': 'weaving',
+      bands: 'solving',
+      geodesic: 'connecting',
+      pulse: 'breathing',
+    };
+    const resolved = legacyMap[saved] || saved;
+    return (resolved && ORB_PRESETS[resolved]) ? resolved : 'searching';
   });
 
   const [chatFont, setChatFontState] = useState<string>(() => {
@@ -75,7 +83,6 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   );
 };
 
-// eslint-disable-next-line react-refresh/only-export-components
 export const useTheme = (): ThemeContextType => {
   const context = useContext(ThemeContext);
   if (!context) {

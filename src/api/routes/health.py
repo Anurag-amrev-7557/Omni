@@ -23,7 +23,6 @@ def health_check():
     pipeline = {}
     overall_ok = True
 
-    # 1. Vector Database (Qdrant)
     try:
         client = get_qdrant_client()
         collections = client.get_collections().collections
@@ -39,7 +38,6 @@ def health_check():
         pipeline["qdrant"] = {"status": "error", "error": str(e)}
         overall_ok = False
 
-    # 2. Knowledge Graph Storage
     try:
         init_graph_db()
         conn = get_db_connection()
@@ -54,7 +52,6 @@ def health_check():
         pipeline["graph_db"] = {"status": "error", "error": str(e)}
         overall_ok = False
 
-    # 3. LLM API (Groq)
     from src.generation.llm import is_valid_groq_key
     has_groq = is_valid_groq_key(settings.GROQ_API_KEY)
     pipeline["llm"] = {
@@ -63,7 +60,6 @@ def health_check():
         "default_model": settings.PRIMARY_LLM_MODEL,
     }
 
-    # 4. Dense Embeddings
     pipeline["embeddings"] = {
         "status": "online",
         "model": settings.EMBEDDING_MODEL,
