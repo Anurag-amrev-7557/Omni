@@ -1,5 +1,6 @@
 """Entity-Relation Property Graph (ERPG) Extraction and Semantic Deduplication Engine."""
 import concurrent.futures
+import gc
 import json
 import re
 from typing import Any, Optional
@@ -395,15 +396,14 @@ def extract_and_cluster(
             user_id=user_id,
         )
 
-    if len(chunks) <= 1:
-        results = [_process_chunk(c) for c in chunks]
-    else:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(2, len(chunks))) as executor:
-            results = list(executor.map(_process_chunk, chunks))
+    results = [_process_chunk(c) for c in chunks]
 
     for res in results:
         entities_count += len(res.get("entities", []))
         relations_count += len(res.get("relations", []))
+
+    del results
+    gc.collect()
 
     run_entity_resolution_and_deduplication(user_id=user_id)
 

@@ -4,12 +4,15 @@ set -e
 # Disable stdout/stderr buffering so all logs appear live in Render
 export PYTHONUNBUFFERED=1
 
-# Configure thread pools for optimal ONNX / CPU embedding speed without RAM spikes
-export OMP_NUM_THREADS="${OMP_NUM_THREADS:-2}"
-export MKL_NUM_THREADS="${MKL_NUM_THREADS:-2}"
-export OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-2}"
-export VECLIB_MAXIMUM_THREADS="${VECLIB_MAXIMUM_THREADS:-2}"
-export NUMEXPR_NUM_THREADS="${NUMEXPR_NUM_THREADS:-2}"
+# Constrain thread pools to 1 thread to stay strictly under Render 512MB RAM limit
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export VECLIB_MAXIMUM_THREADS=1
+export NUMEXPR_NUM_THREADS=1
+
+# Limit glibc memory arenas to prevent memory fragmentation on Linux cgroups
+export MALLOC_ARENA_MAX=2
 
 # Default ENVIRONMENT to production on Render if not explicitly set
 export ENVIRONMENT="${ENVIRONMENT:-production}"

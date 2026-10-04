@@ -108,6 +108,9 @@ def create_app() -> FastAPI:
                 logger.info("FastEmbed ONNX model pre-warmed successfully during startup.")
             except Exception as e:
                 logger.warning(f"Embedding model pre-warming notice: {e}")
+            finally:
+                import gc
+                gc.collect()
 
         asyncio.create_task(asyncio.to_thread(_initialize_backends))
 
