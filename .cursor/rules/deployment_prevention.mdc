@@ -120,3 +120,51 @@ def get_user_uploads_dir(user_id=None):
     return os.path.join(tempfile.gettempdir(), "rag_uploads", safe_uid)
 ```
 
+---
+
+## 🚨 Slow Document Ingestion & Reverse Proxy Stream Buffering Prevention
+
+### Problem
+On deployed cloud environments (Render, Vercel, Railway), document ingestion, indexing, and processing takes an excessively long time, and the frontend upload progress bar appears frozen or stuck on "Processing...":
+```
+[Frontend UI]: Frozen at 15% or 85% for 60-120 seconds with no progress updates.
+[Server Logs]: Slow embedding computation, thread bottlenecks, or timeout errors.
+```
+
+### Root Cause
+1. **Reverse Proxy Buffering**: Cloud reverse proxies (Render, Cloudflare, Nginx) buffer HTTP streaming responses by default unless `X-Accel-Buffering: no` and `Cache-Control: no-cache, no-transform` headers are explicitly sent. Without these headers, client UI never receives SSE/NDJSON progress chunks until the entire request finishes.
+2. **Excessive Chunks from Tiny Chunk Sizes**: Setting `CHILD_CHUNK_SIZE` too small (e.g. 450 chars) causes hundreds of small vectors to be generated, embedded via CPU, and transferred over the network.
+3. **Single-Threaded CPU Choke**: Constraining `OMP_NUM_THREADS=1` starves FastEmbed / ONNX Runtime of CPU cycles during dense vector generation.
+4. **All-at-once Vector Store Indexing**: Calling `vector_store.add_documents()` on a huge list of chunks in a single blocking call prevents intermediate progress events from being sent to the client.
+
+### Prevention Rule
+```python
+# ❌ WRONG - No streaming headers, single-threaded choke, tiny chunk sizes
+return StreamingResponse(event_generator(), media_type="application/x-ndjson")
+export OMP_NUM_THREADS=1
+CHILD_CHUNK_SIZE = 450
+vector_store.add_documents(all_child_documents, batch_size=128)
+
+# ✅ CORRECT - Anti-buffering headers, 2 CPU threads, optimal chunk size, incremental progress batching
+return StreamingResponse(
+    event_generator(),
+    media_type="application/x-ndjson",
+    headers={
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+)
+export OMP_NUM_THREADS="${OMP_NUM_THREADS:-2}"
+CHILD_CHUNK_SIZE = 800  # ~130-150 words: optimal balance between semantic granularity and embedding speed
+for offset in range(0, total, batch_size):
+    on_progress("indexing", calc_progress(offset), f"Indexing ({offset}/{total})...")
+    vector_store.add_documents(batch, batch_size=batch_size)
+```
+
+### Implementation
+1. Always include `X-Accel-Buffering: no` on all `StreamingResponse` endpoints.
+2. Maintain `CHILD_CHUNK_SIZE >= 800` for balanced chunk counts and fast vector processing.
+3. Batch vector store additions into incremental chunks (64 items) with live progress notifications.
+4. Throttle background LLM knowledge graph extraction threads (`max_workers <= 2`) to prevent CPU starvation.
+

@@ -1,4 +1,4 @@
-"""Embeddings model loader with ONNX runtime FastEmbed and HuggingFace fallback."""
+import os
 from functools import lru_cache
 from src.config.settings import settings
 from src.core.logging import logger
@@ -10,7 +10,8 @@ def get_embeddings():
     try:
         from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
         logger.debug(f"Loaded FastEmbed embeddings: {settings.EMBEDDING_MODEL}")
-        return FastEmbedEmbeddings(model_name=settings.EMBEDDING_MODEL)
+        threads_count = int(os.environ.get("OMP_NUM_THREADS", "2"))
+        return FastEmbedEmbeddings(model_name=settings.EMBEDDING_MODEL, threads=threads_count)
     except Exception as e:
         logger.debug(f"FastEmbed unavailable ({e}), falling back to HuggingFaceEmbeddings")
         from langchain_huggingface import HuggingFaceEmbeddings

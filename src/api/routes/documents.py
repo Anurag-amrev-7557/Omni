@@ -315,7 +315,15 @@ async def upload_document_stream(file: UploadFile = File(...), user_id: str = De
 
         await ingest_task
 
-    return StreamingResponse(event_generator(), media_type="application/x-ndjson")
+    return StreamingResponse(
+        event_generator(),
+        media_type="application/x-ndjson",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 def _perform_document_deletion(filenames: List[str], user_id: str) -> None:

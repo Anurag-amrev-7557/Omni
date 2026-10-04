@@ -398,7 +398,7 @@ def extract_and_cluster(
     if len(chunks) <= 1:
         results = [_process_chunk(c) for c in chunks]
     else:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, len(chunks))) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(2, len(chunks))) as executor:
             results = list(executor.map(_process_chunk, chunks))
 
     for res in results:

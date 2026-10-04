@@ -88,8 +88,8 @@ class Settings(BaseSettings):
 
     PARENT_CHUNK_SIZE: int = 2800
     PARENT_CHUNK_OVERLAP: int = 350
-    CHILD_CHUNK_SIZE: int = 450
-    CHILD_CHUNK_OVERLAP: int = 80
+    CHILD_CHUNK_SIZE: int = 800
+    CHILD_CHUNK_OVERLAP: int = 100
     MAX_UPLOAD_SIZE_MB: int = 50
     ALLOWED_FILE_EXTENSIONS: List[str] = [".pdf", ".txt", ".csv", ".docx", ".md"]
 

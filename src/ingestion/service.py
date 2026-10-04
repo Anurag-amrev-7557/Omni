@@ -99,11 +99,23 @@ def ingest_file(
         embedding=get_embeddings(),
     )
 
-    if on_progress:
-        on_progress("indexing", 85, "Storing vectors in Qdrant collection...")
+    batch_size = 64
+    total_child = len(child_documents)
+    logger.info(f"Indexing {total_child} child vectors for {filename} (user: {norm_uid})...")
 
-    logger.info(f"Indexing {len(child_documents)} child vectors for {filename} (user: {norm_uid})...")
-    vector_store.add_documents(child_documents, batch_size=128)
+    if total_child <= batch_size:
+        if on_progress:
+            on_progress("indexing", 75, f"Storing {total_child} vectors in Qdrant collection...")
+        vector_store.add_documents(child_documents, batch_size=batch_size)
+    else:
+        for offset in range(0, total_child, batch_size):
+            batch = child_documents[offset : offset + batch_size]
+            current_count = min(offset + batch_size, total_child)
+            progress_pct = 50 + int((current_count / total_child) * 45)
+            if on_progress:
+                on_progress("indexing", progress_pct, f"Indexing vectors ({current_count}/{total_child})...")
+            vector_store.add_documents(batch, batch_size=batch_size)
+
     invalidate_stats_cache(user_id=norm_uid)
 
     elapsed_time = time.time() - start_time
